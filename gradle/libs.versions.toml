@@ -1,0 +1,128 @@
+[versions]
+vertx = "5.0.10"
+
+avaje-inject = "12.5"
+avaje-http = "3.8"
+avaje-jsonb = "3.5-RC1"
+
+gestalt = "0.37.2"
+mapstruct = "1.6.3"
+record-builder = "52"
+lombok = "1.18.44"
+
+guava = "33.5.0-jre"
+vavr = "1.0.1"
+
+commons-lang3 = "3.20.0"
+commons-collections4 = "4.5.0"
+commons-io = "2.21.0"
+commons-codec = "1.21.0"
+commons-text = "1.15.0"
+
+slf4j = "2.0.17"
+logback = "1.5.32"
+
+[libraries]
+# ===== Vert.x =====
+vertx-core = { group = "io.vertx", name = "vertx-core", version.ref = "vertx" }
+vertx-web = { group = "io.vertx", name = "vertx-web", version.ref = "vertx" }
+vertx-web-client = { group = "io.vertx", name = "vertx-web-client", version.ref = "vertx" }
+vertx-health-check = { group = "io.vertx", name = "vertx-health-check", version.ref = "vertx" }
+vertx-openapi = { group = "io.vertx", name = "vertx-openapi", version.ref = "vertx" }
+vertx-web-openapi-router = { group = "io.vertx", name = "vertx-web-openapi-router", version.ref = "vertx" }
+
+# ===== Avaje Inject =====
+avaje-inject = { group = "io.avaje", name = "avaje-inject", version.ref = "avaje-inject" }
+avaje-inject-generator = { group = "io.avaje", name = "avaje-inject-generator", version.ref = "avaje-inject" }
+avaje-inject-test = { group = "io.avaje", name = "avaje-inject-test", version.ref = "avaje-inject" }
+
+# ===== Avaje Jsonb =====
+avaje-jsonb = { group = "io.avaje", name = "avaje-jsonb", version.ref = "avaje-jsonb" }
+avaje-jsonb-generator = { group = "io.avaje", name = "avaje-jsonb-generator", version.ref = "avaje-jsonb" }
+
+# ===== Avaje Http =====
+avaje-http-api = { group = "io.avaje", name = "avaje-http-api", version.ref = "avaje-http" }
+avaje-http-client = { group = "io.avaje", name = "avaje-http-client", version.ref = "avaje-http" }
+avaje-http-client-generator = { group = "io.avaje", name = "avaje-http-client-generator", version.ref = "avaje-http" }
+
+# ===== Gestalt config =====
+gestalt-core = { group = "com.github.gestalt-config", name = "gestalt-core", version.ref = "gestalt" }
+gestalt-yaml-jackson3 = { group = "com.github.gestalt-config", name = "gestalt-yaml-jackson3", version.ref = "gestalt" }
+gestalt-json-jackson3 = { group = "com.github.gestalt-config", name = "gestalt-json-jackson3", version.ref = "gestalt" }
+
+# ===== Mapping / codegen =====
+mapstruct = { group = "org.mapstruct", name = "mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { group = "org.mapstruct", name = "mapstruct-processor", version.ref = "mapstruct" }
+
+record-builder-core = { group = "io.soabase.record-builder", name = "record-builder-core", version.ref = "record-builder" }
+record-builder-processor = { group = "io.soabase.record-builder", name = "record-builder-processor", version.ref = "record-builder" }
+
+lombok = { group = "org.projectlombok", name = "lombok", version.ref = "lombok" }
+lombok-mapstruct-binding = { group = "org.projectlombok", name = "lombok-mapstruct-binding", version = "0.2.0" }
+
+# ===== Functional / utilities =====
+vavr = { group = "io.vavr", name = "vavr", version.ref = "vavr" }
+vavr-match = { group = "io.vavr", name = "vavr-match", version.ref = "vavr" }
+vavr-match-processor = { group = "io.vavr", name = "vavr-match-processor", version.ref = "vavr" }
+
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
+
+# ===== Apache Commons =====
+commons-lang3 = { group = "org.apache.commons", name = "commons-lang3", version.ref = "commons-lang3" }
+commons-collections4 = { group = "org.apache.commons", name = "commons-collections4", version.ref = "commons-collections4" }
+commons-io = { group = "commons-io", name = "commons-io", version.ref = "commons-io" }
+commons-codec = { group = "commons-codec", name = "commons-codec", version.ref = "commons-codec" }
+commons-text = { group = "org.apache.commons", name = "commons-text", version.ref = "commons-text" }
+
+slf4j-api = { group = "org.slf4j", name = "slf4j-api", version.ref = "slf4j" }
+
+logback-classic = { group = "ch.qos.logback", name = "logback-classic", version.ref = "logback" }
+logback-core = { group = "ch.qos.logback", name = "logback-core", version.ref = "logback" }
+
+[bundles]
+vertx = [
+    "vertx-core",
+    "vertx-web",
+    "vertx-web-client",
+    "vertx-health-check",
+    "vertx-openapi",
+    "vertx-web-openapi-router"
+]
+
+avaje-inject = [
+    "avaje-inject",
+    "avaje-inject-generator"
+]
+
+avaje-jsonb = [
+    "avaje-jsonb",
+    "avaje-jsonb-generator"
+]
+
+avaje-http = [
+    "avaje-http-api",
+    "avaje-http-client",
+    "avaje-http-client-generator"
+]
+
+gestalt = [
+    "gestalt-core",
+    "gestalt-yaml-jackson3",
+    "gestalt-json-jackson3"
+]
+
+commons = [
+    "commons-lang3",
+    "commons-collections4",
+    "commons-io",
+    "commons-codec",
+    "commons-text"
+]
+
+logging = [
+    "slf4j-api",
+    "logback-classic"
+]
+
+[plugins]
+lombok = { id = "name.remal.lombok", version = "3.1.6" }
