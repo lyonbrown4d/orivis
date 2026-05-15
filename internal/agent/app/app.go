@@ -10,6 +10,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/agent/config"
 	"github.com/lyonbrown4d/orivis/internal/shared/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/shared/observability"
+	"github.com/lyonbrown4d/orivis/internal/shared/protocol"
 )
 
 func Run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
@@ -63,11 +64,12 @@ func New(cfg config.Config, logger *slog.Logger) *dix.App {
 }
 
 type Runtime struct {
-	cfg    config.Config
-	logger *slog.Logger
-	client *agentclient.Client
-	stop   context.CancelFunc
-	done   chan struct{}
+	cfg     config.Config
+	logger  *slog.Logger
+	client  *agentclient.Client
+	agentID string
+	stop    context.CancelFunc
+	done    chan struct{}
 }
 
 func (r *Runtime) Start(ctx context.Context) error {
@@ -78,6 +80,20 @@ func (r *Runtime) Start(ctx context.Context) error {
 		"runtime", r.cfg.Runtime,
 		"server_url", r.cfg.Server.URL,
 	)
+
+	registration, err := r.client.Register(ctx, protocol.AgentRegisterRequest{
+		Name:             r.cfg.Agent.Name,
+		Token:            r.cfg.Agent.Token,
+		RegionCode:       r.cfg.Agent.Region,
+		EnvironmentCodes: r.cfg.Agent.Environments,
+		RuntimeType:      r.cfg.Runtime,
+		Version:          buildinfo.Version,
+	})
+	if err != nil {
+		return err
+	}
+	r.agentID = registration.AgentID
+	r.logger.Info("agent registered", "agent_id", r.agentID, "status", registration.Status)
 
 	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
 	r.stop = stop
@@ -110,9 +126,39 @@ func (r *Runtime) loop(ctx context.Context) {
 			r.logger.Info("stopping agent")
 			return
 		case <-ticker.C:
-			r.logger.Debug("agent polling tasks")
+			if err := r.heartbeat(ctx); err != nil {
+				r.logger.Warn("agent heartbeat failed", "error", err)
+				continue
+			}
+			tasks, err := r.pullTasks(ctx)
+			if err != nil {
+				r.logger.Warn("agent task pull failed", "error", err)
+				continue
+			}
+			r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
 		}
 	}
+}
+
+func (r *Runtime) heartbeat(ctx context.Context) error {
+	response, err := r.client.Heartbeat(ctx, protocol.AgentHeartbeatRequest{
+		AgentID: r.agentID,
+		Token:   r.cfg.Agent.Token,
+		Version: buildinfo.Version,
+		SentAt:  time.Now().UTC(),
+	})
+	if err != nil {
+		return err
+	}
+	r.logger.Debug("agent heartbeat accepted", "agent_id", response.AgentID, "status", response.Status)
+	return nil
+}
+
+func (r *Runtime) pullTasks(ctx context.Context) (protocol.AgentTasksResponse, error) {
+	return r.client.Tasks(ctx, protocol.AgentTasksRequest{
+		AgentID: r.agentID,
+		Token:   r.cfg.Agent.Token,
+	})
 }
 
 func profileFromEnv(runtime string) dix.Profile {

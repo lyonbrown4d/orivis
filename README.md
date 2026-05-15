@@ -47,8 +47,10 @@ The server reads:
 | `ORIVIS_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 | `ORIVIS_DB_DRIVER` | `sqlite` | Database driver name. |
 | `ORIVIS_DB_DSN` | `file:orivis.db` | Database connection string. |
-| `ORIVIS_AUTH_AGENT_TOKEN` | empty | Shared agent token placeholder. |
+| `ORIVIS_AUTH_AGENT_TOKEN` | empty | Optional bootstrap token required for agent registration. |
 | `ORIVIS_OBSERVABILITY_PROMETHEUS_ENABLED` | `false` | Enable Prometheus observability adapter. |
+
+When `ORIVIS_AUTH_AGENT_TOKEN` is set on the server, an agent must present the same token during registration. The server stores only a hashed agent token after registration.
 
 The agent reads:
 
@@ -57,7 +59,8 @@ The agent reads:
 | `ORIVIS_SERVER_URL` | `http://127.0.0.1:8080` | Server base URL. |
 | `ORIVIS_AGENT_NAME` | `local-agent` | Agent name. |
 | `ORIVIS_AGENT_TOKEN` | empty | Agent token. |
-| `ORIVIS_REGION` | `local` | Agent region code. |
+| `ORIVIS_AGENT_REGION` | `local` | Agent region code. |
+| `ORIVIS_AGENT_ENVIRONMENTS` | empty | Comma-separated environment codes the agent can probe. |
 | `ORIVIS_RUNTIME` | `host` | Agent runtime type. |
 | `ORIVIS_POLL_INTERVAL` | `30s` | Task polling interval. |
 | `ORIVIS_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
@@ -68,8 +71,10 @@ The agent reads:
 GET /                  application metadata
 GET /healthz          health probe
 GET /readyz           readiness probe
-GET /api/agent/tasks  agent task placeholder
-POST /api/agent/results agent result placeholder
+POST /api/agent/register  agent registration
+POST /api/agent/heartbeat agent heartbeat
+GET /api/agent/tasks  pull assigned monitor tasks
+POST /api/agent/results record probe result
 ```
 
 ## Verify

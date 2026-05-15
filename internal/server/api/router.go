@@ -2,17 +2,23 @@ package api
 
 import (
 	"context"
+	"crypto/subtle"
+	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/arcgolabs/authx"
 	"github.com/arcgolabs/httpx"
 	"github.com/arcgolabs/httpx/adapter"
-	"github.com/arcgolabs/httpx/adapter/std"
+	adapterfiber "github.com/arcgolabs/httpx/adapter/fiber"
 	"github.com/arcgolabs/observabilityx"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/lyonbrown4d/orivis/internal/server/config"
 	"github.com/lyonbrown4d/orivis/internal/server/store"
 	"github.com/lyonbrown4d/orivis/internal/shared/buildinfo"
+	"github.com/lyonbrown4d/orivis/internal/shared/model"
+	"github.com/lyonbrown4d/orivis/internal/shared/protocol"
 )
 
 type Server struct {
@@ -32,7 +38,7 @@ func NewServer(
 	auth *authx.Engine,
 	obs observabilityx.Observability,
 ) *Server {
-	stdAdapter := std.New(nil, adapter.HumaOptions{
+	fiberAdapter := adapterfiber.New(nil, adapter.HumaOptions{
 		Title:       "Orivis API",
 		Version:     buildinfo.Version,
 		Description: "Distributed availability observability API",
@@ -41,7 +47,7 @@ func NewServer(
 	})
 
 	runtime := httpx.New(
-		httpx.WithAdapter(stdAdapter),
+		httpx.WithAdapter(fiberAdapter),
 		httpx.WithLogger(logger),
 		httpx.WithValidation(),
 		httpx.WithAccessLog(true),
@@ -104,13 +110,105 @@ func (s *Server) registerRoutes() {
 		return newStatusOutput("ready"), nil
 	})
 
-	httpx.MustGet(s.runtime, "/api/agent/tasks", func(context.Context, *agentTasksInput) (*agentTasksOutput, error) {
-		out := &agentTasksOutput{}
-		out.Body.Tasks = []agentTask{}
+	httpx.MustPost(s.runtime, "/api/agent/register", func(ctx context.Context, input *agentRegisterInput) (*agentRegisterOutput, error) {
+		if err := s.verifyBootstrapToken(input.Body.Token); err != nil {
+			return nil, apiError(err)
+		}
+		if s.store == nil || s.store.AgentStore() == nil {
+			return nil, huma.Error500InternalServerError("agent store is not available")
+		}
+
+		agent, err := s.store.AgentStore().Register(ctx, store.RegisterAgentParams{
+			Name:             input.Body.Name,
+			Token:            input.Body.Token,
+			RegionCode:       input.Body.RegionCode,
+			EnvironmentCodes: input.Body.EnvironmentCodes,
+			RuntimeType:      input.Body.RuntimeType,
+			Version:          input.Body.Version,
+		})
+		if err != nil {
+			return nil, apiError(err)
+		}
+
+		out := &agentRegisterOutput{}
+		out.Body.AgentID = agent.ID
+		out.Body.RegionID = agent.RegionID
+		out.Body.Status = string(agent.Status)
+		out.Body.ServerTime = time.Now().UTC()
 		return out, nil
 	})
 
-	httpx.MustPost(s.runtime, "/api/agent/results", func(context.Context, *agentResultsInput) (*statusOutput, error) {
+	httpx.MustPost(s.runtime, "/api/agent/heartbeat", func(ctx context.Context, input *agentHeartbeatInput) (*agentHeartbeatOutput, error) {
+		if s.store == nil || s.store.AgentStore() == nil {
+			return nil, huma.Error500InternalServerError("agent store is not available")
+		}
+
+		agent, err := s.store.AgentStore().RecordHeartbeat(ctx, store.AgentHeartbeatParams{
+			AgentID: input.Body.AgentID,
+			Token:   input.Body.Token,
+			Version: input.Body.Version,
+			SeenAt:  input.Body.SentAt,
+		})
+		if err != nil {
+			return nil, apiError(err)
+		}
+
+		out := &agentHeartbeatOutput{}
+		out.Body.AgentID = agent.ID
+		out.Body.Status = string(agent.Status)
+		out.Body.ServerTime = time.Now().UTC()
+		return out, nil
+	})
+
+	httpx.MustGet(s.runtime, "/api/agent/tasks", func(ctx context.Context, input *agentTasksInput) (*agentTasksOutput, error) {
+		if s.store == nil || s.store.AgentStore() == nil || s.store.MonitorStore() == nil {
+			return nil, huma.Error500InternalServerError("agent task stores are not available")
+		}
+
+		agent, err := s.store.AgentStore().Authenticate(ctx, input.AgentID, input.Token)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		monitors, err := s.store.MonitorStore().ListAssignedEnabled(ctx, agent.ID)
+		if err != nil {
+			return nil, apiError(err)
+		}
+
+		out := &agentTasksOutput{}
+		out.Body.Tasks = make([]protocol.AgentTask, 0, len(monitors))
+		for _, monitor := range monitors {
+			out.Body.Tasks = append(out.Body.Tasks, protocol.AgentTask{
+				ID:             monitor.ID,
+				MonitorID:      monitor.ID,
+				Type:           string(monitor.Type),
+				Target:         monitor.Target,
+				TimeoutSeconds: int(monitor.Timeout.Seconds()),
+			})
+		}
+		return out, nil
+	})
+
+	httpx.MustPost(s.runtime, "/api/agent/results", func(ctx context.Context, input *agentResultsInput) (*statusOutput, error) {
+		if s.store == nil || s.store.AgentStore() == nil || s.store.ResultStore() == nil {
+			return nil, huma.Error500InternalServerError("agent result stores are not available")
+		}
+
+		agent, err := s.store.AgentStore().Authenticate(ctx, input.Body.AgentID, input.Body.Token)
+		if err != nil {
+			return nil, apiError(err)
+		}
+		if _, err := s.store.ResultStore().Record(ctx, store.RecordProbeResultParams{
+			Agent:        agent,
+			MonitorID:    input.Body.MonitorID,
+			Status:       modelStatus(input.Body.Status),
+			Latency:      time.Duration(input.Body.LatencyMS) * time.Millisecond,
+			ErrorMessage: input.Body.ErrorMessage,
+			CheckedAt:    input.Body.CheckedAt,
+			RawDetail:    input.Body.RawDetail,
+		}); err != nil {
+			return nil, apiError(err)
+		}
+
 		return newStatusOutput("accepted"), nil
 	})
 }
@@ -139,26 +237,59 @@ func newStatusOutput(status string) *statusOutput {
 	return out
 }
 
-type agentTasksInput struct{}
-
-type agentTasksOutput struct {
-	Body struct {
-		Tasks []agentTask `json:"tasks"`
-	} `json:"body"`
+type agentRegisterInput struct {
+	Body protocol.AgentRegisterRequest `json:"body"`
 }
 
-type agentTask struct {
-	ID        string `json:"id"`
-	MonitorID string `json:"monitor_id"`
-	Type      string `json:"type"`
-	Target    string `json:"target"`
+type agentRegisterOutput struct {
+	Body protocol.AgentRegisterResponse `json:"body"`
+}
+
+type agentHeartbeatInput struct {
+	Body protocol.AgentHeartbeatRequest `json:"body"`
+}
+
+type agentHeartbeatOutput struct {
+	Body protocol.AgentHeartbeatResponse `json:"body"`
+}
+
+type agentTasksInput struct {
+	AgentID string `query:"agent_id" validate:"required"`
+	Token   string `query:"token,omitempty"`
+}
+
+type agentTasksOutput struct {
+	Body protocol.AgentTasksResponse `json:"body"`
 }
 
 type agentResultsInput struct {
-	Body struct {
-		AgentID   string `json:"agent_id"`
-		MonitorID string `json:"monitor_id"`
-		Status    string `json:"status"`
-		CheckedAt string `json:"checked_at,omitempty"`
-	} `json:"body"`
+	Body protocol.AgentResultRequest `json:"body"`
+}
+
+func (s *Server) verifyBootstrapToken(token string) error {
+	expected := strings.TrimSpace(s.cfg.Auth.Agent.Token)
+	if expected == "" {
+		return nil
+	}
+	if subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+		return store.ErrUnauthorized
+	}
+	return nil
+}
+
+func apiError(err error) error {
+	switch {
+	case errors.Is(err, store.ErrInvalidInput):
+		return huma.Error400BadRequest(err.Error(), err)
+	case errors.Is(err, store.ErrUnauthorized):
+		return huma.Error401Unauthorized("unauthorized", err)
+	case errors.Is(err, store.ErrNotFound):
+		return huma.Error404NotFound(err.Error(), err)
+	default:
+		return huma.Error500InternalServerError("internal server error", err)
+	}
+}
+
+func modelStatus(value string) model.Status {
+	return model.Status(strings.ToLower(strings.TrimSpace(value)))
 }

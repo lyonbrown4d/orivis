@@ -9,6 +9,9 @@
 *.coverprofile
 coverage.out
 coverage.html
+*.db
+*.sqlite
+*.sqlite3
 
 # Local configuration
 .env

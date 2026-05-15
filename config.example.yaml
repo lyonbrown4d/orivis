@@ -27,6 +27,8 @@ agent:
   name: local-agent
   token: ""
   region: local
+  environments:
+    - dev
 
 runtime: host
 

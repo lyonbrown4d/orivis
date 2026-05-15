@@ -14,7 +14,10 @@ import (
 )
 
 type Store struct {
-	DB *dbx.DB
+	DB       *dbx.DB
+	agents   AgentStore
+	monitors MonitorStore
+	results  ResultStore
 }
 
 func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
@@ -36,7 +39,16 @@ func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
 		return nil, err
 	}
 
-	return &Store{DB: db}, nil
+	store := &Store{DB: db}
+	store.agents = &agentStore{db: db}
+	store.monitors = &monitorStore{db: db}
+	store.results = &resultStore{db: db}
+	if err := store.Migrate(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return store, nil
 }
 
 func (s *Store) Close(context.Context) error {
@@ -44,6 +56,27 @@ func (s *Store) Close(context.Context) error {
 		return nil
 	}
 	return s.DB.Close()
+}
+
+func (s *Store) AgentStore() AgentStore {
+	if s == nil {
+		return nil
+	}
+	return s.agents
+}
+
+func (s *Store) MonitorStore() MonitorStore {
+	if s == nil {
+		return nil
+	}
+	return s.monitors
+}
+
+func (s *Store) ResultStore() ResultStore {
+	if s == nil {
+		return nil
+	}
+	return s.results
 }
 
 func resolveDialect(driver string) (dialect.Dialect, string, error) {

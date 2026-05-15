@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	unset(t, "ORIVIS_SERVER_URL", "ORIVIS_AGENT_NAME", "ORIVIS_AGENT_TOKEN", "ORIVIS_REGION", "ORIVIS_RUNTIME", "ORIVIS_POLL_INTERVAL", "ORIVIS_LOG_LEVEL")
+	unset(t, "ORIVIS_SERVER_URL", "ORIVIS_AGENT_NAME", "ORIVIS_AGENT_TOKEN", "ORIVIS_AGENT_REGION", "ORIVIS_AGENT_ENVIRONMENTS", "ORIVIS_RUNTIME", "ORIVIS_POLL_INTERVAL", "ORIVIS_LOG_LEVEL")
 
 	cfg, err := Load()
 	if err != nil {
@@ -50,5 +50,21 @@ func TestLoadPollInterval(t *testing.T) {
 
 	if cfg.Poll.Interval != 5*time.Second {
 		t.Fatalf("expected poll interval from environment, got %s", cfg.Poll.Interval)
+	}
+}
+
+func TestLoadAgentEnvironments(t *testing.T) {
+	t.Setenv("ORIVIS_AGENT_ENVIRONMENTS", "prod,staging")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected environment config to load: %v", err)
+	}
+
+	if len(cfg.Agent.Environments) != 2 {
+		t.Fatalf("expected 2 agent environments, got %#v", cfg.Agent.Environments)
+	}
+	if cfg.Agent.Environments[0] != "prod" || cfg.Agent.Environments[1] != "staging" {
+		t.Fatalf("unexpected agent environments: %#v", cfg.Agent.Environments)
 	}
 }

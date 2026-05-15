@@ -51,6 +51,7 @@ func main() {
 	cmd.Flags().String("agent-name", "", "agent name")
 	cmd.Flags().String("agent-token", "", "agent token")
 	cmd.Flags().String("agent-region", "", "agent region")
+	cmd.Flags().StringSlice("agent-environments", nil, "agent environment codes")
 	cmd.Flags().String("runtime", "", "agent runtime")
 	cmd.Flags().Duration("poll-interval", 0, "task polling interval")
 	cmd.Flags().String("log-level", "", "log level")
