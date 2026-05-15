@@ -1,0 +1,34 @@
+app:
+  env: development
+
+http:
+  addr: :8080
+
+log:
+  level: info
+
+db:
+  driver: sqlite
+  dsn: file:orivis.db
+
+auth:
+  agent:
+    token: ""
+
+observability:
+  prometheus:
+    enabled: false
+    namespace: orivis
+
+server:
+  url: http://127.0.0.1:8080
+
+agent:
+  name: local-agent
+  token: ""
+  region: local
+
+runtime: host
+
+poll:
+  interval: 30s
