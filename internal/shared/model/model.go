@@ -88,6 +88,7 @@ type Agent struct {
 
 type Monitor struct {
 	ID                string            `json:"id"`
+	SourceKey         string            `json:"source_key,omitempty"`
 	Name              string            `json:"name"`
 	Type              MonitorType       `json:"type"`
 	Target            string            `json:"target"`

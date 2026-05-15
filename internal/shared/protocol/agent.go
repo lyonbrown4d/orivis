@@ -37,15 +37,39 @@ type AgentTasksRequest struct {
 }
 
 type AgentTask struct {
-	ID             string `json:"id"`
-	MonitorID      string `json:"monitor_id"`
-	Type           string `json:"type"`
-	Target         string `json:"target"`
-	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	ID              string `json:"id"`
+	MonitorID       string `json:"monitor_id"`
+	Type            string `json:"type"`
+	Target          string `json:"target"`
+	IntervalSeconds int    `json:"interval_seconds,omitempty"`
+	TimeoutSeconds  int    `json:"timeout_seconds,omitempty"`
 }
 
 type AgentTasksResponse struct {
 	Tasks []AgentTask `json:"tasks"`
+}
+
+type AgentMonitorSyncRequest struct {
+	AgentID  string                   `json:"agent_id" validate:"required"`
+	Token    string                   `json:"token,omitempty"`
+	Monitors []AgentDiscoveredMonitor `json:"monitors"`
+}
+
+type AgentDiscoveredMonitor struct {
+	SourceKey         string `json:"source_key" validate:"required"`
+	Name              string `json:"name" validate:"required"`
+	Type              string `json:"type" validate:"required"`
+	Target            string `json:"target" validate:"required"`
+	EnvironmentCode   string `json:"environment_code,omitempty"`
+	Enabled           *bool  `json:"enabled,omitempty"`
+	IntervalSeconds   int    `json:"interval_seconds,omitempty"`
+	TimeoutSeconds    int    `json:"timeout_seconds,omitempty"`
+	RetryCount        int    `json:"retry_count,omitempty"`
+	AggregationPolicy string `json:"aggregation_policy,omitempty"`
+}
+
+type AgentMonitorSyncResponse struct {
+	Synced int `json:"synced"`
 }
 
 type AgentResultRequest struct {

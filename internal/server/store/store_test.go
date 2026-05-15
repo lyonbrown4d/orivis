@@ -53,6 +53,72 @@ func TestOpenRunsSQLiteMigrations(t *testing.T) {
 	}
 }
 
+func TestOpenMemoryStoreSupportsWorkflow(t *testing.T) {
+	ctx := context.Background()
+	store := newTestMemoryStore(t)
+
+	if store.DB != nil {
+		t.Fatal("expected memory store to avoid opening a SQL database")
+	}
+	if store.memory == nil {
+		t.Fatal("expected memory store backend")
+	}
+
+	agent, err := store.AgentStore().Register(ctx, RegisterAgentParams{
+		Name:             "agent-memory-01",
+		Token:            "secret-token",
+		RegionCode:       "local",
+		EnvironmentCodes: []string{"dev"},
+		RuntimeType:      "host",
+		Version:          "test-version",
+	})
+	if err != nil {
+		t.Fatalf("register memory agent: %v", err)
+	}
+	environmentIDs := agent.EnvironmentIDs.Values()
+	if len(environmentIDs) != 1 {
+		t.Fatalf("expected one environment id, got %#v", environmentIDs)
+	}
+
+	monitor, err := store.MonitorStore().Create(ctx, CreateMonitorParams{
+		Name:              "Memory API health",
+		Type:              model.MonitorHTTP,
+		Target:            "https://example.com/health",
+		EnvironmentID:     environmentIDs[0],
+		Enabled:           true,
+		Interval:          30 * time.Second,
+		Timeout:           5 * time.Second,
+		AggregationPolicy: model.AggregationMajorityDown,
+	})
+	if err != nil {
+		t.Fatalf("create memory monitor: %v", err)
+	}
+	if err := store.MonitorStore().AssignAgent(ctx, monitor.ID, agent.ID); err != nil {
+		t.Fatalf("assign memory monitor: %v", err)
+	}
+
+	tasks, err := store.MonitorStore().ListAssignedEnabled(ctx, agent.ID)
+	if err != nil {
+		t.Fatalf("list memory monitor tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != monitor.ID {
+		t.Fatalf("expected assigned memory monitor task, got %#v", tasks)
+	}
+
+	result, err := store.ResultStore().Record(ctx, RecordProbeResultParams{
+		Agent:     agent,
+		MonitorID: monitor.ID,
+		Status:    model.StatusUp,
+		Latency:   42 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("record memory result: %v", err)
+	}
+	if result.MonitorID != monitor.ID || result.AgentID != agent.ID || result.RegionID != agent.RegionID {
+		t.Fatalf("unexpected memory result: %#v", result)
+	}
+}
+
 func TestAgentRegisterAndHeartbeat(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
@@ -196,6 +262,26 @@ func newTestStore(t *testing.T) *Store {
 	t.Cleanup(func() {
 		if err := store.Close(context.Background()); err != nil {
 			t.Fatalf("close store: %v", err)
+		}
+	})
+	return store
+}
+
+func newTestMemoryStore(t *testing.T) *Store {
+	t.Helper()
+
+	cfg := config.Config{}
+	cfg.App.Env = "test"
+	cfg.DB.Driver = "memory"
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store, err := Open(cfg, logger)
+	if err != nil {
+		t.Fatalf("open memory store: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Close(context.Background()); err != nil {
+			t.Fatalf("close memory store: %v", err)
 		}
 	})
 	return store

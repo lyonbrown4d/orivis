@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+
 	"github.com/arcgolabs/configx"
 	"github.com/spf13/pflag"
 )
@@ -16,8 +18,10 @@ type Config struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
 	DB struct {
-		Driver string `mapstructure:"driver" validate:"required"`
-		DSN    string `mapstructure:"dsn" validate:"required"`
+		Driver                string `mapstructure:"driver" validate:"required"`
+		DSN                   string `mapstructure:"dsn"`
+		MemoryResultRetention string `mapstructure:"memory_result_retention"`
+		MemoryCleanupInterval string `mapstructure:"memory_cleanup_interval"`
 	} `mapstructure:"db"`
 	Auth struct {
 		Agent struct {
@@ -37,6 +41,7 @@ func Load(opts ...configx.Option) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	applyRuntimeDefaults(&cfg)
 	return cfg, nil
 }
 
@@ -54,13 +59,30 @@ func defaultOptions() []configx.Option {
 			"app.env":                            "development",
 			"http.addr":                          ":8080",
 			"log.level":                          "info",
-			"db.driver":                          "sqlite",
-			"db.dsn":                             "file:orivis.db",
+			"db.driver":                          "memory",
+			"db.dsn":                             "",
+			"db.memory_result_retention":         "24h",
+			"db.memory_cleanup_interval":         "1m",
 			"auth.agent.token":                   "",
 			"observability.prometheus.enabled":   false,
 			"observability.prometheus.namespace": "orivis",
 		}),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithValidateLevel(configx.ValidateLevelStruct),
+	}
+}
+
+func applyRuntimeDefaults(cfg *Config) {
+	if value, ok := os.LookupEnv("ORIVIS_DB_MEMORY_RESULT_RETENTION"); ok {
+		cfg.DB.MemoryResultRetention = value
+	}
+	if value, ok := os.LookupEnv("ORIVIS_DB_MEMORY_CLEANUP_INTERVAL"); ok {
+		cfg.DB.MemoryCleanupInterval = value
+	}
+	if cfg.DB.MemoryResultRetention == "" {
+		cfg.DB.MemoryResultRetention = "24h"
+	}
+	if cfg.DB.MemoryCleanupInterval == "" {
+		cfg.DB.MemoryCleanupInterval = "1m"
 	}
 }

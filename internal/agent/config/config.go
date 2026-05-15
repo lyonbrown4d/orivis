@@ -22,6 +22,12 @@ type Config struct {
 	Poll    struct {
 		Interval time.Duration `mapstructure:"interval" validate:"required"`
 	} `mapstructure:"poll"`
+	Discovery struct {
+		Docker struct {
+			Enabled bool   `mapstructure:"enabled"`
+			Mode    string `mapstructure:"mode"`
+		} `mapstructure:"docker"`
+	} `mapstructure:"discovery"`
 	Log struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
@@ -47,14 +53,16 @@ func LoadFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
 func defaultOptions() []configx.Option {
 	return []configx.Option{
 		configx.WithDefaults(map[string]any{
-			"server.url":         "http://127.0.0.1:8080",
-			"agent.name":         "local-agent",
-			"agent.token":        "",
-			"agent.region":       "local",
-			"agent.environments": []string{},
-			"runtime":            "host",
-			"poll.interval":      30 * time.Second,
-			"log.level":          "info",
+			"server.url":               "http://127.0.0.1:8080",
+			"agent.name":               "local-agent",
+			"agent.token":              "",
+			"agent.region":             "local",
+			"agent.environments":       []string{},
+			"runtime":                  "host",
+			"poll.interval":            30 * time.Second,
+			"discovery.docker.enabled": false,
+			"discovery.docker.mode":    "container",
+			"log.level":                "info",
 		}),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithValidateLevel(configx.ValidateLevelStruct),

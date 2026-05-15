@@ -54,6 +54,8 @@ func main() {
 	cmd.Flags().StringSlice("agent-environments", nil, "agent environment codes")
 	cmd.Flags().String("runtime", "", "agent runtime")
 	cmd.Flags().Duration("poll-interval", 0, "task polling interval")
+	cmd.Flags().Bool("discovery-docker-enabled", false, "enable Docker label discovery")
+	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode: container or swarm")
 	cmd.Flags().String("log-level", "", "log level")
 
 	if err := cmd.Execute(); err != nil {

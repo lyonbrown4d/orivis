@@ -35,6 +35,7 @@ func TestRoutesAreRegistered(t *testing.T) {
 		{method: http.MethodPost, path: "/api/agent/register"},
 		{method: http.MethodPost, path: "/api/agent/heartbeat"},
 		{method: http.MethodGet, path: "/api/agent/tasks"},
+		{method: http.MethodPost, path: "/api/agent/monitors"},
 		{method: http.MethodPost, path: "/api/agent/results"},
 	}
 
@@ -163,6 +164,85 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected one probe result, got %d", count)
+	}
+}
+
+func TestAgentMonitorSyncAPI(t *testing.T) {
+	ctx := context.Background()
+	storage := newAPITestStore(t)
+
+	cfg := config.Config{}
+	cfg.App.Env = "test"
+	cfg.DB.Driver = "sqlite"
+	cfg.Auth.Agent.Token = "agent-token"
+
+	server := NewServer(cfg, testLogger(), storage, nil, nil)
+	handler := server.Runtime().HumaAPI().Adapter()
+
+	registerResp := postJSON[protocol.AgentRegisterResponse](t, handler, "/api/agent/register", protocol.AgentRegisterRequest{
+		Name:             "agent-sync-01",
+		Token:            "agent-token",
+		RegionCode:       "local",
+		EnvironmentCodes: []string{"dev"},
+		RuntimeType:      "docker",
+	}, http.StatusOK)
+
+	syncResp := postJSON[protocol.AgentMonitorSyncResponse](t, handler, "/api/agent/monitors", protocol.AgentMonitorSyncRequest{
+		AgentID: registerResp.AgentID,
+		Token:   "agent-token",
+		Monitors: []protocol.AgentDiscoveredMonitor{
+			{
+				SourceKey:         "docker:container:web:http",
+				Name:              "web",
+				Type:              string(model.MonitorHTTP),
+				Target:            "http://web:8080/health",
+				EnvironmentCode:   "dev",
+				IntervalSeconds:   15,
+				TimeoutSeconds:    3,
+				AggregationPolicy: string(model.AggregationMajorityDown),
+			},
+		},
+	}, http.StatusOK)
+	if syncResp.Synced != 1 {
+		t.Fatalf("expected one synced monitor, got %d", syncResp.Synced)
+	}
+
+	tasks := getJSON[protocol.AgentTasksResponse](
+		t,
+		handler,
+		"/api/agent/tasks?agent_id="+url.QueryEscape(registerResp.AgentID)+"&token=agent-token",
+		http.StatusOK,
+	)
+	if len(tasks.Tasks) != 1 {
+		t.Fatalf("expected one synced task, got %#v", tasks.Tasks)
+	}
+	if tasks.Tasks[0].Target != "http://web:8080/health" || tasks.Tasks[0].IntervalSeconds != 15 {
+		t.Fatalf("unexpected synced task: %#v", tasks.Tasks[0])
+	}
+
+	postJSON[protocol.AgentMonitorSyncResponse](t, handler, "/api/agent/monitors", protocol.AgentMonitorSyncRequest{
+		AgentID: registerResp.AgentID,
+		Token:   "agent-token",
+		Monitors: []protocol.AgentDiscoveredMonitor{
+			{
+				SourceKey:         "docker:container:web:http",
+				Name:              "web",
+				Type:              string(model.MonitorHTTP),
+				Target:            "http://web:8081/health",
+				EnvironmentCode:   "dev",
+				IntervalSeconds:   30,
+				TimeoutSeconds:    5,
+				AggregationPolicy: string(model.AggregationMajorityDown),
+			},
+		},
+	}, http.StatusOK)
+
+	var count int
+	if err := storage.DB.QueryRowContext(ctx, "SELECT COUNT(1) FROM monitors WHERE source_key = ?", "docker:container:web:http").Scan(&count); err != nil {
+		t.Fatalf("count discovered monitors: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected discovered monitor to be upserted, got %d rows", count)
 	}
 }
 

@@ -29,6 +29,12 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Poll.Interval != 30*time.Second {
 		t.Fatalf("expected default poll interval, got %s", cfg.Poll.Interval)
 	}
+	if cfg.Discovery.Docker.Enabled {
+		t.Fatal("expected Docker discovery to be disabled by default")
+	}
+	if cfg.Discovery.Docker.Mode != "container" {
+		t.Fatalf("expected default Docker discovery mode, got %q", cfg.Discovery.Docker.Mode)
+	}
 }
 
 func unset(t *testing.T, keys ...string) {
@@ -66,5 +72,22 @@ func TestLoadAgentEnvironments(t *testing.T) {
 	}
 	if cfg.Agent.Environments[0] != "prod" || cfg.Agent.Environments[1] != "staging" {
 		t.Fatalf("unexpected agent environments: %#v", cfg.Agent.Environments)
+	}
+}
+
+func TestLoadDockerDiscovery(t *testing.T) {
+	t.Setenv("ORIVIS_DISCOVERY_DOCKER_ENABLED", "true")
+	t.Setenv("ORIVIS_DISCOVERY_DOCKER_MODE", "swarm")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected environment config to load: %v", err)
+	}
+
+	if !cfg.Discovery.Docker.Enabled {
+		t.Fatal("expected Docker discovery to be enabled")
+	}
+	if cfg.Discovery.Docker.Mode != "swarm" {
+		t.Fatalf("expected Docker discovery mode from environment, got %q", cfg.Discovery.Docker.Mode)
 	}
 }

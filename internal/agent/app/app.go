@@ -3,12 +3,17 @@ package app
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/arcgolabs/dix"
+	"github.com/go-co-op/gocron"
 	agentclient "github.com/lyonbrown4d/orivis/internal/agent/client"
 	"github.com/lyonbrown4d/orivis/internal/agent/config"
+	"github.com/lyonbrown4d/orivis/internal/agent/discovery"
+	"github.com/lyonbrown4d/orivis/internal/agent/probe"
 	"github.com/lyonbrown4d/orivis/internal/shared/buildinfo"
+	"github.com/lyonbrown4d/orivis/internal/shared/model"
 	"github.com/lyonbrown4d/orivis/internal/shared/observability"
 	"github.com/lyonbrown4d/orivis/internal/shared/protocol"
 )
@@ -42,7 +47,7 @@ func New(cfg config.Config, logger *slog.Logger) *dix.App {
 		dix.Imports(clientModule),
 		dix.Providers(
 			dix.Provider3(func(cfg config.Config, logger *slog.Logger, client *agentclient.Client) *Runtime {
-				return &Runtime{cfg: cfg, logger: logger, client: client}
+				return &Runtime{cfg: cfg, logger: logger, client: client, checker: probe.New(), tasks: map[string]scheduledTask{}}
 			}),
 		),
 		dix.Hooks(
@@ -64,12 +69,24 @@ func New(cfg config.Config, logger *slog.Logger) *dix.App {
 }
 
 type Runtime struct {
-	cfg     config.Config
-	logger  *slog.Logger
-	client  *agentclient.Client
-	agentID string
-	stop    context.CancelFunc
-	done    chan struct{}
+	cfg       config.Config
+	logger    *slog.Logger
+	client    *agentclient.Client
+	checker   *probe.Checker
+	discovery monitorDiscoverer
+	agentID   string
+	stop      context.CancelFunc
+	sched     *gocron.Scheduler
+	tasks     map[string]scheduledTask
+}
+
+type monitorDiscoverer interface {
+	Discover(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error)
+	Close(ctx context.Context) error
+}
+
+type scheduledTask struct {
+	signature string
 }
 
 func (r *Runtime) Start(ctx context.Context) error {
@@ -95,11 +112,22 @@ func (r *Runtime) Start(ctx context.Context) error {
 	r.agentID = registration.AgentID
 	r.logger.Info("agent registered", "agent_id", r.agentID, "status", registration.Status)
 
+	if err := r.configureDiscovery(); err != nil {
+		return err
+	}
+
 	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
 	r.stop = stop
-	r.done = make(chan struct{})
 
-	go r.loop(runCtx)
+	scheduler := gocron.NewScheduler(time.UTC)
+	if _, err := scheduler.Every(r.cfg.Poll.Interval).SingletonMode().Do(func() {
+		r.syncTasks(runCtx)
+	}); err != nil {
+		stop()
+		return err
+	}
+	r.sched = scheduler
+	scheduler.StartAsync()
 	return nil
 }
 
@@ -107,37 +135,51 @@ func (r *Runtime) Stop(context.Context) error {
 	if r.stop != nil {
 		r.stop()
 	}
-	if r.done != nil {
-		<-r.done
+	if r.sched != nil {
+		r.sched.Stop()
+	}
+	if r.discovery != nil {
+		if err := r.discovery.Close(context.Background()); err != nil {
+			r.logger.Warn("close monitor discovery failed", "error", err)
+		}
 	}
 	r.logger.Info("stopped agent")
 	return nil
 }
 
-func (r *Runtime) loop(ctx context.Context) {
-	defer close(r.done)
-
-	ticker := time.NewTicker(r.cfg.Poll.Interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			r.logger.Info("stopping agent")
-			return
-		case <-ticker.C:
-			if err := r.heartbeat(ctx); err != nil {
-				r.logger.Warn("agent heartbeat failed", "error", err)
-				continue
-			}
-			tasks, err := r.pullTasks(ctx)
-			if err != nil {
-				r.logger.Warn("agent task pull failed", "error", err)
-				continue
-			}
-			r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
-		}
+func (r *Runtime) syncTasks(ctx context.Context) {
+	if err := ctx.Err(); err != nil {
+		return
 	}
+	if err := r.heartbeat(ctx); err != nil {
+		r.logger.Warn("agent heartbeat failed", "error", err)
+		return
+	}
+	if err := r.syncDiscoveredMonitors(ctx); err != nil {
+		r.logger.Warn("agent monitor discovery sync failed", "error", err)
+	}
+	tasks, err := r.pullTasks(ctx)
+	if err != nil {
+		r.logger.Warn("agent task pull failed", "error", err)
+		return
+	}
+	r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
+	r.reconcileTasks(ctx, tasks.Tasks)
+}
+
+func (r *Runtime) configureDiscovery() error {
+	if !r.cfg.Discovery.Docker.Enabled {
+		return nil
+	}
+	discoverer, err := discovery.NewDockerDiscoverer(discovery.DockerOptions{
+		Mode: r.cfg.Discovery.Docker.Mode,
+	})
+	if err != nil {
+		return err
+	}
+	r.discovery = discoverer
+	r.logger.Info("Docker discovery enabled", "mode", r.cfg.Discovery.Docker.Mode)
+	return nil
 }
 
 func (r *Runtime) heartbeat(ctx context.Context) error {
@@ -159,6 +201,123 @@ func (r *Runtime) pullTasks(ctx context.Context) (protocol.AgentTasksResponse, e
 		AgentID: r.agentID,
 		Token:   r.cfg.Agent.Token,
 	})
+}
+
+func (r *Runtime) syncDiscoveredMonitors(ctx context.Context) error {
+	if r.discovery == nil {
+		return nil
+	}
+	monitors, err := r.discovery.Discover(ctx)
+	if err != nil {
+		return err
+	}
+	if len(monitors) == 0 {
+		return nil
+	}
+	response, err := r.client.SyncMonitors(ctx, protocol.AgentMonitorSyncRequest{
+		AgentID:  r.agentID,
+		Token:    r.cfg.Agent.Token,
+		Monitors: monitors,
+	})
+	if err != nil {
+		return err
+	}
+	r.logger.Debug("agent discovered monitors synced", "count", response.Synced)
+	return nil
+}
+
+func (r *Runtime) reconcileTasks(ctx context.Context, tasks []protocol.AgentTask) {
+	seen := make(map[string]struct{}, len(tasks))
+	for _, task := range tasks {
+		if task.MonitorID == "" {
+			continue
+		}
+		seen[task.MonitorID] = struct{}{}
+		signature := taskSignature(task)
+		current, ok := r.tasks[task.MonitorID]
+		if ok && current.signature == signature {
+			continue
+		}
+		if ok {
+			r.removeTask(task.MonitorID)
+		}
+		if err := r.scheduleTask(ctx, task, signature); err != nil {
+			r.logger.Warn("schedule agent task failed", "monitor_id", task.MonitorID, "error", err)
+		}
+	}
+
+	for monitorID := range r.tasks {
+		if _, ok := seen[monitorID]; !ok {
+			r.removeTask(monitorID)
+		}
+	}
+}
+
+func (r *Runtime) scheduleTask(ctx context.Context, task protocol.AgentTask, signature string) error {
+	interval := taskInterval(task, r.cfg.Poll.Interval)
+	taskCopy := task
+	job, err := r.sched.Every(interval).SingletonMode().Do(func() {
+		r.runTask(ctx, taskCopy)
+	})
+	if err != nil {
+		return err
+	}
+	job.Tag(taskTag(task.MonitorID))
+	r.tasks[task.MonitorID] = scheduledTask{signature: signature}
+	r.logger.Info("agent task scheduled", "monitor_id", task.MonitorID, "interval", interval)
+	return nil
+}
+
+func (r *Runtime) removeTask(monitorID string) {
+	if err := r.sched.RemoveByTag(taskTag(monitorID)); err != nil {
+		r.logger.Warn("remove agent task failed", "monitor_id", monitorID, "error", err)
+	}
+	delete(r.tasks, monitorID)
+}
+
+func (r *Runtime) runTask(ctx context.Context, task protocol.AgentTask) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	result := r.checker.Check(ctx, task)
+	if err := r.client.ReportResult(ctx, protocol.AgentResultRequest{
+		AgentID:      r.agentID,
+		Token:        r.cfg.Agent.Token,
+		MonitorID:    task.MonitorID,
+		Status:       string(result.Status),
+		LatencyMS:    result.Latency.Milliseconds(),
+		ErrorMessage: result.ErrorMessage,
+		CheckedAt:    result.CheckedAt,
+		RawDetail:    result.RawDetail,
+	}); err != nil {
+		r.logger.Warn("agent result report failed", "monitor_id", task.MonitorID, "error", err)
+		return
+	}
+
+	level := slog.LevelDebug
+	if result.Status != model.StatusUp {
+		level = slog.LevelWarn
+	}
+	r.logger.Log(ctx, level, "agent task checked", "monitor_id", task.MonitorID, "status", result.Status, "latency", result.Latency)
+}
+
+func taskInterval(task protocol.AgentTask, fallback time.Duration) time.Duration {
+	if task.IntervalSeconds > 0 {
+		return time.Duration(task.IntervalSeconds) * time.Second
+	}
+	if fallback > 0 {
+		return fallback
+	}
+	return 30 * time.Second
+}
+
+func taskSignature(task protocol.AgentTask) string {
+	return task.Type + "\x00" + task.Target + "\x00" + strconv.Itoa(task.IntervalSeconds) + "\x00" + strconv.Itoa(task.TimeoutSeconds)
+}
+
+func taskTag(monitorID string) string {
+	return "monitor:" + monitorID
 }
 
 func profileFromEnv(runtime string) dix.Profile {

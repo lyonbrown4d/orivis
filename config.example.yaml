@@ -8,8 +8,10 @@ log:
   level: info
 
 db:
-  driver: sqlite
-  dsn: file:orivis.db
+  driver: memory
+  dsn: ""
+  memory_result_retention: 24h
+  memory_cleanup_interval: 1m
 
 auth:
   agent:
@@ -34,3 +36,8 @@ runtime: host
 
 poll:
   interval: 30s
+
+discovery:
+  docker:
+    enabled: false
+    mode: container

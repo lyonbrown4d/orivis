@@ -108,6 +108,23 @@ func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (pro
 	return out, nil
 }
 
+func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSyncRequest) (protocol.AgentMonitorSyncResponse, error) {
+	var out protocol.AgentMonitorSyncResponse
+	resp, err := c.HTTP.Execute(
+		ctx,
+		c.HTTP.R().SetBody(req).SetResult(&out),
+		http.MethodPost,
+		"/api/agent/monitors",
+	)
+	if err != nil {
+		return out, err
+	}
+	if resp.IsError() {
+		return out, fmt.Errorf("sync agent monitors: server returned %s: %s", resp.Status(), resp.String())
+	}
+	return out, nil
+}
+
 func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultRequest) error {
 	resp, err := c.HTTP.Execute(
 		ctx,

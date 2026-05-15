@@ -178,13 +178,56 @@ func (s *Server) registerRoutes() {
 		out.Body.Tasks = make([]protocol.AgentTask, 0, len(monitors))
 		for _, monitor := range monitors {
 			out.Body.Tasks = append(out.Body.Tasks, protocol.AgentTask{
-				ID:             monitor.ID,
-				MonitorID:      monitor.ID,
-				Type:           string(monitor.Type),
-				Target:         monitor.Target,
-				TimeoutSeconds: int(monitor.Timeout.Seconds()),
+				ID:              monitor.ID,
+				MonitorID:       monitor.ID,
+				Type:            string(monitor.Type),
+				Target:          monitor.Target,
+				IntervalSeconds: int(monitor.Interval.Seconds()),
+				TimeoutSeconds:  int(monitor.Timeout.Seconds()),
 			})
 		}
+		return out, nil
+	})
+
+	httpx.MustPost(s.runtime, "/api/agent/monitors", func(ctx context.Context, input *agentMonitorSyncInput) (*agentMonitorSyncOutput, error) {
+		if s.store == nil || s.store.AgentStore() == nil || s.store.MonitorStore() == nil {
+			return nil, huma.Error500InternalServerError("agent monitor stores are not available")
+		}
+
+		agent, err := s.store.AgentStore().Authenticate(ctx, input.Body.AgentID, input.Body.Token)
+		if err != nil {
+			return nil, apiError(err)
+		}
+
+		synced := 0
+		for _, discovered := range input.Body.Monitors {
+			environmentID, err := s.store.EnvironmentIDForAgent(ctx, agent, discovered.EnvironmentCode)
+			if err != nil {
+				return nil, apiError(err)
+			}
+			monitor, err := s.store.MonitorStore().UpsertDiscovered(ctx, store.UpsertDiscoveredMonitorParams{
+				SourceKey:         discovered.SourceKey,
+				Name:              discovered.Name,
+				Type:              model.MonitorType(normalizeProtocolString(discovered.Type)),
+				Target:            discovered.Target,
+				EnvironmentID:     environmentID,
+				Enabled:           protocolEnabled(discovered.Enabled),
+				Interval:          time.Duration(discovered.IntervalSeconds) * time.Second,
+				Timeout:           time.Duration(discovered.TimeoutSeconds) * time.Second,
+				RetryCount:        discovered.RetryCount,
+				AggregationPolicy: model.AggregationPolicy(normalizeProtocolString(discovered.AggregationPolicy)),
+			})
+			if err != nil {
+				return nil, apiError(err)
+			}
+			if err := s.store.MonitorStore().AssignAgent(ctx, monitor.ID, agent.ID); err != nil {
+				return nil, apiError(err)
+			}
+			synced++
+		}
+
+		out := &agentMonitorSyncOutput{}
+		out.Body.Synced = synced
 		return out, nil
 	})
 
@@ -262,6 +305,14 @@ type agentTasksOutput struct {
 	Body protocol.AgentTasksResponse `json:"body"`
 }
 
+type agentMonitorSyncInput struct {
+	Body protocol.AgentMonitorSyncRequest `json:"body"`
+}
+
+type agentMonitorSyncOutput struct {
+	Body protocol.AgentMonitorSyncResponse `json:"body"`
+}
+
 type agentResultsInput struct {
 	Body protocol.AgentResultRequest `json:"body"`
 }
@@ -291,5 +342,16 @@ func apiError(err error) error {
 }
 
 func modelStatus(value string) model.Status {
-	return model.Status(strings.ToLower(strings.TrimSpace(value)))
+	return model.Status(normalizeProtocolString(value))
+}
+
+func normalizeProtocolString(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func protocolEnabled(value *bool) bool {
+	if value == nil {
+		return true
+	}
+	return *value
 }

@@ -14,12 +14,14 @@ import (
 
 type MonitorStore interface {
 	Create(ctx context.Context, params CreateMonitorParams) (model.Monitor, error)
+	UpsertDiscovered(ctx context.Context, params UpsertDiscoveredMonitorParams) (model.Monitor, error)
 	AssignAgent(ctx context.Context, monitorID, agentID string) error
 	ListAssignedEnabled(ctx context.Context, agentID string) ([]model.Monitor, error)
 	Get(ctx context.Context, id string) (model.Monitor, error)
 }
 
 type CreateMonitorParams struct {
+	SourceKey         string
 	Name              string
 	Type              model.MonitorType
 	Target            string
@@ -30,6 +32,19 @@ type CreateMonitorParams struct {
 	RetryCount        int
 	AggregationPolicy model.AggregationPolicy
 	Source            model.ConfigSource
+}
+
+type UpsertDiscoveredMonitorParams struct {
+	SourceKey         string
+	Name              string
+	Type              model.MonitorType
+	Target            string
+	EnvironmentID     string
+	Enabled           bool
+	Interval          time.Duration
+	Timeout           time.Duration
+	RetryCount        int
+	AggregationPolicy model.AggregationPolicy
 }
 
 type monitorStore struct {
@@ -50,10 +65,11 @@ func (s *monitorStore) Create(ctx context.Context, params CreateMonitorParams) (
 	if _, err := s.db.ExecContext(
 		ctx,
 		`INSERT INTO monitors (
-            id, name, type, target, environment_id, enabled, interval_seconds,
+            id, source_key, name, type, target, environment_id, enabled, interval_seconds,
             timeout_seconds, retry_count, aggregation_policy, source, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id,
+		normalized.SourceKey,
 		normalized.Name,
 		string(normalized.Type),
 		normalized.Target,
@@ -70,6 +86,62 @@ func (s *monitorStore) Create(ctx context.Context, params CreateMonitorParams) (
 		return model.Monitor{}, fmt.Errorf("insert monitor: %w", err)
 	}
 	return s.Get(ctx, id)
+}
+
+func (s *monitorStore) UpsertDiscovered(ctx context.Context, params UpsertDiscoveredMonitorParams) (model.Monitor, error) {
+	createParams := CreateMonitorParams{
+		SourceKey:         params.SourceKey,
+		Name:              params.Name,
+		Type:              params.Type,
+		Target:            params.Target,
+		EnvironmentID:     params.EnvironmentID,
+		Enabled:           params.Enabled,
+		Interval:          params.Interval,
+		Timeout:           params.Timeout,
+		RetryCount:        params.RetryCount,
+		AggregationPolicy: params.AggregationPolicy,
+		Source:            model.ConfigSourceAPI,
+	}
+	normalized, err := normalizeCreateMonitorParams(createParams)
+	if err != nil {
+		return model.Monitor{}, err
+	}
+	if normalized.SourceKey == "" {
+		return model.Monitor{}, fmt.Errorf("%w: monitor source key is required", ErrInvalidInput)
+	}
+
+	var existingID string
+	err = s.db.QueryRowContext(ctx, "SELECT id FROM monitors WHERE source_key = ?", normalized.SourceKey).Scan(&existingID)
+	switch {
+	case err == nil:
+		if _, err := s.db.ExecContext(
+			ctx,
+			`UPDATE monitors
+             SET name = ?, type = ?, target = ?, environment_id = ?, enabled = ?,
+                 interval_seconds = ?, timeout_seconds = ?, retry_count = ?,
+                 aggregation_policy = ?, source = ?, updated_at = ?
+             WHERE id = ?`,
+			normalized.Name,
+			string(normalized.Type),
+			normalized.Target,
+			normalized.EnvironmentID,
+			boolInt(normalized.Enabled),
+			int(normalized.Interval.Seconds()),
+			int(normalized.Timeout.Seconds()),
+			normalized.RetryCount,
+			string(normalized.AggregationPolicy),
+			string(normalized.Source),
+			formatTime(time.Now().UTC()),
+			existingID,
+		); err != nil {
+			return model.Monitor{}, fmt.Errorf("update discovered monitor: %w", err)
+		}
+		return s.Get(ctx, existingID)
+	case errors.Is(err, sql.ErrNoRows):
+		return s.Create(ctx, createParams)
+	default:
+		return model.Monitor{}, fmt.Errorf("find discovered monitor: %w", err)
+	}
 }
 
 func (s *monitorStore) AssignAgent(ctx context.Context, monitorID, agentID string) error {
@@ -102,7 +174,7 @@ func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) 
 	rows, err := s.db.QueryContext(
 		ctx,
 		`SELECT m.id, m.name, m.type, m.target, m.environment_id, m.enabled,
-                m.interval_seconds, m.timeout_seconds, m.retry_count,
+                m.source_key, m.interval_seconds, m.timeout_seconds, m.retry_count,
                 m.aggregation_policy, m.source, m.created_at, m.updated_at
          FROM monitors m
          JOIN monitor_agents ma ON ma.monitor_id = m.id
@@ -139,7 +211,7 @@ func (s *monitorStore) Get(ctx context.Context, id string) (model.Monitor, error
 	err := s.db.QueryRowContext(
 		ctx,
 		`SELECT id, name, type, target, environment_id, enabled,
-                interval_seconds, timeout_seconds, retry_count,
+                source_key, interval_seconds, timeout_seconds, retry_count,
                 aggregation_policy, source, created_at, updated_at
          FROM monitors
          WHERE id = ?`,
@@ -151,6 +223,7 @@ func (s *monitorStore) Get(ctx context.Context, id string) (model.Monitor, error
 		&rec.Target,
 		&rec.EnvironmentID,
 		&rec.Enabled,
+		&rec.SourceKey,
 		&rec.IntervalSeconds,
 		&rec.TimeoutSeconds,
 		&rec.RetryCount,
@@ -169,6 +242,7 @@ func (s *monitorStore) Get(ctx context.Context, id string) (model.Monitor, error
 }
 
 type createMonitorParams struct {
+	SourceKey         string
 	Name              string
 	Type              model.MonitorType
 	Target            string
@@ -183,6 +257,7 @@ type createMonitorParams struct {
 
 func normalizeCreateMonitorParams(params CreateMonitorParams) (createMonitorParams, error) {
 	out := createMonitorParams{
+		SourceKey:         strings.TrimSpace(params.SourceKey),
 		Name:              strings.TrimSpace(params.Name),
 		Type:              params.Type,
 		Target:            strings.TrimSpace(params.Target),
@@ -234,6 +309,7 @@ func scanMonitor(row rowScanner) (model.Monitor, error) {
 		&rec.Target,
 		&rec.EnvironmentID,
 		&rec.Enabled,
+		&rec.SourceKey,
 		&rec.IntervalSeconds,
 		&rec.TimeoutSeconds,
 		&rec.RetryCount,
@@ -249,6 +325,7 @@ func scanMonitor(row rowScanner) (model.Monitor, error) {
 
 type monitorRecord struct {
 	ID                string
+	SourceKey         string
 	Name              string
 	Type              string
 	Target            string
@@ -274,6 +351,7 @@ func (r monitorRecord) model() (model.Monitor, error) {
 	}
 	return model.Monitor{
 		ID:                r.ID,
+		SourceKey:         r.SourceKey,
 		Name:              r.Name,
 		Type:              model.MonitorType(r.Type),
 		Target:            r.Target,
