@@ -3,6 +3,7 @@
   "page.subtitle": "Distributed availability observability",
   "status.description": "A zero-config server view for agents, discovered monitors, and recent probe results.",
   "nav.dashboard": "Dashboard",
+  "nav.timeline": "Timeline",
   "nav.monitors": "Monitors",
   "nav.agents": "Agents",
   "nav.results": "Recent results",
@@ -20,8 +21,13 @@
   "summary.updated": "Updated",
   "summary.updated.at": "auto refresh 15s",
   "section.monitors": "Monitors",
+  "section.timeline": "Status timeline",
   "section.agents": "Agents",
   "section.recent_results": "Recent results",
+  "chart.description": "Recent probe status by time node. Hover points to inspect monitor status and latency.",
+  "chart.empty": "No timeline data yet. Probe results will appear here after agents report status.",
+  "chart.status": "status",
+  "chart.latency": "latency",
   "table.name": "Name",
   "table.target": "Target",
   "table.environment": "Environment",
@@ -45,5 +51,6 @@
   "time.minutes_ago": "%dm ago",
   "time.hours_ago": "%dh ago",
   "meta.group": "Environment",
-  "status.unknown": "unknown"
+  "status.unknown": "unknown",
+  "status.degraded": "degraded"
 }

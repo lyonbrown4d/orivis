@@ -62,8 +62,6 @@ func (s *Store) DashboardSnapshot(ctx context.Context, resultLimit int) (Dashboa
 	switch {
 	case s == nil:
 		return out, nil
-	case s.memory != nil:
-		return s.memoryDashboardSnapshot(resultLimit)
 	case s.DB != nil:
 		return s.sqlDashboardSnapshot(ctx, resultLimit)
 	default:

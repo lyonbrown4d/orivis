@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="15">
   <title>{{call .T "page.title"}} | Orivis</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
 </head>
 <body class="min-h-screen bg-[#f5f1e8] text-slate-950">
   <div class="mx-auto flex min-h-screen max-w-7xl gap-4 px-4 py-5 lg:px-8">
@@ -18,6 +20,7 @@
 
       <div class="mt-8 space-y-1 text-sm">
         <a class="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-2" href="/?lang={{.Lang}}#overview">{{call .T "nav.dashboard"}}</a>
+        <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white" href="/?lang={{.Lang}}#timeline">{{call .T "nav.timeline"}}</a>
         <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white" href="/?lang={{.Lang}}#monitors">{{call .T "nav.monitors"}}</a>
         <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white" href="/?lang={{.Lang}}#agents">{{call .T "nav.agents"}}</a>
         <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white" href="/?lang={{.Lang}}#results">{{call .T "nav.results"}}</a>

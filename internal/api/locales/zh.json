@@ -3,6 +3,7 @@
   "page.subtitle": "\u5206\u5e03\u5f0f\u53ef\u7528\u6027\u76d1\u6d4b\u9762\u677f",
   "status.description": "\u9762\u5411 Agent\u3001\u81ea\u52a8\u53d1\u73b0\u4e0e\u6700\u65b0\u63a2\u6d4b\u7ed3\u679c\u7684\u96f6\u914d\u7f6e\u89c6\u56fe\u3002",
   "nav.dashboard": "\u6982\u89c8",
+  "nav.timeline": "\u72b6\u6001\u65f6\u95f4\u7ebf",
   "nav.monitors": "\u76d1\u63a7\u5217\u8868",
   "nav.agents": "\u8282\u70b9",
   "nav.results": "\u6700\u8fd1\u7ed3\u679c",
@@ -20,8 +21,13 @@
   "summary.updated": "\u66f4\u65b0\u65f6\u95f4",
   "summary.updated.at": "15s \u81ea\u52a8\u5237\u65b0",
   "section.monitors": "\u76d1\u63a7",
+  "section.timeline": "\u72b6\u6001\u65f6\u95f4\u7ebf",
   "section.agents": "\u8282\u70b9",
   "section.recent_results": "\u6700\u8fd1\u7ed3\u679c",
+  "chart.description": "\u6309\u65f6\u95f4\u8282\u70b9\u5c55\u793a\u6700\u8fd1\u63a2\u6d4b\u72b6\u6001\uff0c\u60ac\u505c\u8282\u70b9\u53ef\u67e5\u770b\u76d1\u63a7\u3001\u72b6\u6001\u548c\u8017\u65f6\u3002",
+  "chart.empty": "\u6682\u65e0\u65f6\u95f4\u7ebf\u6570\u636e\u3002Agent \u4e0a\u62a5\u63a2\u6d4b\u7ed3\u679c\u540e\u4f1a\u5728\u8fd9\u91cc\u663e\u793a\u3002",
+  "chart.status": "\u72b6\u6001",
+  "chart.latency": "\u8017\u65f6",
   "table.name": "\u540d\u79f0",
   "table.target": "\u76ee\u6807",
   "table.environment": "\u73af\u5883",
@@ -45,5 +51,6 @@
   "time.minutes_ago": "%d \u5206\u949f\u524d",
   "time.hours_ago": "%d \u5c0f\u65f6\u524d",
   "meta.group": "\u73af\u5883\u5206\u7ec4",
-  "status.unknown": "\u672a\u77e5"
+  "status.unknown": "\u672a\u77e5",
+  "status.degraded": "\u964d\u7ea7"
 }

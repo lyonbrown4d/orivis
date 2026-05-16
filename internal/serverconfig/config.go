@@ -5,6 +5,8 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const DefaultSQLiteDSN = "file:orivis?mode=memory&cache=shared"
+
 type Config struct {
 	App struct {
 		Env string `mapstructure:"env" validate:"required"`
@@ -16,11 +18,14 @@ type Config struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
 	DB struct {
-		Driver          string `mapstructure:"driver"          validate:"required"`
-		DSN             string `mapstructure:"dsn"`
-		ResultRetention string `mapstructure:"resultretention"`
-		CleanupInterval string `mapstructure:"cleanupinterval"`
+		Driver string `mapstructure:"driver" validate:"required"`
+		DSN    string `mapstructure:"dsn"`
 	} `mapstructure:"db"`
+	Ingest struct {
+		QueueSize     int    `mapstructure:"queuesize"`
+		BatchSize     int    `mapstructure:"batchsize"`
+		FlushInterval string `mapstructure:"flushinterval" validate:"required"`
+	} `mapstructure:"ingest"`
 	Auth struct {
 		Agent struct {
 			Token string `mapstructure:"token"`
@@ -61,10 +66,11 @@ func defaultOptions() []configx.Option {
 			"app.env":                            "development",
 			"http.addr":                          ":8080",
 			"log.level":                          "info",
-			"db.driver":                          "memory",
-			"db.dsn":                             "",
-			"db.resultretention":                 "24h",
-			"db.cleanupinterval":                 "1m",
+			"db.driver":                          "sqlite",
+			"db.dsn":                             DefaultSQLiteDSN,
+			"ingest.queuesize":                   4096,
+			"ingest.batchsize":                   100,
+			"ingest.flushinterval":               "1s",
 			"auth.agent.token":                   "",
 			"auth.dashboard.enabled":             false,
 			"auth.dashboard.username":            "admin",

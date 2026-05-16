@@ -41,12 +41,31 @@
       <div class="rounded-3xl border border-slate-900/10 bg-white/80 p-5 shadow-sm">
         <p class="text-xs uppercase tracking-[0.25em] text-slate-500">{{call $t "summary.storage"}}</p>
         <p class="mt-2 font-semibold">{{.Database.Driver}}</p>
-        <p class="text-sm text-slate-500">{{call $t "summary.storage.driver"}}: {{if .Database.Dialect}}{{.Database.Dialect}}{{else}}memory{{end}}</p>
+        <p class="text-sm text-slate-500">{{call $t "summary.storage.driver"}}: {{.Database.Dialect}}</p>
       </div>
       <div class="rounded-3xl border border-slate-900/10 bg-white/80 p-5 shadow-sm">
         <p class="text-xs uppercase tracking-[0.25em] text-slate-500">{{call $t "summary.updated"}}</p>
         <p class="mt-2 font-semibold">{{since $t .GeneratedAt}}</p>
         <p class="text-sm text-slate-500">{{.GeneratedAt.Format "2006-01-02 15:04:05 UTC"}} / {{call $t "summary.updated.at"}}</p>
+      </div>
+    </section>
+
+    <section id="timeline" class="rounded-[1.75rem] border border-slate-900/10 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 class="text-xl font-black">{{call $t "section.timeline"}}</h2>
+          <p class="mt-1 text-sm text-slate-500">{{call $t "chart.description"}}</p>
+        </div>
+        <div class="flex items-center gap-3 text-xs font-bold text-slate-500">
+          <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-rose-500"></span>{{call $t "label.down"}}</span>
+          <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-amber-500"></span>{{call $t "status.degraded"}}</span>
+          <span class="inline-flex items-center gap-1"><span class="h-2 w-2 rounded-full bg-emerald-500"></span>{{call $t "label.up"}}</span>
+        </div>
+      </div>
+      <div class="mt-5 rounded-3xl border border-slate-100 bg-slate-50/70 p-4">
+        <div id="orivis-status-chart" class="min-h-[280px]"></div>
+        <p id="orivis-status-chart-empty" class="hidden rounded-2xl bg-white p-6 text-center text-sm text-slate-500 ring-1 ring-slate-100">{{call $t "chart.empty"}}</p>
+        <p id="orivis-status-chart-detail" class="mt-3 min-h-5 text-sm font-semibold text-slate-600"></p>
       </div>
     </section>
 
@@ -151,3 +170,107 @@
     </section>
   </section>
 </section>
+
+<script type="application/json" id="orivis-status-chart-data">{{.StatusChartJSON}}</script>
+<script>
+  (function() {
+    const dataNode = document.getElementById('orivis-status-chart-data');
+    let points = [];
+    try {
+      points = JSON.parse(dataNode ? dataNode.textContent : '[]');
+    } catch {
+      points = [];
+    }
+    const chart = document.getElementById('orivis-status-chart');
+    const empty = document.getElementById('orivis-status-chart-empty');
+    const detail = document.getElementById('orivis-status-chart-detail');
+    const labels = {
+      status: {{printf "%q" (call $t "chart.status")}},
+      latency: {{printf "%q" (call $t "chart.latency")}},
+      up: {{printf "%q" (call $t "label.up")}},
+      down: {{printf "%q" (call $t "label.down")}},
+      degraded: {{printf "%q" (call $t "status.degraded")}},
+      unknown: {{printf "%q" (call $t "status.unknown")}}
+    };
+
+    if (!chart || !window.uPlot || !Array.isArray(points) || points.length === 0) {
+      if (chart) chart.classList.add('hidden');
+      if (empty) empty.classList.remove('hidden');
+      return;
+    }
+
+    const times = points.map((point) => Date.parse(point.time) / 1000);
+    const scores = points.map((point) => point.score);
+    const statusLabel = function(value) {
+      if (value >= 0.9) return labels.up;
+      if (value >= 0.5) return labels.degraded;
+      if (value > 0.05) return labels.unknown;
+      return labels.down;
+    };
+    const setDetail = function(index) {
+      const point = points[index];
+      if (!point || !detail) return;
+      const name = point.monitor_name || '-';
+      detail.textContent = `${point.label} / ${name} / ${labels.status}: ${statusLabel(point.score)} / ${labels.latency}: ${point.latency_ms}ms`;
+    };
+
+    const options = {
+      width: Math.max(chart.clientWidth, 320),
+      height: 280,
+      padding: [12, 16, 0, 0],
+      scales: {
+        x: { time: true },
+        y: { range: [-0.08, 1.08] }
+      },
+      axes: [
+        {
+          stroke: '#64748b',
+          grid: { stroke: '#e2e8f0' },
+          values: function(_plot, values) {
+            return values.map((value) => new Date(value * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          }
+        },
+        {
+          stroke: '#64748b',
+          grid: { stroke: '#e2e8f0' },
+          values: function(_plot, values) {
+            return values.map(statusLabel);
+          }
+        }
+      ],
+      series: [
+        {},
+        {
+          label: labels.status,
+          stroke: '#10b981',
+          width: 3,
+          points: {
+            show: true,
+            size: 7,
+            stroke: '#10221f',
+            fill: '#f8fafc'
+          }
+        }
+      ],
+      cursor: { points: { size: 9 } },
+      hooks: {
+        setCursor: [
+          function(plot) {
+            if (Number.isInteger(plot.cursor.idx)) {
+              setDetail(plot.cursor.idx);
+            }
+          }
+        ]
+      }
+    };
+
+    const plot = new uPlot(options, [times, scores], chart);
+    setDetail(points.length - 1);
+
+    if (window.ResizeObserver) {
+      new ResizeObserver(function() {
+        plot.setSize({ width: Math.max(chart.clientWidth, 320), height: 280 });
+      }).observe(chart);
+    }
+  })();
+</script>

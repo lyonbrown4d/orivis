@@ -2,26 +2,29 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	"github.com/arcgolabs/dbx/querydsl"
+	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
 )
 
 func (s *agentStore) findAgentCredentialByName(ctx context.Context, name string) (agentCredential, error) {
-	var credential agentCredential
-	err := s.db.QueryRowContext(ctx, "SELECT id, token_hash FROM agents WHERE name = ?", name).Scan(&credential.ID, &credential.TokenHash)
-	if err == nil {
-		credential.Found = true
-		return credential, nil
+	agent, err := newAgentRepository(s.db).FirstSpec(ctx, repository.Where(agentsSchema.Name.Eq(name)))
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return agentCredential{}, nil
+		}
+		return agentCredential{}, fmt.Errorf("find agent by name: %w", err)
 	}
-	if errors.Is(err, sql.ErrNoRows) {
-		return credential, nil
-	}
-	return credential, fmt.Errorf("find agent by name: %w", err)
+	return agentCredential{
+		ID:        agent.ID,
+		TokenHash: agent.TokenHash,
+		Found:     true,
+	}, nil
 }
 
 func (s *agentStore) updateRegisteredAgent(
@@ -76,54 +79,29 @@ func (s *agentStore) insertAgent(
 	normalized normalizedRegisterParams,
 	now time.Time,
 ) error {
-	_, err := s.db.ExecContext(
-		ctx,
-		`INSERT INTO agents (
-                id, name, token_hash, region_id, runtime_type, version,
-                last_seen_at, status, source, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id,
-		normalized.Name,
-		tokenHash,
-		regionID,
-		normalized.RuntimeType,
-		normalized.Version,
-		formatTime(now),
-		string(model.AgentStatusOnline),
-		string(model.ConfigSourceAPI),
-		formatTime(now),
-		formatTime(now),
-	)
-	if err != nil {
+	agent := agentRecord{
+		ID:          id,
+		Name:        normalized.Name,
+		TokenHash:   tokenHash,
+		RegionID:    regionID,
+		RuntimeType: normalized.RuntimeType,
+		Version:     normalized.Version,
+		LastSeenAt:  formatTime(now),
+		Status:      string(model.AgentStatusOnline),
+		Source:      string(model.ConfigSourceAPI),
+		CreatedAt:   formatTime(now),
+		UpdatedAt:   formatTime(now),
+	}
+	if err := newAgentRepository(s.db).Create(ctx, &agent); err != nil {
 		return fmt.Errorf("insert agent: %w", err)
 	}
 	return nil
 }
 
 func (s *agentStore) getAgentRecord(ctx context.Context, id string) (agentRecord, error) {
-	var rec agentRecord
-	err := s.db.QueryRowContext(
-		ctx,
-		`SELECT id, name, token_hash, region_id, runtime_type, version,
-                last_seen_at, status, source, created_at, updated_at
-         FROM agents
-         WHERE id = ?`,
-		id,
-	).Scan(
-		&rec.ID,
-		&rec.Name,
-		&rec.TokenHash,
-		&rec.RegionID,
-		&rec.RuntimeType,
-		&rec.Version,
-		&rec.LastSeenAt,
-		&rec.Status,
-		&rec.Source,
-		&rec.CreatedAt,
-		&rec.UpdatedAt,
-	)
+	rec, err := newAgentRepository(s.db).FirstSpec(ctx, repository.Where(agentsSchema.ID.Eq(id)))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return agentRecord{}, fmt.Errorf("%w: agent %s", ErrNotFound, id)
 		}
 		return agentRecord{}, fmt.Errorf("get agent: %w", err)
@@ -132,34 +110,33 @@ func (s *agentStore) getAgentRecord(ctx context.Context, id string) (agentRecord
 }
 
 func (s *agentStore) ensureRegion(ctx context.Context, code string, now time.Time) (string, error) {
-	var id string
-	err := s.db.QueryRowContext(ctx, "SELECT id FROM regions WHERE code = ?", code).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("find region: %w", err)
-	}
+	return ensureCodeEntity(ctx, code, "reg", "region", s.findRegionIDByCode, func(ctx context.Context, id, code string) error {
+		return s.insertRegion(ctx, id, code, now)
+	})
+}
 
-	id, err = newID("reg")
+func (s *agentStore) findRegionIDByCode(ctx context.Context, code string) (string, error) {
+	region, err := newRegionRepository(s.db).FirstSpec(ctx, repository.Where(regionsSchema.Code.Eq(code)))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("find region by code: %w", err)
 	}
-	if _, err := s.db.ExecContext(
-		ctx,
-		`INSERT INTO regions (id, name, code, enabled, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id,
-		code,
-		code,
-		1,
-		string(model.ConfigSourceAPI),
-		formatTime(now),
-		formatTime(now),
-	); err != nil {
-		return "", fmt.Errorf("insert region: %w", err)
+	return region.ID, nil
+}
+
+func (s *agentStore) insertRegion(ctx context.Context, id, code string, now time.Time) error {
+	row := regionRow{
+		ID:        id,
+		Name:      code,
+		Code:      code,
+		Enabled:   1,
+		Source:    string(model.ConfigSourceAPI),
+		CreatedAt: formatTime(now),
+		UpdatedAt: formatTime(now),
 	}
-	return id, nil
+	if err := newRegionRepository(s.db).Create(ctx, &row); err != nil {
+		return fmt.Errorf("insert region: %w", err)
+	}
+	return nil
 }
 
 func (s *agentStore) ensureEnvironments(ctx context.Context, codes []string, now time.Time) ([]string, error) {
@@ -179,49 +156,75 @@ func (s *agentStore) ensureEnvironments(ctx context.Context, codes []string, now
 }
 
 func (s *agentStore) ensureEnvironment(ctx context.Context, code string, now time.Time) (string, error) {
-	var id string
-	err := s.db.QueryRowContext(ctx, "SELECT id FROM environments WHERE code = ?", code).Scan(&id)
+	return ensureCodeEntity(ctx, code, "env", "environment", s.findEnvironmentIDByCode, func(ctx context.Context, id, code string) error {
+		return s.insertEnvironment(ctx, id, code, now)
+	})
+}
+
+func (s *agentStore) findEnvironmentIDByCode(ctx context.Context, code string) (string, error) {
+	environment, err := newEnvironmentRepository(s.db).FirstSpec(ctx, repository.Where(environmentsSchema.Code.Eq(code)))
+	if err != nil {
+		return "", fmt.Errorf("find environment by code: %w", err)
+	}
+	return environment.ID, nil
+}
+
+func (s *agentStore) insertEnvironment(ctx context.Context, id, code string, now time.Time) error {
+	row := environmentRow{
+		ID:        id,
+		Name:      code,
+		Code:      code,
+		Enabled:   1,
+		Source:    string(model.ConfigSourceAPI),
+		CreatedAt: formatTime(now),
+		UpdatedAt: formatTime(now),
+	}
+	if err := newEnvironmentRepository(s.db).Create(ctx, &row); err != nil {
+		return fmt.Errorf("insert environment: %w", err)
+	}
+	return nil
+}
+
+func ensureCodeEntity(
+	ctx context.Context,
+	code,
+	idPrefix,
+	entityName string,
+	find func(context.Context, string) (string, error),
+	insert func(context.Context, string, string) error,
+) (string, error) {
+	id, err := find(ctx, code)
 	if err == nil {
 		return id, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return "", fmt.Errorf("find environment: %w", err)
+	if !errors.Is(err, repository.ErrNotFound) {
+		return "", fmt.Errorf("find %s: %w", entityName, err)
 	}
 
-	id, err = newID("env")
+	id, err = newID(idPrefix)
 	if err != nil {
 		return "", err
 	}
-	if _, err := s.db.ExecContext(
-		ctx,
-		`INSERT INTO environments (id, name, code, enabled, source, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id,
-		code,
-		code,
-		1,
-		string(model.ConfigSourceAPI),
-		formatTime(now),
-		formatTime(now),
-	); err != nil {
-		return "", fmt.Errorf("insert environment: %w", err)
+	if err := insert(ctx, id, code); err != nil {
+		return "", err
 	}
 	return id, nil
 }
 
 func (s *agentStore) updateExistingAgent(ctx context.Context, id, regionID, runtimeType, version string, now time.Time) error {
-	_, err := s.db.ExecContext(
+	schema := agentsSchema
+	_, err := newAgentRepository(s.db).Update(
 		ctx,
-		`UPDATE agents
-         SET region_id = ?, runtime_type = ?, version = ?, last_seen_at = ?, status = ?, updated_at = ?
-         WHERE id = ?`,
-		regionID,
-		runtimeType,
-		version,
-		formatTime(now),
-		string(model.AgentStatusOnline),
-		formatTime(now),
-		id,
+		querydsl.Update(schema).
+			Set(
+				schema.RegionID.Set(regionID),
+				schema.RuntimeType.Set(runtimeType),
+				schema.Version.Set(version),
+				schema.LastSeenAt.Set(formatTime(now)),
+				schema.Status.Set(string(model.AgentStatusOnline)),
+				schema.UpdatedAt.Set(formatTime(now)),
+			).
+			Where(schema.ID.Eq(id)),
 	)
 	if err != nil {
 		return fmt.Errorf("update existing agent: %w", err)
@@ -230,39 +233,42 @@ func (s *agentStore) updateExistingAgent(ctx context.Context, id, regionID, runt
 }
 
 func (s *agentStore) replaceAgentEnvironments(ctx context.Context, agentID string, environmentIDs []string) error {
-	if _, err := s.db.ExecContext(ctx, "DELETE FROM agent_environments WHERE agent_id = ?", agentID); err != nil {
+	repo := newAgentEnvironmentRepository(s.db)
+	schema := agentEnvironmentsSchema
+	if _, err := repo.Delete(ctx, querydsl.DeleteFrom(schema).Where(schema.AgentID.Eq(agentID))); err != nil {
 		return fmt.Errorf("clear agent environments: %w", err)
 	}
+	if len(environmentIDs) == 0 {
+		return nil
+	}
+	rows := make([]*agentEnvironmentRow, 0, len(environmentIDs))
 	for _, environmentID := range environmentIDs {
-		if _, err := s.db.ExecContext(
-			ctx,
-			"INSERT INTO agent_environments (agent_id, environment_id) VALUES (?, ?)",
-			agentID,
-			environmentID,
-		); err != nil {
-			return fmt.Errorf("insert agent environment: %w", err)
-		}
+		rows = append(rows, &agentEnvironmentRow{
+			AgentID:       agentID,
+			EnvironmentID: environmentID,
+		})
+	}
+	if err := repo.CreateMany(ctx, rows...); err != nil {
+		return fmt.Errorf("insert agent environments: %w", err)
 	}
 	return nil
 }
 
 func (s *agentStore) agentEnvironmentIDs(ctx context.Context, agentID string) (*collectionlist.List[string], error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT environment_id FROM agent_environments WHERE agent_id = ? ORDER BY environment_id", agentID)
+	schema := agentEnvironmentsSchema
+	links, err := newAgentEnvironmentRepository(s.db).List(
+		ctx,
+		querydsl.Select(querydsl.AllColumns(schema).Values()...).
+			From(schema).
+			Where(schema.AgentID.Eq(agentID)).
+			OrderBy(schema.EnvironmentID.Asc()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("query agent environments: %w", err)
 	}
-	defer closeRows(rows)
-
-	ids := make([]string, 0)
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan agent environment: %w", err)
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate agent environments: %w", err)
+	ids := make([]string, 0, links.Len())
+	for _, link := range links.Values() {
+		ids = append(ids, link.EnvironmentID)
 	}
 	return collectionlist.NewList[string](ids...), nil
 }

@@ -13,7 +13,7 @@ import (
 func TestDashboardIndexRendersHTML(t *testing.T) {
 	cfg := config.Config{}
 	cfg.App.Env = "test"
-	cfg.DB.Driver = "memory"
+	cfg.DB.Driver = "sqlite"
 
 	server := newAPITestServer(cfg, newAPITestStore(t))
 	handler := server.Runtime().HumaAPI().Adapter()

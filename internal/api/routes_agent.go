@@ -169,7 +169,7 @@ func (e *agentEndpoint) reportResult(ctx context.Context, input *agentResultsInp
 	if err != nil {
 		return nil, apiError(err)
 	}
-	if _, err := e.store.ResultStore().Record(ctx, store.RecordProbeResultParams{
+	params := store.RecordProbeResultParams{
 		Agent:        agent,
 		MonitorID:    input.Body.MonitorID,
 		Status:       modelStatus(input.Body.Status),
@@ -177,9 +177,24 @@ func (e *agentEndpoint) reportResult(ctx context.Context, input *agentResultsInp
 		ErrorMessage: input.Body.ErrorMessage,
 		CheckedAt:    input.Body.CheckedAt,
 		RawDetail:    input.Body.RawDetail,
-	}); err != nil {
+	}
+	if err := e.recordProbeResult(ctx, params); err != nil {
 		return nil, apiError(err)
 	}
 
 	return newStatusOutput("accepted"), nil
+}
+
+func (e *agentEndpoint) recordProbeResult(ctx context.Context, params store.RecordProbeResultParams) error {
+	if e.resultIngestor != nil {
+		if err := e.resultIngestor.Enqueue(ctx, params); err != nil {
+			return fmt.Errorf("enqueue probe result: %w", err)
+		}
+		return nil
+	}
+	_, err := e.store.ResultStore().Record(ctx, params)
+	if err != nil {
+		return fmt.Errorf("record probe result: %w", err)
+	}
+	return nil
 }

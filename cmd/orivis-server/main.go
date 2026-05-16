@@ -15,6 +15,7 @@ import (
 	"github.com/arcgolabs/logx"
 	"github.com/lyonbrown4d/orivis/internal/api"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
+	"github.com/lyonbrown4d/orivis/internal/ingest"
 	"github.com/lyonbrown4d/orivis/internal/security"
 	serverconfig "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	serverobs "github.com/lyonbrown4d/orivis/internal/serverobservability"
@@ -48,6 +49,9 @@ func main() {
 	cmd.Flags().String("log-level", "", "log level")
 	cmd.Flags().String("db-driver", "", "database driver")
 	cmd.Flags().String("db-dsn", "", "database DSN")
+	cmd.Flags().Int("ingest-queue-size", 0, "probe result ingest queue size")
+	cmd.Flags().Int("ingest-batch-size", 0, "probe result ingest batch size")
+	cmd.Flags().String("ingest-flush-interval", "", "probe result ingest flush interval")
 	cmd.Flags().String("auth-agent-token", "", "agent shared token")
 	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard basic auth")
 	cmd.Flags().String("auth-dashboard-username", "", "dashboard basic auth username")
@@ -102,6 +106,8 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
+	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule)
+
 	observabilityModule := dix.NewModule("observability",
 		dix.Imports(configModule, loggingModule),
 		dix.Providers(
@@ -116,7 +122,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
-	endpointModule := newServerEndpointModule(configModule, storeModule)
+	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule)
 
 	httpModule := dix.NewModule("http",
 		dix.Imports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
@@ -142,14 +148,31 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	)
 }
 
-func newServerEndpointModule(configModule, storeModule dix.Module) dix.Module {
+func newServerIngestModule(configModule, loggingModule, storeModule dix.Module) dix.Module {
+	return dix.NewModule("ingest",
+		dix.Imports(configModule, loggingModule, storeModule),
+		dix.Providers(
+			dix.ProviderErr3(ingest.NewResultIngestor),
+		),
+		dix.Hooks(
+			dix.OnStart[*ingest.ResultIngestor](func(ctx context.Context, resultIngestor *ingest.ResultIngestor) error {
+				return resultIngestor.Start(ctx)
+			}),
+			dix.OnStop[*ingest.ResultIngestor](func(ctx context.Context, resultIngestor *ingest.ResultIngestor) error {
+				return resultIngestor.Stop(ctx)
+			}),
+		),
+	)
+}
+
+func newServerEndpointModule(configModule, storeModule, ingestModule dix.Module) dix.Module {
 	return dix.NewModule("http-endpoints",
-		dix.Imports(configModule, storeModule),
+		dix.Imports(configModule, storeModule, ingestModule),
 		dix.Providers(
 			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewDashboardEndpoint, dix.Order(10)),
 			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(20)),
 			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(30)),
-			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewAgentEndpoint, dix.Order(40)),
+			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *ingest.ResultIngestor](api.NewAgentEndpoint, dix.Order(40)),
 		),
 	)
 }

@@ -8,10 +8,8 @@ log:
   level: info
 
 db:
-  driver: memory
-  dsn: ""
-  resultretention: 24h
-  cleanupinterval: 1m
+  driver: sqlite
+  dsn: file:orivis?mode=memory&cache=shared
 
 auth:
   agent:

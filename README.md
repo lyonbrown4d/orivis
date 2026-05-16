@@ -29,7 +29,6 @@ go run ./cmd/orivis-agent
 This repository also includes an ignored `.env.local` for a ready-to-run local dotenv test environment.
 
 Environment variables use `__` to separate nested config keys. Single underscores remain part of a field name.
-For in-memory retention settings use `ORIVIS_DB__RESULTRETENTION` and `ORIVIS_DB__CLEANUPINTERVAL`.
 
 ## Build
 
@@ -49,7 +48,7 @@ internal/
   agentclient/    agent HTTP client
   agentconfig/    agent config model and loader
   collector/      agent collection runner
-  store/          storage backends
+  store/          sqlite storage and dashboard snapshots
   discovery/      monitor discovery adapters
   probe/          monitor probes
   model/          domain models
@@ -68,22 +67,19 @@ The server reads:
 | `ORIVIS_APP__ENV` | `development` | Runtime environment. |
 | `ORIVIS_HTTP__ADDR` | `:8080` | Server listen address. |
 | `ORIVIS_LOG__LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
-| `ORIVIS_DB__DRIVER` | `memory` | Storage mode. Supported values: `memory`, `sqlite`. |
-| `ORIVIS_DB__DSN` | (empty) | Only required when driver is `sqlite` (example: `file:orivis.db`). |
-| `ORIVIS_DB__RESULTRETENTION` | `24h` | How long in-memory probe results are retained. |
-| `ORIVIS_DB__CLEANUPINTERVAL` | `1m` | How often expired in-memory probe results are removed. |
+| `ORIVIS_DB__DRIVER` | `sqlite` | Storage driver. |
+| `ORIVIS_DB__DSN` | `file:orivis?mode=memory&cache=shared` | SQLite DSN. Use a file DSN for persistence. |
 | `ORIVIS_AUTH__AGENT__TOKEN` | empty | Optional bootstrap token required for agent registration. |
 | `ORIVIS_AUTH__DASHBOARD__ENABLED` | `false` | Enable HTTP Basic Auth for the dashboard. |
 | `ORIVIS_AUTH__DASHBOARD__USERNAME` | `admin` | Dashboard Basic Auth username. |
 | `ORIVIS_AUTH__DASHBOARD__PASSWORD` | empty | Dashboard Basic Auth password. Required when dashboard auth is enabled. |
 | `ORIVIS_OBSERVABILITY__PROMETHEUS__ENABLED` | `false` | Enable Prometheus observability adapter. |
 
-### Storage mode
+### Storage
 
-`memory` is the default and gives a zero-configuration startup path.
-Data is kept in process memory and is not persisted across restarts. Probe results are retained for `24h` by default and cleaned every `1m`.
+SQLite is the only storage backend. The default DSN uses SQLite's in-memory mode for zero-configuration startup.
 
-Use `sqlite` when you need persistence:
+Use a file DSN when you need persistence:
 
 ```env
 ORIVIS_DB__DRIVER=sqlite

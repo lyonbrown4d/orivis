@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/lyonbrown4d/orivis/internal/ingest"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/lyonbrown4d/orivis/internal/store"
@@ -67,6 +68,10 @@ func apiError(err error) error {
 		return huma.Error401Unauthorized("unauthorized", err)
 	case errors.Is(err, store.ErrNotFound):
 		return huma.Error404NotFound(err.Error(), err)
+	case errors.Is(err, ingest.ErrQueueFull):
+		return huma.Error429TooManyRequests("result ingest queue is full", err)
+	case errors.Is(err, ingest.ErrClosed):
+		return huma.Error503ServiceUnavailable("result ingestor is closed", err)
 	default:
 		return huma.Error500InternalServerError("internal server error", err)
 	}

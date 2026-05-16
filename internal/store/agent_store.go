@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/arcgolabs/dbx"
+	"github.com/arcgolabs/dbx/querydsl"
 	"github.com/lyonbrown4d/orivis/internal/model"
 )
 
@@ -62,16 +63,17 @@ func (s *agentStore) RecordHeartbeat(ctx context.Context, params AgentHeartbeatP
 		return model.Agent{}, err
 	}
 
-	if _, err := s.db.ExecContext(
+	schema := agentsSchema
+	if _, err := newAgentRepository(s.db).Update(
 		ctx,
-		`UPDATE agents
-         SET version = ?, last_seen_at = ?, status = ?, updated_at = ?
-         WHERE id = ?`,
-		strings.TrimSpace(params.Version),
-		formatTime(seenAt),
-		string(model.AgentStatusOnline),
-		formatTime(time.Now().UTC()),
-		agentID,
+		querydsl.Update(schema).
+			Set(
+				schema.Version.Set(strings.TrimSpace(params.Version)),
+				schema.LastSeenAt.Set(formatTime(seenAt)),
+				schema.Status.Set(string(model.AgentStatusOnline)),
+				schema.UpdatedAt.Set(formatTime(time.Now().UTC())),
+			).
+			Where(schema.ID.Eq(agentID)),
 	); err != nil {
 		return model.Agent{}, fmt.Errorf("record heartbeat: %w", err)
 	}

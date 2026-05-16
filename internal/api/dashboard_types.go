@@ -8,19 +8,20 @@ import (
 )
 
 type dashboardView struct {
-	Lang          string
-	Name          string
-	Env           string
-	Version       buildinfo.Info
-	Database      dashboardDatabase
-	GeneratedAt   time.Time
-	Agents        []store.DashboardAgent
-	Monitors      []dashboardMonitorView
-	Environments  []dashboardEnvironmentGroup
-	LangOptions   []dashboardLanguageOption
-	RecentResults []dashboardResultView
-	Summary       dashboardSummary
-	T             func(string) string
+	Lang            string
+	Name            string
+	Env             string
+	Version         buildinfo.Info
+	Database        dashboardDatabase
+	GeneratedAt     time.Time
+	Agents          []store.DashboardAgent
+	Monitors        []dashboardMonitorView
+	Environments    []dashboardEnvironmentGroup
+	LangOptions     []dashboardLanguageOption
+	RecentResults   []dashboardResultView
+	StatusChartJSON string
+	Summary         dashboardSummary
+	T               func(string) string
 }
 
 type dashboardLanguageOption struct {

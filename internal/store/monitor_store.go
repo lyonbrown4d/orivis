@@ -2,13 +2,14 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/arcgolabs/dbx"
+	"github.com/arcgolabs/dbx/querydsl"
+	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
 )
 
@@ -47,14 +48,15 @@ func (s *monitorStore) UpsertDiscovered(ctx context.Context, params UpsertDiscov
 	}
 
 	var existingID string
-	err = s.db.QueryRowContext(ctx, "SELECT id FROM monitors WHERE source_key = ?", normalized.SourceKey).Scan(&existingID)
+	existing, err := newMonitorRepository(s.db).FirstSpec(ctx, repository.Where(monitorsSchema.SourceKey.Eq(normalized.SourceKey)))
 	switch {
 	case err == nil:
+		existingID = existing.ID
 		if updateErr := s.updateDiscoveredMonitor(ctx, existingID, normalized); updateErr != nil {
 			return model.Monitor{}, updateErr
 		}
 		return s.Get(ctx, existingID)
-	case errors.Is(err, sql.ErrNoRows):
+	case errors.Is(err, repository.ErrNotFound):
 		return s.Create(ctx, createMonitorParamsToPublic(normalized))
 	default:
 		return model.Monitor{}, fmt.Errorf("find discovered monitor: %w", err)
@@ -71,11 +73,15 @@ func (s *monitorStore) AssignAgent(ctx context.Context, monitorID, agentID strin
 		return fmt.Errorf("%w: agent id is required", ErrInvalidInput)
 	}
 
-	_, err := s.db.ExecContext(
+	row := monitorAgentRow{
+		MonitorID: monitorID,
+		AgentID:   agentID,
+	}
+	err := newMonitorAgentRepository(s.db).Upsert(
 		ctx,
-		"INSERT OR IGNORE INTO monitor_agents (monitor_id, agent_id) VALUES (?, ?)",
-		monitorID,
-		agentID,
+		&row,
+		"monitor_id",
+		"agent_id",
 	)
 	if err != nil {
 		return fmt.Errorf("assign monitor agent: %w", err)
@@ -89,32 +95,31 @@ func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) 
 		return nil, fmt.Errorf("%w: agent id is required", ErrInvalidInput)
 	}
 
-	rows, err := s.db.QueryContext(
+	query := querydsl.Select(querydsl.AllColumns(monitorsSchema).Values()...).
+		From(monitorsSchema).
+		Join(monitorAgentsSchema).
+		On(monitorAgentsSchema.MonitorID.EqColumn(monitorsSchema.ID)).
+		Where(querydsl.And(
+			monitorAgentsSchema.AgentID.Eq(agentID),
+			monitorsSchema.Enabled.Eq(1),
+		)).
+		OrderBy(monitorsSchema.Name.Asc())
+	records, err := newMonitorRepository(s.db).List(
 		ctx,
-		`SELECT m.id, m.name, m.type, m.target, m.environment_id, m.enabled,
-                m.source_key, m.interval_seconds, m.timeout_seconds, m.retry_count,
-                m.aggregation_policy, m.source, m.created_at, m.updated_at
-         FROM monitors m
-         JOIN monitor_agents ma ON ma.monitor_id = m.id
-         WHERE ma.agent_id = ? AND m.enabled = 1
-         ORDER BY m.name`,
-		agentID,
+		query,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list assigned monitors: %w", err)
 	}
-	defer closeRows(rows)
 
-	monitors := make([]model.Monitor, 0)
-	for rows.Next() {
-		monitor, err := scanMonitor(rows)
+	monitors := make([]model.Monitor, 0, records.Len())
+	values := records.Values()
+	for index := range values {
+		monitor, err := values[index].model()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("map assigned monitor: %w", err)
 		}
 		monitors = append(monitors, monitor)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate monitors: %w", err)
 	}
 	return monitors, nil
 }
@@ -134,53 +139,47 @@ func (s *monitorStore) Get(ctx context.Context, id string) (model.Monitor, error
 
 func (s *monitorStore) insertMonitor(ctx context.Context, id string, normalized createMonitorParams) error {
 	now := time.Now().UTC()
-	_, err := s.db.ExecContext(
-		ctx,
-		`INSERT INTO monitors (
-            id, source_key, name, type, target, environment_id, enabled, interval_seconds,
-            timeout_seconds, retry_count, aggregation_policy, source, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id,
-		normalized.SourceKey,
-		normalized.Name,
-		string(normalized.Type),
-		normalized.Target,
-		normalized.EnvironmentID,
-		boolInt(normalized.Enabled),
-		int(normalized.Interval.Seconds()),
-		int(normalized.Timeout.Seconds()),
-		normalized.RetryCount,
-		string(normalized.AggregationPolicy),
-		string(normalized.Source),
-		formatTime(now),
-		formatTime(now),
-	)
-	if err != nil {
+	row := monitorRecord{
+		ID:                id,
+		SourceKey:         normalized.SourceKey,
+		Name:              normalized.Name,
+		Type:              string(normalized.Type),
+		Target:            normalized.Target,
+		EnvironmentID:     normalized.EnvironmentID,
+		Enabled:           boolInt(normalized.Enabled),
+		IntervalSeconds:   int(normalized.Interval.Seconds()),
+		TimeoutSeconds:    int(normalized.Timeout.Seconds()),
+		RetryCount:        normalized.RetryCount,
+		AggregationPolicy: string(normalized.AggregationPolicy),
+		Source:            string(normalized.Source),
+		CreatedAt:         formatTime(now),
+		UpdatedAt:         formatTime(now),
+	}
+	if err := newMonitorRepository(s.db).Create(ctx, &row); err != nil {
 		return fmt.Errorf("insert monitor: %w", err)
 	}
 	return nil
 }
 
 func (s *monitorStore) updateDiscoveredMonitor(ctx context.Context, id string, normalized createMonitorParams) error {
-	_, err := s.db.ExecContext(
+	schema := monitorsSchema
+	_, err := newMonitorRepository(s.db).Update(
 		ctx,
-		`UPDATE monitors
-             SET name = ?, type = ?, target = ?, environment_id = ?, enabled = ?,
-                 interval_seconds = ?, timeout_seconds = ?, retry_count = ?,
-                 aggregation_policy = ?, source = ?, updated_at = ?
-             WHERE id = ?`,
-		normalized.Name,
-		string(normalized.Type),
-		normalized.Target,
-		normalized.EnvironmentID,
-		boolInt(normalized.Enabled),
-		int(normalized.Interval.Seconds()),
-		int(normalized.Timeout.Seconds()),
-		normalized.RetryCount,
-		string(normalized.AggregationPolicy),
-		string(normalized.Source),
-		formatTime(time.Now().UTC()),
-		id,
+		querydsl.Update(schema).
+			Set(
+				schema.Name.Set(normalized.Name),
+				schema.Type.Set(string(normalized.Type)),
+				schema.Target.Set(normalized.Target),
+				schema.EnvironmentID.Set(normalized.EnvironmentID),
+				schema.Enabled.Set(boolInt(normalized.Enabled)),
+				schema.IntervalSeconds.Set(int(normalized.Interval.Seconds())),
+				schema.TimeoutSeconds.Set(int(normalized.Timeout.Seconds())),
+				schema.RetryCount.Set(normalized.RetryCount),
+				schema.AggregationPolicy.Set(string(normalized.AggregationPolicy)),
+				schema.Source.Set(string(normalized.Source)),
+				schema.UpdatedAt.Set(formatTime(time.Now().UTC())),
+			).
+			Where(schema.ID.Eq(id)),
 	)
 	if err != nil {
 		return fmt.Errorf("update discovered monitor: %w", err)
@@ -189,20 +188,12 @@ func (s *monitorStore) updateDiscoveredMonitor(ctx context.Context, id string, n
 }
 
 func (s *monitorStore) getMonitor(ctx context.Context, id string) (model.Monitor, error) {
-	monitor, err := scanMonitor(s.db.QueryRowContext(
-		ctx,
-		`SELECT id, name, type, target, environment_id, enabled,
-                source_key, interval_seconds, timeout_seconds, retry_count,
-                aggregation_policy, source, created_at, updated_at
-         FROM monitors
-         WHERE id = ?`,
-		id,
-	))
+	record, err := newMonitorRepository(s.db).FirstSpec(ctx, repository.Where(monitorsSchema.ID.Eq(id)))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		if errors.Is(err, repository.ErrNotFound) {
 			return model.Monitor{}, fmt.Errorf("%w: monitor %s", ErrNotFound, id)
 		}
 		return model.Monitor{}, fmt.Errorf("get monitor: %w", err)
 	}
-	return monitor, nil
+	return record.model()
 }

@@ -25,11 +25,8 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("expected default HTTP address, got %q", cfg.HTTP.Addr)
 	}
-	if cfg.DB.Driver != "memory" || cfg.DB.DSN != "" {
+	if cfg.DB.Driver != "sqlite" || cfg.DB.DSN != config.DefaultSQLiteDSN {
 		t.Fatalf("unexpected default DB config: %#v", cfg.DB)
-	}
-	if cfg.DB.ResultRetention != "24h" || cfg.DB.CleanupInterval != "1m" {
-		t.Fatalf("unexpected default memory DB config: %#v", cfg.DB)
 	}
 }
 
@@ -46,10 +43,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_APP__ENV", "test")
 	t.Setenv("ORIVIS_HTTP__ADDR", ":9090")
 	t.Setenv("ORIVIS_LOG__LEVEL", "debug")
-	t.Setenv("ORIVIS_DB__DRIVER", "postgres")
-	t.Setenv("ORIVIS_DB__DSN", "postgres://example")
-	t.Setenv("ORIVIS_DB__RESULTRETENTION", "12h")
-	t.Setenv("ORIVIS_DB__CLEANUPINTERVAL", "30s")
+	t.Setenv("ORIVIS_DB__DRIVER", "sqlite")
+	t.Setenv("ORIVIS_DB__DSN", "file:orivis.db")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -63,10 +58,7 @@ func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	if cfg.App.Env != "test" || cfg.HTTP.Addr != ":9090" || cfg.Log.Level != "debug" {
 		t.Fatalf("unexpected environment app config: %#v", cfg)
 	}
-	if cfg.DB.Driver != "postgres" || cfg.DB.DSN != "postgres://example" {
+	if cfg.DB.Driver != "sqlite" || cfg.DB.DSN != "file:orivis.db" {
 		t.Fatalf("unexpected environment DB config: %#v", cfg.DB)
-	}
-	if cfg.DB.ResultRetention != "12h" || cfg.DB.CleanupInterval != "30s" {
-		t.Fatalf("unexpected environment memory DB config: %#v", cfg.DB)
 	}
 }

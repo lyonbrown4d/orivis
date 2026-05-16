@@ -31,19 +31,6 @@ func TestOpenRunsSQLiteMigrations(t *testing.T) {
 	}
 }
 
-func TestOpenMemoryStoreSupportsWorkflow(t *testing.T) {
-	storage := newTestMemoryStore(t)
-	if storage.DB != nil {
-		t.Fatal("expected memory store to avoid opening a SQL database")
-	}
-
-	agent := registerTestAgent(t, storage, "agent-memory-01", []string{"dev"})
-	monitor := createTestMonitor(t, storage, agent, "Memory API health")
-	assertAssignedTask(t, storage, agent.ID, monitor.ID)
-	result := recordTestResult(t, storage, agent, monitor.ID)
-	assertProbeResult(t, result, agent, monitor.ID)
-}
-
 func TestAgentRegisterAndHeartbeat(t *testing.T) {
 	storage := newTestStore(t)
 	agent := registerTestAgent(t, storage, "agent-guangdong-01", []string{"prod", "staging"})
@@ -218,25 +205,6 @@ func newTestStore(t *testing.T) *store.Store {
 	t.Cleanup(func() {
 		if err := storage.Close(context.Background()); err != nil {
 			t.Fatalf("close store: %v", err)
-		}
-	})
-	return storage
-}
-
-func newTestMemoryStore(t *testing.T) *store.Store {
-	t.Helper()
-
-	cfg := config.Config{}
-	cfg.App.Env = "test"
-	cfg.DB.Driver = "memory"
-
-	storage, err := store.Open(cfg, testLogger())
-	if err != nil {
-		t.Fatalf("open memory store: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := storage.Close(context.Background()); err != nil {
-			t.Fatalf("close memory store: %v", err)
 		}
 	})
 	return storage

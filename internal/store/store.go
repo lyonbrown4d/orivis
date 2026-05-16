@@ -19,7 +19,6 @@ import (
 
 type Store struct {
 	DB       *dbx.DB
-	memory   *memoryStore
 	agents   AgentStore
 	monitors MonitorStore
 	results  ResultStore
@@ -27,12 +26,16 @@ type Store struct {
 
 func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
 	switch normalizeDBDriver(cfg.DB.Driver) {
-	case "", "memory", "mem", "inmemory":
-		return openMemoryStore(cfg.DB.ResultRetention, cfg.DB.CleanupInterval, logger)
-	case "sqlite", "sqlite3":
+	case "", "sqlite", "sqlite3":
+		if strings.TrimSpace(cfg.DB.Driver) == "" {
+			cfg.DB.Driver = "sqlite"
+		}
+		if strings.TrimSpace(cfg.DB.DSN) == "" {
+			cfg.DB.DSN = config.DefaultSQLiteDSN
+		}
 		return openSQLiteStore(cfg, logger)
 	default:
-		return nil, fmt.Errorf("unsupported database driver %q: supported drivers are memory and sqlite", cfg.DB.Driver)
+		return nil, fmt.Errorf("unsupported database driver %q: supported driver is sqlite", cfg.DB.Driver)
 	}
 }
 
@@ -58,6 +61,7 @@ func openSQLiteStore(cfg config.Config, logger *slog.Logger) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite store: %w", err)
 	}
+	configureSQLiteConnection(database, cfg.DB.DSN)
 
 	storage := &Store{DB: database}
 	storage.agents = &agentStore{db: database}
@@ -76,9 +80,6 @@ func openSQLiteStore(cfg config.Config, logger *slog.Logger) (*Store, error) {
 func (s *Store) Close(context.Context) error {
 	if s == nil {
 		return nil
-	}
-	if s.memory != nil {
-		return s.memory.Close()
 	}
 	if s.DB != nil {
 		if err := s.DB.Close(); err != nil {
@@ -133,8 +134,6 @@ func (s *Store) findEnvironmentIDByCode(ctx context.Context, code string) (strin
 	switch {
 	case s == nil:
 		return "", fmt.Errorf("%w: store is not available", ErrInvalidInput)
-	case s.memory != nil:
-		return s.memory.memoryEnvironmentIDByCode(code)
 	case s.DB != nil:
 		return findSQLiteEnvironmentIDByCode(ctx, s.DB, code)
 	default:
@@ -179,6 +178,16 @@ func resolveDialect(driver string) (dialect.Dialect, string, error) {
 
 func normalizeDBDriver(driver string) string {
 	return strings.ToLower(strings.TrimSpace(driver))
+}
+
+func configureSQLiteConnection(database *dbx.DB, dsn string) {
+	if database == nil || database.SQLDB() == nil {
+		return
+	}
+	normalizedDSN := strings.ToLower(dsn)
+	if strings.Contains(normalizedDSN, "mode=memory") || strings.Contains(normalizedDSN, ":memory:") {
+		database.SQLDB().SetMaxOpenConns(1)
+	}
 }
 
 func agentEnvironmentIDValues(agent model.Agent) []string {
