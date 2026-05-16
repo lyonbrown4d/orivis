@@ -26,6 +26,11 @@ type Config struct {
 		BatchSize     int    `mapstructure:"batchsize"`
 		FlushInterval string `mapstructure:"flushinterval" validate:"required"`
 	} `mapstructure:"ingest"`
+	Retention struct {
+		Enabled         bool   `mapstructure:"enabled"`
+		ResultTTL       string `mapstructure:"resultttl"       validate:"required"`
+		CleanupInterval string `mapstructure:"cleanupinterval" validate:"required"`
+	} `mapstructure:"retention"`
 	Auth struct {
 		Agent struct {
 			Token string `mapstructure:"token"`
@@ -71,6 +76,9 @@ func defaultOptions() []configx.Option {
 			"ingest.queuesize":                   4096,
 			"ingest.batchsize":                   100,
 			"ingest.flushinterval":               "1s",
+			"retention.enabled":                  true,
+			"retention.resultttl":                "168h",
+			"retention.cleanupinterval":          "1h",
 			"auth.agent.token":                   "",
 			"auth.dashboard.enabled":             false,
 			"auth.dashboard.username":            "admin",

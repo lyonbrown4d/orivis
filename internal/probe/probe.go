@@ -74,7 +74,7 @@ func (c *Checker) check(ctx context.Context, task protocol.AgentTask) (model.Sta
 	case string(model.MonitorDatabase), string(model.MonitorSQLite), string(model.MonitorMySQL), string(model.MonitorPostgres), "db", "pg", "postgresql":
 		return c.checkDatabase(ctx, task)
 	case string(model.MonitorPing):
-		return model.StatusUnknown, map[string]any{"type": task.Type}, newError("ping probe is not implemented yet")
+		return c.checkPing(ctx, task)
 	default:
 		return model.StatusUnknown, map[string]any{"type": task.Type}, errorf("unsupported monitor type %q", task.Type)
 	}

@@ -11,11 +11,13 @@ import (
 	"github.com/arcgolabs/dbx"
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
+	"github.com/samber/oops"
 )
 
 type ResultStore interface {
 	Record(ctx context.Context, params RecordProbeResultParams) (model.ProbeResult, error)
 	RecordBatch(ctx context.Context, params []RecordProbeResultParams) ([]model.ProbeResult, error)
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 type RecordProbeResultParams struct {
@@ -69,6 +71,21 @@ func (s *resultStore) RecordBatch(ctx context.Context, params []RecordProbeResul
 	}
 
 	return results, nil
+}
+
+func (s *resultStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, fmt.Errorf("%w", oops.New("result store is not available"))
+	}
+	result, err := s.db.ExecContext(ctx, "DELETE FROM probe_results WHERE checked_at < ?", before.UTC())
+	if err != nil {
+		return 0, fmt.Errorf("%w", oops.Wrapf(err, "%s", "delete old probe results"))
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("%w", oops.Wrapf(err, "%s", "read deleted probe result count"))
+	}
+	return rows, nil
 }
 
 func (s *resultStore) prepareProbeResultRows(

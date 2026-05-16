@@ -1,0 +1,9 @@
+.git
+.env
+.env.local
+bin/
+tmp/
+dist/
+coverage.out
+*.db
+*.sqlite

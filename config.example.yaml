@@ -11,6 +11,16 @@ db:
   driver: sqlite
   dsn: file:orivis?mode=memory&cache=shared
 
+ingest:
+  queuesize: 4096
+  batchsize: 100
+  flushinterval: 1s
+
+retention:
+  enabled: true
+  resultttl: 168h
+  cleanupinterval: 1h
+
 auth:
   agent:
     token: ""
@@ -86,6 +96,16 @@ discovery:
       # - name: postgres-local
       #   type: postgres
       #   target: postgres://postgres:password@127.0.0.1:5432/app?sslmode=disable
+      #   environment: dev
+      #   enabled: true
+      #   interval: 15s
+      #   timeout: 3s
+      #   retry_count: 0
+      #   aggregation: majority_down
+      # Ping probe example:
+      # - name: loopback-ping
+      #   type: ping
+      #   target: 127.0.0.1
       #   environment: dev
       #   enabled: true
       #   interval: 15s

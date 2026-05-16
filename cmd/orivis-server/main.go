@@ -17,6 +17,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/api"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
+	"github.com/lyonbrown4d/orivis/internal/retention"
 	"github.com/lyonbrown4d/orivis/internal/security"
 	serverconfig "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	serverobs "github.com/lyonbrown4d/orivis/internal/serverobservability"
@@ -53,6 +54,9 @@ func main() {
 	cmd.Flags().Int("ingest-queue-size", 0, "probe result ingest queue size")
 	cmd.Flags().Int("ingest-batch-size", 0, "probe result ingest batch size")
 	cmd.Flags().String("ingest-flush-interval", "", "probe result ingest flush interval")
+	cmd.Flags().Bool("retention-enabled", false, "enable probe result retention cleanup")
+	cmd.Flags().String("retention-result-ttl", "", "probe result retention TTL")
+	cmd.Flags().String("retention-cleanup-interval", "", "probe result retention cleanup interval")
 	cmd.Flags().String("auth-agent-token", "", "agent shared token")
 	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard basic auth")
 	cmd.Flags().String("auth-dashboard-username", "", "dashboard basic auth username")
@@ -103,12 +107,13 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.WithModuleHooks(
 			dix.OnStop[*store.Store](func(ctx context.Context, storage *store.Store) error {
 				return storage.Close(ctx)
-			}, dix.LifecycleName("close-store"), dix.LifecycleAfter("stop-http-server", "stop-result-ingestor")),
+			}, dix.LifecycleName("close-store"), dix.LifecycleAfter("stop-http-server", "stop-result-ingestor", "stop-retention")),
 		),
 	)
 
 	eventModule := newServerEventModule(loggingModule)
 	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule)
+	retentionModule := newServerRetentionModule(configModule, loggingModule, storeModule)
 
 	observabilityModule := dix.NewModule("observability",
 		dix.WithModuleImports(configModule, loggingModule),
@@ -146,8 +151,24 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.WithVersion(buildinfo.Version),
 		dix.WithAppDescription("distributed availability observability platform"),
 		dix.WithRunStopTimeout(10*time.Second),
-		dix.WithLifecycleConcurrency(4),
-		dix.WithModules(httpModule),
+		dix.WithModules(httpModule, retentionModule),
+	)
+}
+
+func newServerRetentionModule(configModule, loggingModule, storeModule dix.Module) dix.Module {
+	return dix.NewModule("retention",
+		dix.WithModuleImports(configModule, loggingModule, storeModule),
+		dix.WithModuleProviders(
+			dix.ProviderErr3(retention.New),
+		),
+		dix.WithModuleHooks(
+			dix.OnStart[*retention.Cleaner](func(ctx context.Context, cleaner *retention.Cleaner) error {
+				return cleaner.Start(ctx)
+			}, dix.LifecycleName("start-retention")),
+			dix.OnStop[*retention.Cleaner](func(ctx context.Context, cleaner *retention.Cleaner) error {
+				return cleaner.Stop(ctx)
+			}, dix.LifecycleName("stop-retention"), dix.LifecycleBefore("close-store")),
+		),
 	)
 }
 

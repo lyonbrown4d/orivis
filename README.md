@@ -1,24 +1,44 @@
 # Orivis
 
-Orivis is a Go multi-command application framework for a distributed availability observability platform.
+Orivis is a lightweight distributed uptime service.
 
-## Commands
+It runs as two binaries:
 
-```powershell
-go run ./cmd/orivis-server
-go run ./cmd/orivis-agent
+- `orivis-server`: receives agent data, stores probe results, and serves the dashboard UI.
+- `orivis-agent`: discovers monitors, runs scheduled checks, and reports results to the server.
+
+The default storage backend is SQLite. The default configuration is zero-config and uses an in-memory SQLite database.
+
+## Current status
+
+Orivis is suitable for `v0.1-alpha` testing. The core loop is implemented:
+
+```text
+agent discovery -> server sync -> task pull -> probe check -> result report -> eventx ingest -> sqlite -> dashboard
 ```
 
-Local end-to-end run with the example config:
+## Quick start with Docker Compose
+
+```powershell
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8080
+```
+
+The Compose stack starts one server and one agent. The agent registers a static HTTP monitor for the server health endpoint.
+
+## Local run
 
 ```powershell
 go run ./cmd/orivis-server --config config.example.yaml
 go run ./cmd/orivis-agent --config config.example.yaml
 ```
 
-The example agent config registers a static `http` monitor for `http://127.0.0.1:8080/healthz`, syncs it to the server, pulls it back as a task, probes it, and reports the result.
-
-Orivis also reads `.env` and `.env.local` automatically through `configx`, so local development can run without `--config`:
+Or use dotenv:
 
 ```powershell
 Copy-Item .env.example .env
@@ -26,9 +46,13 @@ go run ./cmd/orivis-server
 go run ./cmd/orivis-agent
 ```
 
-This repository also includes an ignored `.env.local` for a ready-to-run local dotenv test environment.
+## Smoke test
 
-Environment variables use `__` to separate nested config keys. Single underscores remain part of a field name.
+```powershell
+./scripts/smoke-local.ps1
+```
+
+The script starts a temporary server and agent, waits for a full probe loop, and checks that the dashboard responds.
 
 ## Build
 
@@ -37,58 +61,69 @@ go build -o bin/orivis-server.exe ./cmd/orivis-server
 go build -o bin/orivis-agent.exe ./cmd/orivis-agent
 ```
 
-## Layout
+Docker images can be built from the same Dockerfile:
 
-```text
-cmd/
-  orivis-server/  server entrypoint
-  orivis-agent/   agent entrypoint
-internal/
-  api/            HTTP API and dashboard
-  agentclient/    agent HTTP client
-  agentconfig/    agent config model and loader
-  collector/      agent collection runner
-  store/          sqlite storage and dashboard snapshots
-  discovery/      monitor discovery adapters
-  probe/          monitor probes
-  model/          domain models
-  protocol/       agent/server protocol DTOs
-migrations/       database-specific migrations
-deployments/      deployment examples and manifests
-docs/             project documentation
+```powershell
+docker build --build-arg APP=orivis-server -t orivis-server:local .
+docker build --build-arg APP=orivis-agent -t orivis-agent:local .
 ```
 
 ## Configuration
 
-The server reads:
+Orivis uses `configx`, so config can come from YAML, dotenv, or environment variables.
+
+Environment variables use `__` for nested keys:
+
+```env
+ORIVIS_HTTP__ADDR=:8080
+ORIVIS_DB__DSN=file:orivis.db
+```
+
+### Server
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `ORIVIS_APP__ENV` | `development` | Runtime environment. |
 | `ORIVIS_HTTP__ADDR` | `:8080` | Server listen address. |
-| `ORIVIS_LOG__LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
+| `ORIVIS_LOG__LEVEL` | `info` | Log level. |
 | `ORIVIS_DB__DRIVER` | `sqlite` | Storage driver. |
 | `ORIVIS_DB__DSN` | `file:orivis?mode=memory&cache=shared` | SQLite DSN. Use a file DSN for persistence. |
-| `ORIVIS_AUTH__AGENT__TOKEN` | empty | Optional bootstrap token required for agent registration. |
-| `ORIVIS_AUTH__DASHBOARD__ENABLED` | `false` | Enable HTTP Basic Auth for the dashboard. |
+| `ORIVIS_INGEST__QUEUESIZE` | `4096` | Async ingest queue size. |
+| `ORIVIS_INGEST__BATCHSIZE` | `100` | Async ingest flush batch size. |
+| `ORIVIS_INGEST__FLUSHINTERVAL` | `1s` | Async ingest periodic flush interval. |
+| `ORIVIS_RETENTION__ENABLED` | `true` | Enable probe result cleanup. |
+| `ORIVIS_RETENTION__RESULTTTL` | `168h` | Probe result retention TTL. |
+| `ORIVIS_RETENTION__CLEANUPINTERVAL` | `1h` | Probe result cleanup interval. |
+| `ORIVIS_AUTH__AGENT__TOKEN` | empty | Optional shared bootstrap token for agent registration. |
+| `ORIVIS_AUTH__DASHBOARD__ENABLED` | `false` | Enable dashboard Basic Auth. |
 | `ORIVIS_AUTH__DASHBOARD__USERNAME` | `admin` | Dashboard Basic Auth username. |
-| `ORIVIS_AUTH__DASHBOARD__PASSWORD` | empty | Dashboard Basic Auth password. Required when dashboard auth is enabled. |
-| `ORIVIS_OBSERVABILITY__PROMETHEUS__ENABLED` | `false` | Enable Prometheus observability adapter. |
+| `ORIVIS_AUTH__DASHBOARD__PASSWORD` | empty | Dashboard Basic Auth password. |
+| `ORIVIS_OBSERVABILITY__PROMETHEUS__ENABLED` | `false` | Enable Prometheus metrics. |
 
-### Storage
+### Agent
 
-SQLite is the only storage backend. The default DSN uses SQLite's in-memory mode for zero-configuration startup.
+| Variable | Default | Description |
+| --- | --- | --- |
+| `ORIVIS_SERVER__URL` | `http://127.0.0.1:8080` | Server base URL. |
+| `ORIVIS_AGENT__NAME` | `local-agent` | Agent name. |
+| `ORIVIS_AGENT__TOKEN` | empty | Agent token. Must match server token when configured. |
+| `ORIVIS_AGENT__REGION` | `local` | Agent region code. |
+| `ORIVIS_AGENT__ENVIRONMENTS` | empty | Comma-separated environment codes. |
+| `ORIVIS_RUNTIME` | `host` | Agent runtime type. |
+| `ORIVIS_POLL__INTERVAL` | `30s` | Task sync fallback interval. |
+| `ORIVIS_DISCOVERY__DOCKER__ENABLED` | `false` | Enable Docker label discovery. |
+| `ORIVIS_DISCOVERY__DOCKER__MODE` | `container` | Docker discovery mode: `container` or `swarm`. |
 
-Use a file DSN when you need persistence:
+## Security
+
+Agent registration can be protected with a shared token:
 
 ```env
-ORIVIS_DB__DRIVER=sqlite
-ORIVIS_DB__DSN=file:orivis.db
+ORIVIS_AUTH__AGENT__TOKEN=change-me
+ORIVIS_AGENT__TOKEN=change-me
 ```
 
-When `ORIVIS_AUTH__AGENT__TOKEN` is set on the server, an agent must present the same token during registration. The server stores only a hashed agent token after registration.
-
-The dashboard at `/` is public by default for local zero-configuration usage. Enable Basic Auth when exposing it outside localhost:
+Dashboard Basic Auth is disabled by default for local zero-config usage. Enable it when exposing the dashboard outside localhost:
 
 ```env
 ORIVIS_AUTH__DASHBOARD__ENABLED=true
@@ -96,73 +131,28 @@ ORIVIS_AUTH__DASHBOARD__USERNAME=admin
 ORIVIS_AUTH__DASHBOARD__PASSWORD=change-me
 ```
 
-The agent reads:
+For production, run Orivis behind a reverse proxy that terminates HTTPS.
 
-| Variable | Default | Description |
+## Supported probes
+
+| Type | Target example | Behavior |
 | --- | --- | --- |
-| `ORIVIS_SERVER__URL` | `http://127.0.0.1:8080` | Server base URL. |
-| `ORIVIS_AGENT__NAME` | `local-agent` | Agent name. |
-| `ORIVIS_AGENT__TOKEN` | empty | Agent token. |
-| `ORIVIS_AGENT__REGION` | `local` | Agent region code. |
-| `ORIVIS_AGENT__ENVIRONMENTS` | empty | Comma-separated environment codes the agent can probe. |
-| `ORIVIS_RUNTIME` | `host` | Agent runtime type. |
-| `ORIVIS_POLL__INTERVAL` | `30s` | Task polling interval. |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__NAME` | empty | Optional single static monitor name for dotenv-based local runs. |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__TYPE` | empty | Optional single static monitor type. |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__TARGET` | empty | Optional single static monitor target. |
-| `ORIVIS_DISCOVERY__DOCKER__ENABLED` | `false` | Enable Docker label discovery. |
-| `ORIVIS_DISCOVERY__DOCKER__MODE` | `container` | Docker discovery mode: `container` or `swarm`. |
-| `ORIVIS_LOG__LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
+| `http` | `https://example.com/health` | Sends `GET`; `2xx` and `3xx` are up. |
+| `tcp` | `example.com:443` | Opens a TCP connection. |
+| `ping` | `1.1.1.1` | Sends one ICMP/UDP ping via `pro-bing`. Containers may need network capabilities depending on platform. |
+| `redis` | `redis://127.0.0.1:6379` | Uses `go-redis` `PING`. |
+| `database` | `sqlite://file:orivis.db` | Generic database probe. |
+| `sqlite` | `file:orivis.db` | SQLite `database/sql` ping. |
+| `mysql` | `mysql://root:password@127.0.0.1:3306/app?parseTime=true` | MySQL `database/sql` ping. |
+| `postgres` / `pg` | `postgres://postgres:password@127.0.0.1:5432/app?sslmode=disable` | PostgreSQL `database/sql` ping through pgx. |
+| `dns` | `example.com` | Resolves host addresses. |
+| `tls` | `example.com:443` | Opens a verified TLS connection. |
 
-## HTTP Endpoints
+Kafka is not implemented yet and is not advertised as a supported probe.
 
-```text
-GET /                  dashboard UI
-GET /api/server/metadata application metadata
-GET /healthz          health probe
-GET /readyz           readiness probe
-POST /api/agent/register  agent registration
-POST /api/agent/heartbeat agent heartbeat
-GET /api/agent/tasks  pull assigned monitor tasks
-POST /api/agent/results record probe result
-```
-
-## Agent Probes
-
-The agent uses `gocron` to periodically sync assigned tasks from the server.
-Each monitor task is scheduled independently using its `interval_seconds` value, with `ORIVIS_POLL__INTERVAL` as the fallback interval.
-
-Currently implemented probe types:
-
-| Type | Behavior |
-| --- | --- |
-| `http` | Sends `GET` and treats `2xx`/`3xx` as up. |
-| `tcp` | Opens a TCP connection to `host:port`. |
-| `dns` | Resolves the target host. |
-| `tls` | Opens a verified TLS connection to `host:port`. |
-
-`ping` is defined in the shared model but is not implemented yet because ICMP needs a platform-specific adapter.
-
-## Discovery Labels
-
-For local development, monitors can be declared directly in the agent config file:
-
-```yaml
-discovery:
-  static:
-    enabled: true
-    monitors:
-      - name: server-health
-        type: http
-        target: http://127.0.0.1:8080/healthz
-        environment: dev
-        interval: 15s
-        timeout: 3s
-        aggregation: majority_down
-```
+## Docker labels
 
 Orivis monitor discovery uses labels with an `orivis.` prefix.
-The parser is runtime-agnostic; Docker and Swarm adapters feed container or service labels into this format.
 
 ```yaml
 labels:
@@ -177,79 +167,39 @@ labels:
 ```
 
 Each monitor is grouped by `orivis.monitor.<name>.*`.
+
 Supported fields are `type`, `target`, `name`, `enabled`, `interval`, `timeout`, `retry`, and `aggregation`.
 
-Docker discovery is disabled by default. Enable container label discovery with:
+Enable Docker container labels:
 
 ```env
 ORIVIS_DISCOVERY__DOCKER__ENABLED=true
 ORIVIS_DISCOVERY__DOCKER__MODE=container
 ```
 
-For Docker Swarm service labels, use:
+Enable Docker Swarm service labels:
 
 ```env
 ORIVIS_DISCOVERY__DOCKER__ENABLED=true
 ORIVIS_DISCOVERY__DOCKER__MODE=swarm
 ```
 
-## Configuration Reconciliation (`.env` ↔ `config.example.yaml` ↔ design doc)
+## HTTP endpoints
 
-### 1) `.env` examples to `config.example.yaml`
-
-| 环境变量 | 对应 YAML key | 备注 |
-| --- | --- | --- |
-| `ORIVIS_LOG__LEVEL` | `log.level` | 已对齐 |
-| `ORIVIS_APP__ENV` | `app.env` | 已对齐 |
-| `ORIVIS_HTTP__ADDR` | `http.addr` | 已对齐 |
-| `ORIVIS_DB__DRIVER` | `db.driver` | 已对齐 |
-| `ORIVIS_DB__DSN` | `db.dsn` | 已对齐 |
-| `ORIVIS_DB__RESULTRETENTION` | `db.resultretention` | 已对齐 |
-| `ORIVIS_DB__CLEANUPINTERVAL` | `db.cleanupinterval` | 已对齐 |
-| `ORIVIS_AUTH__AGENT__TOKEN` | `auth.agent.token` | 已对齐 |
-| `ORIVIS_AUTH__DASHBOARD__ENABLED` | `auth.dashboard.enabled` | 已对齐 |
-| `ORIVIS_AUTH__DASHBOARD__USERNAME` | `auth.dashboard.username` | 已对齐 |
-| `ORIVIS_AUTH__DASHBOARD__PASSWORD` | `auth.dashboard.password` | 已对齐 |
-| `ORIVIS_OBSERVABILITY__PROMETHEUS__ENABLED` | `observability.prometheus.enabled` | 已对齐 |
-| `ORIVIS_OBSERVABILITY__PROMETHEUS__NAMESPACE` | `observability.prometheus.namespace` | 已对齐 |
-| `ORIVIS_SERVER__URL` | `server.url` | 已对齐 |
-| `ORIVIS_AGENT__NAME` | `agent.name` | 已对齐 |
-| `ORIVIS_AGENT__TOKEN` | `agent.token` | 已对齐 |
-| `ORIVIS_AGENT__REGION` | `agent.region` | 已对齐 |
-| `ORIVIS_AGENT__ENVIRONMENTS` | `agent.environments` | 已对齐 |
-| `ORIVIS_RUNTIME` | `runtime` | 已对齐 |
-| `ORIVIS_POLL__INTERVAL` | `poll.interval` | 已对齐 |
-| `ORIVIS_DISCOVERY__STATIC__ENABLED` | `discovery.static.enabled` | 已对齐 |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__SOURCE_KEY` | `discovery.static.monitors[n].source_key` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__NAME` | `discovery.static.monitors[n].name` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__TYPE` | `discovery.static.monitors[n].type` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__TARGET` | `discovery.static.monitors[n].target` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__ENVIRONMENT` | `discovery.static.monitors[n].environment` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__ENABLED` | `discovery.static.monitors[n].enabled` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__INTERVAL` | `discovery.static.monitors[n].interval` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__TIMEOUT` | `discovery.static.monitors[n].timeout` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__RETRY_COUNT` | `discovery.static.monitors[n].retry_count` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__STATIC__MONITOR__AGGREGATION` | `discovery.static.monitors[n].aggregation` | 已对齐（单个 monitor 快捷写法） |
-| `ORIVIS_DISCOVERY__DOCKER__ENABLED` | `discovery.docker.enabled` | 已对齐 |
-| `ORIVIS_DISCOVERY__DOCKER__MODE` | `discovery.docker.mode` | 已对齐 |
-
-### 2) 设计文档部署片段对照
-
-| 场景 | 设计文档片段配置 | 与配置模型一致性 |
-| --- | --- | --- |
-| Docker Agent (`6.3`) | `ORIVIS_SERVER__URL` `ORIVIS_AGENT__TOKEN` `ORIVIS_AGENT__NAME` `ORIVIS_AGENT__REGION` `ORIVIS_RUNTIME` | ✅ 与 server/agent/runtime 配置完全一致 |
-| Host + systemd (`6.4`) | `ORIVIS_SERVER__URL` `ORIVIS_AGENT__TOKEN` `ORIVIS_AGENT__NAME` `ORIVIS_AGENT__REGION` `ORIVIS_RUNTIME` | ✅ 与 server/agent/runtime 配置完全一致 |
-| Docker Compose (`13.2`) | `ORIVIS_DB__DRIVER` `ORIVIS_DB__DSN` | ✅ 与 `db.*` 一致 |
-| Docker Swarm (`13.3`) | `ORIVIS_SERVER__URL` `ORIVIS_AGENT__TOKEN` `ORIVIS_RUNTIME` | ✅ 与 server/agent/runtime 一致 |
-
-### 3) 对账结论
-
-- `.env` 与 `config.example.yaml`：字段映射完整。
-- 设计文档：当前 `systemd` 示例与 `configx` 的 dotenv 方式统一，全部片段与当前配置路径一致。
+```text
+GET  /                         dashboard UI
+GET  /api/server/metadata      application metadata
+GET  /healthz                  health probe
+GET  /readyz                   readiness probe
+POST /api/agent/register       agent registration
+POST /api/agent/heartbeat      agent heartbeat
+GET  /api/agent/tasks          pull assigned monitor tasks
+POST /api/agent/results        report probe result
+```
 
 ## Verify
 
 ```powershell
-go fmt ./...
 go test ./...
+golangci-lint run ./...
 ```
