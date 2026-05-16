@@ -19,8 +19,12 @@ const (
 )
 
 type LabelSource struct {
-	SourceKey string
-	Labels    map[string]string
+	SourceKey          string
+	Labels             map[string]string
+	DefaultName        string
+	DefaultEnvironment string
+	TargetHost         string
+	Ports              []int
 }
 
 func ParseLabels(source LabelSource) ([]protocol.AgentDiscoveredMonitor, error) {
@@ -28,16 +32,29 @@ func ParseLabels(source LabelSource) ([]protocol.AgentDiscoveredMonitor, error) 
 	if sourceKey == "" {
 		return nil, errors.New("source key is required")
 	}
-	if !labelBool(source.Labels[LabelEnable], true) {
+	enableValue := strings.TrimSpace(source.Labels[LabelEnable])
+	if !labelBool(enableValue, true) {
 		return nil, nil
 	}
-	return parseMonitorGroups(sourceKey, source.Labels[LabelEnvironment], monitorLabelGroups(source.Labels))
+	environment := firstNonEmpty(source.Labels[LabelEnvironment], source.DefaultEnvironment)
+	groups := monitorLabelGroups(source.Labels, source.DefaultName)
+	if groups.Len() == 0 {
+		if !labelBool(enableValue, false) {
+			return nil, nil
+		}
+		fields, ok := inferredMonitorFields(source, nil)
+		if !ok {
+			return nil, nil
+		}
+		groups.Set(defaultMonitorKey(source.DefaultName), fields)
+	}
+	return parseMonitorGroups(sourceKey, environment, source, groups)
 }
 
-func monitorLabelGroups(labels map[string]string) *collectionmapping.Map[string, map[string]string] {
+func monitorLabelGroups(labels map[string]string, defaultName string) *collectionmapping.Map[string, map[string]string] {
 	groups := collectionmapping.NewMap[string, map[string]string]()
 	for key, value := range labels {
-		name, field, ok := monitorLabelField(key)
+		name, field, ok := monitorLabelField(key, defaultName)
 		if !ok {
 			continue
 		}
@@ -51,11 +68,14 @@ func monitorLabelGroups(labels map[string]string) *collectionmapping.Map[string,
 	return groups
 }
 
-func monitorLabelField(key string) (string, string, bool) {
+func monitorLabelField(key, defaultName string) (string, string, bool) {
 	if !strings.HasPrefix(key, LabelMonitor) {
 		return "", "", false
 	}
 	rest := strings.TrimPrefix(key, LabelMonitor)
+	if monitorField(rest) {
+		return defaultMonitorKey(defaultName), rest, true
+	}
 	parts := strings.SplitN(rest, ".", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", false
@@ -66,6 +86,7 @@ func monitorLabelField(key string) (string, string, bool) {
 func parseMonitorGroups(
 	sourceKey string,
 	environment string,
+	source LabelSource,
 	groups *collectionmapping.Map[string, map[string]string],
 ) ([]protocol.AgentDiscoveredMonitor, error) {
 	names := groups.Keys()
@@ -74,6 +95,7 @@ func parseMonitorGroups(
 	monitors := make([]protocol.AgentDiscoveredMonitor, 0, len(names))
 	for _, name := range names {
 		fields, _ := groups.Get(name)
+		fields, _ = inferredMonitorFields(source, fields)
 		monitor, err := parseMonitor(sourceKey, environment, name, fields)
 		if err != nil {
 			return nil, err

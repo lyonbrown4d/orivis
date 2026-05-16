@@ -17,12 +17,14 @@ const (
 )
 
 type DockerOptions struct {
-	Mode string
+	Mode               string
+	DefaultEnvironment string
 }
 
 type DockerDiscoverer struct {
-	client *dockerclient.Client
-	mode   string
+	client             *dockerclient.Client
+	mode               string
+	defaultEnvironment string
 }
 
 func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
@@ -36,7 +38,11 @@ func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
 		return nil, fmt.Errorf("create Docker client: %w", err)
 	}
 
-	return &DockerDiscoverer{client: client, mode: mode}, nil
+	return &DockerDiscoverer{
+		client:             client,
+		mode:               mode,
+		defaultEnvironment: strings.TrimSpace(opts.DefaultEnvironment),
+	}, nil
 }
 
 func (d *DockerDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
@@ -73,10 +79,9 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 	out := make([]protocol.AgentDiscoveredMonitor, 0)
 	for index := range result.Items {
 		item := result.Items[index]
-		monitors, err := ParseLabels(LabelSource{
-			SourceKey: ContainerSourceKey(item),
-			Labels:    item.Labels,
-		})
+		source := ContainerLabelSource(item)
+		source.DefaultEnvironment = firstNonEmpty(d.defaultEnvironment, source.DefaultEnvironment)
+		monitors, err := ParseLabels(source)
 		if err != nil {
 			return nil, err
 		}
@@ -94,10 +99,9 @@ func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.Age
 	out := make([]protocol.AgentDiscoveredMonitor, 0)
 	for index := range result.Items {
 		item := result.Items[index]
-		monitors, err := ParseLabels(LabelSource{
-			SourceKey: ServiceSourceKey(item),
-			Labels:    item.Spec.Labels,
-		})
+		source := ServiceLabelSource(item)
+		source.DefaultEnvironment = firstNonEmpty(d.defaultEnvironment, source.DefaultEnvironment)
+		monitors, err := ParseLabels(source)
 		if err != nil {
 			return nil, err
 		}
@@ -114,6 +118,18 @@ func normalizeDockerMode(mode string) string {
 		return DockerModeSwarm
 	default:
 		return ""
+	}
+}
+
+// ContainerLabelSource returns label parsing metadata for a Docker container.
+func ContainerLabelSource(item container.Summary) LabelSource {
+	return LabelSource{
+		SourceKey:          ContainerSourceKey(item),
+		Labels:             item.Labels,
+		DefaultName:        ContainerName(item),
+		DefaultEnvironment: ContainerEnvironment(item),
+		TargetHost:         ContainerTargetHost(item),
+		Ports:              ContainerPorts(item),
 	}
 }
 
@@ -139,6 +155,55 @@ func ContainerSourceKey(item container.Summary) string {
 	return "docker:container:" + id
 }
 
+// ContainerName returns the best user-facing monitor name for a Docker container.
+func ContainerName(item container.Summary) string {
+	return firstNonEmpty(
+		item.Labels["com.docker.compose.service"],
+		item.Labels["com.docker.swarm.service.name"],
+		containerRuntimeName(item),
+		shortDockerID(item.ID),
+	)
+}
+
+// ContainerEnvironment returns the best environment fallback for a Docker container.
+func ContainerEnvironment(item container.Summary) string {
+	return firstNonEmpty(
+		item.Labels["com.docker.compose.project"],
+		item.Labels["com.docker.stack.namespace"],
+	)
+}
+
+// ContainerTargetHost returns the DNS name an agent can use from the same Docker network.
+func ContainerTargetHost(item container.Summary) string {
+	return firstNonEmpty(
+		item.Labels["com.docker.compose.service"],
+		item.Labels["com.docker.swarm.service.name"],
+		containerRuntimeName(item),
+		shortDockerID(item.ID),
+	)
+}
+
+// ContainerPorts returns exposed private container ports.
+func ContainerPorts(item container.Summary) []int {
+	ports := make([]int, 0, len(item.Ports))
+	seen := map[int]struct{}{}
+	for _, port := range item.Ports {
+		if !strings.EqualFold(strings.TrimSpace(port.Type), "tcp") {
+			continue
+		}
+		value := int(port.PrivatePort)
+		if value == 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		ports = append(ports, value)
+	}
+	return ports
+}
+
 // ServiceSourceKey returns the stable discovery source key for a Docker Swarm service.
 func ServiceSourceKey(item swarm.Service) string {
 	if namespace := strings.TrimSpace(item.Spec.Labels["com.docker.stack.namespace"]); namespace != "" {
@@ -154,6 +219,61 @@ func ServiceSourceKey(item swarm.Service) string {
 		id = "unknown"
 	}
 	return "docker:swarm:" + id
+}
+
+// ServiceLabelSource returns label parsing metadata for a Docker Swarm service.
+func ServiceLabelSource(item swarm.Service) LabelSource {
+	return LabelSource{
+		SourceKey:          ServiceSourceKey(item),
+		Labels:             item.Spec.Labels,
+		DefaultName:        ServiceName(item),
+		DefaultEnvironment: ServiceEnvironment(item),
+		TargetHost:         ServiceTargetHost(item),
+		Ports:              ServicePorts(item),
+	}
+}
+
+// ServiceName returns the best user-facing monitor name for a Docker Swarm service.
+func ServiceName(item swarm.Service) string {
+	return firstNonEmpty(item.Spec.Name, shortDockerID(item.ID))
+}
+
+// ServiceEnvironment returns the best environment fallback for a Docker Swarm service.
+func ServiceEnvironment(item swarm.Service) string {
+	return firstNonEmpty(item.Spec.Labels["com.docker.stack.namespace"])
+}
+
+// ServiceTargetHost returns the DNS name an agent can use inside a Docker Swarm network.
+func ServiceTargetHost(item swarm.Service) string {
+	return ServiceName(item)
+}
+
+// ServicePorts returns exposed target ports for a Docker Swarm service.
+func ServicePorts(item swarm.Service) []int {
+	ports := make([]int, 0, len(item.Endpoint.Ports))
+	seen := map[int]struct{}{}
+	for _, port := range item.Endpoint.Ports {
+		if !strings.EqualFold(string(port.Protocol), "tcp") {
+			continue
+		}
+		value := int(port.TargetPort)
+		if value == 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		ports = append(ports, value)
+	}
+	return ports
+}
+
+func containerRuntimeName(item container.Summary) string {
+	if len(item.Names) == 0 {
+		return ""
+	}
+	return strings.Trim(strings.TrimSpace(item.Names[0]), "/")
 }
 
 func shortDockerID(id string) string {

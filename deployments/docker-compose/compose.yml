@@ -40,15 +40,9 @@ services:
       retries: 12
     labels:
       orivis.enable: "true"
-      orivis.environment: "dev"
-      orivis.monitor.redis.type: "redis"
-      orivis.monitor.redis.target: "redis://redis:6379"
-      orivis.monitor.redis.name: "compose-redis"
-      orivis.monitor.redis.enabled: "true"
-      orivis.monitor.redis.interval: "10s"
-      orivis.monitor.redis.timeout: "3s"
-      orivis.monitor.redis.retry: "0"
-      orivis.monitor.redis.aggregation: "majority_down"
+      orivis.monitor.type: "redis"
+      orivis.monitor.interval: "10s"
+      orivis.monitor.timeout: "3s"
 
   postgres:
     image: postgres:17-alpine
@@ -64,15 +58,10 @@ services:
       retries: 12
     labels:
       orivis.enable: "true"
-      orivis.environment: "dev"
-      orivis.monitor.postgres.type: "postgres"
-      orivis.monitor.postgres.target: "postgres://orivis:orivis@postgres:5432/orivis?sslmode=disable"
-      orivis.monitor.postgres.name: "compose-postgres"
-      orivis.monitor.postgres.enabled: "true"
-      orivis.monitor.postgres.interval: "10s"
-      orivis.monitor.postgres.timeout: "3s"
-      orivis.monitor.postgres.retry: "0"
-      orivis.monitor.postgres.aggregation: "majority_down"
+      orivis.monitor.type: "postgres"
+      orivis.monitor.target: "postgres://orivis:orivis@postgres:5432/orivis?sslmode=disable"
+      orivis.monitor.interval: "10s"
+      orivis.monitor.timeout: "3s"
 
 volumes:
   orivis-data:

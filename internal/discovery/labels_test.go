@@ -83,3 +83,66 @@ func TestParseLabelsRequiresTypeAndTarget(t *testing.T) {
 		t.Fatal("expected missing target error")
 	}
 }
+
+func TestParseLabelsInfersSingleMonitorFromDockerMetadata(t *testing.T) {
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
+		SourceKey:          "docker:compose:project:redis",
+		Labels:             map[string]string{"orivis.enable": "true", "orivis.monitor.type": "redis"},
+		DefaultName:        "redis",
+		DefaultEnvironment: "project",
+		TargetHost:         "redis",
+		Ports:              []int{6379},
+	})
+	if err != nil {
+		t.Fatalf("parse inferred labels: %v", err)
+	}
+	if len(monitors) != 1 {
+		t.Fatalf("expected one inferred monitor, got %#v", monitors)
+	}
+	monitor := monitors[0]
+	if monitor.SourceKey != "docker:compose:project:redis:redis" {
+		t.Fatalf("unexpected source key: %#v", monitor)
+	}
+	if monitor.Name != "redis" || monitor.Type != "redis" || monitor.Target != "redis://redis:6379" {
+		t.Fatalf("unexpected inferred monitor: %#v", monitor)
+	}
+	if monitor.EnvironmentCode != "project" {
+		t.Fatalf("unexpected environment: %#v", monitor)
+	}
+}
+
+func TestParseLabelsInfersTCPMonitorWhenOnlyEnabled(t *testing.T) {
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
+		SourceKey:   "docker:container:web",
+		Labels:      map[string]string{"orivis.enable": "true"},
+		DefaultName: "web",
+		TargetHost:  "web",
+		Ports:       []int{8080},
+	})
+	if err != nil {
+		t.Fatalf("parse inferred labels: %v", err)
+	}
+	if len(monitors) != 1 {
+		t.Fatalf("expected one inferred monitor, got %#v", monitors)
+	}
+	monitor := monitors[0]
+	if monitor.Name != "web" || monitor.Type != "tcp" || monitor.Target != "web:8080" {
+		t.Fatalf("unexpected inferred monitor: %#v", monitor)
+	}
+}
+
+func TestParseLabelsDoesNotInferWithoutOrivisLabels(t *testing.T) {
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
+		SourceKey:   "docker:container:web",
+		Labels:      map[string]string{},
+		DefaultName: "web",
+		TargetHost:  "web",
+		Ports:       []int{8080},
+	})
+	if err != nil {
+		t.Fatalf("parse labels: %v", err)
+	}
+	if len(monitors) != 0 {
+		t.Fatalf("expected no monitors without orivis labels, got %#v", monitors)
+	}
+}

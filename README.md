@@ -188,16 +188,15 @@ Orivis monitor discovery uses labels with an `orivis.` prefix.
 ```yaml
 labels:
   orivis.enable: "true"
-  orivis.environment: "prod"
-  orivis.monitor.http.type: "http"
-  orivis.monitor.http.target: "http://web:8080/health"
-  orivis.monitor.http.interval: "30s"
-  orivis.monitor.http.timeout: "5s"
-  orivis.monitor.http.retry: "2"
-  orivis.monitor.http.aggregation: "majority_down"
+  orivis.monitor.type: "redis"
+  orivis.monitor.interval: "30s"
 ```
 
-Each monitor is grouped by `orivis.monitor.<name>.*`.
+When Docker discovery is enabled, Orivis uses container metadata to infer the monitor name, environment, target host, and ports.
+For Redis, `orivis.monitor.type=redis` is enough to infer `redis://<service>:6379`.
+For database probes that need credentials, keep `orivis.monitor.target` explicit.
+
+Multiple monitors can still be grouped by `orivis.monitor.<name>.*`.
 
 Supported fields are `type`, `target`, `name`, `enabled`, `interval`, `timeout`, `retry`, and `aggregation`.
 

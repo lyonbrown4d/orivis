@@ -19,7 +19,8 @@ func (r *Runner) configureDiscovery() error {
 
 	if r.cfg.Discovery.Docker.Enabled {
 		discoverer, err := agentdiscovery.NewDockerDiscoverer(agentdiscovery.DockerOptions{
-			Mode: r.cfg.Discovery.Docker.Mode,
+			Mode:               r.cfg.Discovery.Docker.Mode,
+			DefaultEnvironment: defaultDiscoveryEnvironment(r.cfg.Agent.Environments),
 		})
 		if err != nil {
 			return oops.Wrapf(err, "create Docker discoverer")
@@ -38,6 +39,13 @@ func (r *Runner) configureDiscovery() error {
 		r.discovery = compositeDiscoverer{discoverers: discoverers}
 	}
 	return nil
+}
+
+func defaultDiscoveryEnvironment(environments []string) string {
+	if len(environments) == 0 {
+		return ""
+	}
+	return environments[0]
 }
 
 type compositeDiscoverer struct {

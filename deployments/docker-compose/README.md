@@ -32,7 +32,9 @@ $env:ORIVIS_HTTP_PORT = "18080"
 docker compose -f deployments/docker-compose/compose.yml up -d
 ```
 
-The template also starts Redis and PostgreSQL. The agent reads their Docker labels through the Docker socket and reports Redis/PostgreSQL uptime probes to the server.
+The template also starts Redis and PostgreSQL. The agent reads their Docker labels and container metadata through the Docker socket, then reports Redis/PostgreSQL uptime probes to the server.
+
+Redis only declares `orivis.monitor.type=redis`; the agent infers its service name and `redis://redis:6379` target from Docker metadata. PostgreSQL keeps an explicit DSN target because credentials are not inferred from container environment variables by default.
 
 Before production use:
 

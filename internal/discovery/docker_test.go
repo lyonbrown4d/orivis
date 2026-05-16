@@ -32,6 +32,28 @@ func TestContainerSourceKeyPrefersComposeService(t *testing.T) {
 	}
 }
 
+func TestContainerLabelSourceUsesComposeMetadata(t *testing.T) {
+	source := discovery.ContainerLabelSource(container.Summary{
+		ID:    "1234567890abcdef",
+		Names: []string{"/project-redis-1"},
+		Labels: map[string]string{
+			"com.docker.compose.project": "project",
+			"com.docker.compose.service": "redis",
+			"orivis.enable":              "true",
+		},
+		Ports: []container.PortSummary{{PrivatePort: 6379, Type: "tcp"}},
+	})
+	if source.SourceKey != "docker:compose:project:redis" {
+		t.Fatalf("unexpected source key: %#v", source)
+	}
+	if source.DefaultName != "redis" || source.DefaultEnvironment != "project" || source.TargetHost != "redis" {
+		t.Fatalf("unexpected source metadata: %#v", source)
+	}
+	if len(source.Ports) != 1 || source.Ports[0] != 6379 {
+		t.Fatalf("unexpected source ports: %#v", source)
+	}
+}
+
 func TestServiceSourceKey(t *testing.T) {
 	key := discovery.ServiceSourceKey(swarm.Service{
 		ID: "abcdef1234567890",

@@ -37,8 +37,8 @@ $previousPort = $env:ORIVIS_HTTP_PORT
 Push-Location $root
 try {
     if ($SkipBuild) {
-        Invoke-CheckedCommand docker @("image", "inspect", "ghcr.io/lyonbrown4d/orivis-server:$Tag")
-        Invoke-CheckedCommand docker @("image", "inspect", "ghcr.io/lyonbrown4d/orivis-agent:$Tag")
+        Invoke-CheckedCommand docker @("image", "inspect", "--format", "{{.Id}}", "ghcr.io/lyonbrown4d/orivis-server:$Tag")
+        Invoke-CheckedCommand docker @("image", "inspect", "--format", "{{.Id}}", "ghcr.io/lyonbrown4d/orivis-agent:$Tag")
     }
     else {
         Invoke-CheckedCommand docker @("build", "--build-arg", "APP=orivis-server", "-t", "ghcr.io/lyonbrown4d/orivis-server:$Tag", ".")
@@ -49,7 +49,7 @@ try {
     $env:ORIVIS_HTTP_PORT = "$HostPort"
     $baseURL = "http://127.0.0.1:$HostPort"
 
-    Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "down", "--remove-orphans")
+    Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "down", "--remove-orphans", "-v")
     Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "up", "-d", "--remove-orphans")
 
     $deadline = (Get-Date).AddSeconds($DurationSeconds)
@@ -72,7 +72,7 @@ try {
     $dashboard = Invoke-WebRequest -UseBasicParsing "$baseURL/" -Headers @{
         Authorization = "Basic $basicAuth"
     }
-    foreach ($expected in @("server-health", "compose-redis", "compose-postgres")) {
+    foreach ($expected in @("server-health", "redis", "postgres")) {
         if ($dashboard.Content -notmatch [regex]::Escape($expected)) {
             throw "Expected monitor '$expected' was not found on the dashboard."
         }
@@ -82,7 +82,7 @@ try {
     Write-Host "Dashboard: $baseURL/"
 
     if (-not $KeepRunning) {
-        Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "down")
+        Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "down", "-v")
     }
 }
 finally {
