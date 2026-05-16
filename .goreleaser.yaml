@@ -3,6 +3,11 @@ version: 2
 
 project_name: orivis
 
+before:
+  hooks:
+    - pnpm -C web install --frozen-lockfile
+    - pnpm -C web build
+
 builds:
   - id: orivis-server
     main: ./cmd/orivis-server
@@ -143,7 +148,7 @@ dockers_v2:
   - id: orivis-server
     ids:
       - orivis-server
-    dockerfile: Dockerfile.goreleaser
+    dockerfile: Dockerfile.goreleaser.server
     images:
       - ghcr.io/lyonbrown4d/orivis-server
     tags:
@@ -154,6 +159,8 @@ dockers_v2:
       - linux/arm64
     build_args:
       BIN: orivis-server
+    extra_files:
+      - web/dist
     labels:
       org.opencontainers.image.title: orivis-server
       org.opencontainers.image.description: Lightweight uptime server for Orivis.

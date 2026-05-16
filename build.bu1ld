@@ -1,0 +1,6 @@
+workspace {
+  name = "orivis"
+  default = build
+}
+
+import "tasks/*.bu1ld"

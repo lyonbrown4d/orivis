@@ -11,7 +11,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	unset(t, "ORIVIS_SERVER__URL", "ORIVIS_AGENT__NAME", "ORIVIS_AGENT__TOKEN", "ORIVIS_AGENT__REGION", "ORIVIS_AGENT__ENVIRONMENTS", "ORIVIS_RUNTIME", "ORIVIS_POLL__INTERVAL", "ORIVIS_LOG__LEVEL")
+	isolateOrivisEnv(t)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -42,8 +42,34 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	}
 }
 
-func unset(t *testing.T, keys ...string) {
+func isolateOrivisEnv(t *testing.T) {
 	t.Helper()
+	keys := []string{
+		"ORIVIS_SERVER__URL",
+		"ORIVIS_AGENT__NAME",
+		"ORIVIS_AGENT__TOKEN",
+		"ORIVIS_AGENT__REGION",
+		"ORIVIS_AGENT__ENVIRONMENTS",
+		"ORIVIS_RUNTIME",
+		"ORIVIS_POLL__INTERVAL",
+		"ORIVIS_LOG__LEVEL",
+		"ORIVIS_DISCOVERY__DOCKER__ENABLED",
+		"ORIVIS_DISCOVERY__DOCKER__MODE",
+		"ORIVIS_DISCOVERY__STATIC__ENABLED",
+		"ORIVIS_DISCOVERY__STATIC__HCL_FILES",
+		"ORIVIS_DISCOVERY__STATIC__MONITORS",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__SOURCE_KEY",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__NAME",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__TYPE",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__TARGET",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__GROUP",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__ENVIRONMENT",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__ENABLED",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__INTERVAL",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__TIMEOUT",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__RETRY_COUNT",
+		"ORIVIS_DISCOVERY__STATIC__MONITOR__AGGREGATION",
+	}
 	for _, key := range keys {
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("unset %s: %v", key, err)
@@ -52,6 +78,7 @@ func unset(t *testing.T, keys ...string) {
 }
 
 func TestLoadPollInterval(t *testing.T) {
+	isolateOrivisEnv(t)
 	t.Setenv("ORIVIS_POLL__INTERVAL", "5s")
 
 	cfg, err := config.Load()
@@ -65,6 +92,7 @@ func TestLoadPollInterval(t *testing.T) {
 }
 
 func TestLoadAgentEnvironments(t *testing.T) {
+	isolateOrivisEnv(t)
 	t.Setenv("ORIVIS_AGENT__ENVIRONMENTS", "prod,staging")
 
 	cfg, err := config.Load()
@@ -81,6 +109,7 @@ func TestLoadAgentEnvironments(t *testing.T) {
 }
 
 func TestLoadDockerDiscovery(t *testing.T) {
+	isolateOrivisEnv(t)
 	t.Setenv("ORIVIS_DISCOVERY__DOCKER__ENABLED", "true")
 	t.Setenv("ORIVIS_DISCOVERY__DOCKER__MODE", "swarm")
 
@@ -98,6 +127,7 @@ func TestLoadDockerDiscovery(t *testing.T) {
 }
 
 func TestLoadStaticDiscoveryMonitorFromEnvironment(t *testing.T) {
+	isolateOrivisEnv(t)
 	t.Setenv("ORIVIS_DISCOVERY__STATIC__MONITOR__NAME", "server-health")
 	t.Setenv("ORIVIS_DISCOVERY__STATIC__MONITOR__TYPE", "http")
 	t.Setenv("ORIVIS_DISCOVERY__STATIC__MONITOR__TARGET", "http://127.0.0.1:8080/healthz")
@@ -123,6 +153,7 @@ func TestLoadStaticDiscoveryMonitorFromEnvironment(t *testing.T) {
 }
 
 func TestLoadStaticDiscoveryFromFile(t *testing.T) {
+	isolateOrivisEnv(t)
 	path := filepath.Join(t.TempDir(), "agent.yaml")
 	if err := os.WriteFile(path, []byte(staticDiscoveryConfigYAML), 0o600); err != nil {
 		t.Fatalf("write config file: %v", err)

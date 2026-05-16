@@ -25,6 +25,9 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("expected default HTTP address, got %q", cfg.HTTP.Addr)
 	}
+	if cfg.Web.Enabled || cfg.Web.Root != "web/dist" {
+		t.Fatalf("unexpected default web config: %#v", cfg.Web)
+	}
 	if cfg.DB.Driver != "sqlite" || cfg.DB.DSN != config.DefaultSQLiteDSN {
 		t.Fatalf("unexpected default DB config: %#v", cfg.DB)
 	}
@@ -42,6 +45,8 @@ func unset(t *testing.T, keys ...string) {
 func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_APP__ENV", "test")
 	t.Setenv("ORIVIS_HTTP__ADDR", ":9090")
+	t.Setenv("ORIVIS_WEB__ENABLED", "true")
+	t.Setenv("ORIVIS_WEB__ROOT", "/app/web")
 	t.Setenv("ORIVIS_LOG__LEVEL", "debug")
 	t.Setenv("ORIVIS_DB__DRIVER", "sqlite")
 	t.Setenv("ORIVIS_DB__DSN", "file:orivis.db")
@@ -60,5 +65,8 @@ func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	}
 	if cfg.DB.Driver != "sqlite" || cfg.DB.DSN != "file:orivis.db" {
 		t.Fatalf("unexpected environment DB config: %#v", cfg.DB)
+	}
+	if !cfg.Web.Enabled || cfg.Web.Root != "/app/web" {
+		t.Fatalf("unexpected environment web config: %#v", cfg.Web)
 	}
 }

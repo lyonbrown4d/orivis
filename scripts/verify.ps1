@@ -7,14 +7,15 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
+$previousTag = $env:ORIVIS_IMAGE_TAG
 
 try {
     go test ./...
     golangci-lint run ./...
 
     if ($Docker) {
-        docker build --build-arg APP=orivis-server -t orivis-server:verify .
-        docker build --build-arg APP=orivis-agent -t orivis-agent:verify .
+        $env:ORIVIS_IMAGE_TAG = "verify"
+        go tool bu1ld --no-cache build docker
     }
 
     if ($Release) {
@@ -26,5 +27,6 @@ try {
     }
 }
 finally {
+    $env:ORIVIS_IMAGE_TAG = $previousTag
     Pop-Location
 }

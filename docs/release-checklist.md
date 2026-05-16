@@ -10,8 +10,7 @@ This checklist defines the minimum bar for an alpha release.
 - `.goreleaser.yaml` passes `goreleaser check`.
 - `goreleaser release --snapshot --clean` produces local release artifacts.
 - GoReleaser produces `deb` and `rpm` packages for server and agent.
-- `docker build --build-arg APP=orivis-server` succeeds.
-- `docker build --build-arg APP=orivis-agent` succeeds.
+- `go tool bu1ld --no-cache build docker` builds the server and agent images.
 - Docker images compress the runtime binary with UPX by default.
 - `docker compose up --build` starts server and agent.
 - `./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080` starts Redis, PostgreSQL, server, and agent.
@@ -33,6 +32,8 @@ This checklist defines the minimum bar for an alpha release.
 ./scripts/verify.ps1
 ./scripts/verify.ps1 -Docker
 ./scripts/verify.ps1 -Release
+go tool bu1ld build
+go tool bu1ld --no-cache build docker
 goreleaser release --snapshot --clean
 ./scripts/smoke-local.ps1
 ./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080

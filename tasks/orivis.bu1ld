@@ -1,0 +1,107 @@
+task web_build {
+  inputs = [
+    "web/package.json",
+    "web/pnpm-lock.yaml",
+    "web/index.html",
+    "web/public/**",
+    "web/src/**",
+    "web/components.json",
+    "web/vite.config.ts",
+    "web/tailwind.config.ts",
+    "web/postcss.config.js",
+    "web/tsconfig*.json",
+  ]
+  outputs = ["web/dist"]
+  command = ["pnpm", "-C", "web", "build"]
+}
+
+task go_test {
+  inputs = [
+    "build.bu1ld",
+    "tasks/*.bu1ld",
+    "go.mod",
+    "go.sum",
+    "**/*.go",
+  ]
+  command = ["go", "test", "./..."]
+}
+
+task go_lint {
+  inputs = [
+    ".golangci.yml",
+    "build.bu1ld",
+    "tasks/*.bu1ld",
+    "go.mod",
+    "go.sum",
+    "**/*.go",
+  ]
+  command = ["golangci-lint", "run", "./..."]
+}
+
+task build {
+  deps = [web_build, go_test, go_lint]
+  command = []
+}
+
+task docker_server {
+  inputs = [
+    "Dockerfile",
+    ".dockerignore",
+    "go.mod",
+    "go.sum",
+    "cmd/**",
+    "internal/**",
+    "migrations/**",
+    "web/package.json",
+    "web/pnpm-lock.yaml",
+    "web/index.html",
+    "web/public/**",
+    "web/src/**",
+    "web/components.json",
+    "web/vite.config.ts",
+    "web/tailwind.config.ts",
+    "web/postcss.config.js",
+    "web/tsconfig*.json",
+  ]
+  command = [
+    "docker",
+    "build",
+    "--pull=false",
+    "--target",
+    "server",
+    "-t",
+    "orivis-server:local",
+    "-t",
+    "ghcr.io/lyonbrown4d/orivis-server:" + env("ORIVIS_IMAGE_TAG", "local"),
+    ".",
+  ]
+}
+
+task docker_agent {
+  inputs = [
+    "Dockerfile",
+    ".dockerignore",
+    "go.mod",
+    "go.sum",
+    "cmd/**",
+    "internal/**",
+    "migrations/**",
+  ]
+  command = [
+    "docker",
+    "build",
+    "--pull=false",
+    "--target",
+    "agent",
+    "-t",
+    "orivis-agent:local",
+    "-t",
+    "ghcr.io/lyonbrown4d/orivis-agent:" + env("ORIVIS_IMAGE_TAG", "local"),
+    ".",
+  ]
+}
+
+task docker {
+  deps = [docker_server, docker_agent]
+  command = []
+}

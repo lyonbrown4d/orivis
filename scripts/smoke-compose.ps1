@@ -42,16 +42,16 @@ $previousPort = $env:ORIVIS_HTTP_PORT
 
 Push-Location $root
 try {
+    $env:ORIVIS_IMAGE_TAG = $Tag
+
     if ($SkipBuild) {
         Invoke-CheckedCommand docker @("image", "inspect", "--format", "{{.Id}}", "ghcr.io/lyonbrown4d/orivis-server:$Tag")
         Invoke-CheckedCommand docker @("image", "inspect", "--format", "{{.Id}}", "ghcr.io/lyonbrown4d/orivis-agent:$Tag")
     }
     else {
-        Invoke-CheckedCommand docker @("build", "--build-arg", "APP=orivis-server", "-t", "ghcr.io/lyonbrown4d/orivis-server:$Tag", ".")
-        Invoke-CheckedCommand docker @("build", "--build-arg", "APP=orivis-agent", "-t", "ghcr.io/lyonbrown4d/orivis-agent:$Tag", ".")
+        Invoke-CheckedCommand go @("tool", "bu1ld", "--no-cache", "build", "docker")
     }
 
-    $env:ORIVIS_IMAGE_TAG = $Tag
     $env:ORIVIS_HTTP_PORT = "$HostPort"
     $baseURL = "http://127.0.0.1:$HostPort"
 

@@ -14,6 +14,10 @@ type Config struct {
 	HTTP struct {
 		Addr string `mapstructure:"addr" validate:"required"`
 	} `mapstructure:"http"`
+	Web struct {
+		Enabled bool   `mapstructure:"enabled"`
+		Root    string `mapstructure:"root"    validate:"required"`
+	} `mapstructure:"web"`
 	Log struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
@@ -72,6 +76,8 @@ func defaultOptions() []configx.Option {
 		configx.WithDefaults(map[string]any{
 			"app.env":                            "development",
 			"http.addr":                          ":8080",
+			"web.enabled":                        false,
+			"web.root":                           "web/dist",
 			"log.level":                          "info",
 			"db.driver":                          "sqlite",
 			"db.dsn":                             DefaultSQLiteDSN,

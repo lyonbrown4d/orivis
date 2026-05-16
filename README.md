@@ -67,11 +67,16 @@ go build -o bin/orivis-agent.exe ./cmd/orivis-agent
 Docker images can be built from the same Dockerfile:
 
 ```powershell
-docker build --build-arg APP=orivis-server -t orivis-server:local .
-docker build --build-arg APP=orivis-agent -t orivis-agent:local .
+go tool bu1ld --no-cache build docker
 ```
 
-The Docker build compresses the runtime binary with UPX by default.
+The bu1ld Docker task builds the `server` and `agent` Dockerfile targets through the Docker CLI, tags local images, and loads them into Docker. The Docker build compresses the runtime binary with UPX by default.
+
+Run the full local build gate with:
+
+```powershell
+go tool bu1ld build
+```
 
 Release artifacts are described by GoReleaser:
 

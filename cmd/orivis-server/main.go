@@ -48,6 +48,8 @@ func main() {
 	cmd.Flags().StringVar(&configFile, "config", "", "config file path")
 	cmd.Flags().String("app-env", "", "runtime environment")
 	cmd.Flags().String("http-addr", "", "HTTP listen address")
+	cmd.Flags().Bool("web-enabled", false, "serve built web SPA from the server")
+	cmd.Flags().String("web-root", "", "built web SPA root directory")
 	cmd.Flags().String("log-level", "", "log level")
 	cmd.Flags().String("db-driver", "", "database driver")
 	cmd.Flags().String("db-dsn", "", "database DSN")

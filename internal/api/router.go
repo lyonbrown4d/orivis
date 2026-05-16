@@ -81,6 +81,7 @@ func NewServer(
 	}
 	server.registerEndpoints(endpoints)
 	server.registerDashboardRoutes()
+	server.registerSPARoutes()
 	return server
 }
 
