@@ -1,0 +1,23 @@
+[Unit]
+Description=Orivis Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/orivis/server.env
+ExecStart=/usr/local/bin/orivis-server
+Restart=on-failure
+RestartSec=5s
+User=orivis
+Group=orivis
+WorkingDirectory=/var/lib/orivis
+StateDirectory=orivis
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/orivis
+
+[Install]
+WantedBy=multi-user.target

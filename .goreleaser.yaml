@@ -1,0 +1,111 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: orivis
+
+builds:
+  - id: orivis-server
+    main: ./cmd/orivis-server
+    binary: orivis-server
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/lyonbrown4d/orivis/internal/buildinfo.Version={{ .Version }}
+        -X github.com/lyonbrown4d/orivis/internal/buildinfo.Commit={{ .Commit }}
+        -X github.com/lyonbrown4d/orivis/internal/buildinfo.Date={{ .Date }}
+
+  - id: orivis-agent
+    main: ./cmd/orivis-agent
+    binary: orivis-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - >-
+        -s -w
+        -X github.com/lyonbrown4d/orivis/internal/buildinfo.Version={{ .Version }}
+        -X github.com/lyonbrown4d/orivis/internal/buildinfo.Commit={{ .Commit }}
+        -X github.com/lyonbrown4d/orivis/internal/buildinfo.Date={{ .Date }}
+
+archives:
+  - id: orivis-server
+    ids:
+      - orivis-server
+    name_template: "{{ .ProjectName }}_server_{{ .Os }}_{{ .Arch }}"
+
+  - id: orivis-agent
+    ids:
+      - orivis-agent
+    name_template: "{{ .ProjectName }}_agent_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+
+dockers_v2:
+  - id: orivis-server
+    ids:
+      - orivis-server
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - ghcr.io/lyonbrown4d/orivis-server
+    tags:
+      - "{{ .Tag }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    build_args:
+      BIN: orivis-server
+    labels:
+      org.opencontainers.image.title: orivis-server
+      org.opencontainers.image.description: Lightweight uptime server for Orivis.
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+
+  - id: orivis-agent
+    ids:
+      - orivis-agent
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - ghcr.io/lyonbrown4d/orivis-agent
+    tags:
+      - "{{ .Tag }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    build_args:
+      BIN: orivis-agent
+    labels:
+      org.opencontainers.image.title: orivis-agent
+      org.opencontainers.image.description: Lightweight uptime agent for Orivis.
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+
+release:
+  github:
+    owner: lyonbrown4d
+    name: orivis

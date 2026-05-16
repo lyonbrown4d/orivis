@@ -68,6 +68,26 @@ docker build --build-arg APP=orivis-server -t orivis-server:local .
 docker build --build-arg APP=orivis-agent -t orivis-agent:local .
 ```
 
+The Docker build compresses the runtime binary with UPX by default.
+
+Release artifacts are described by GoReleaser:
+
+```powershell
+goreleaser check
+goreleaser release --snapshot --clean
+```
+
+The GoReleaser pipeline builds:
+
+- `orivis-server` and `orivis-agent` binaries for Linux, macOS, and Windows.
+- Per-binary archives and `checksums.txt`.
+- Optional multi-arch container images through `dockers_v2`. Release images also compress the runtime binary with UPX.
+
+Deployment templates are available in:
+
+- `deployments/docker-compose`
+- `deployments/systemd`
+
 ## Configuration
 
 Orivis uses `configx`, so config can come from YAML, dotenv, or environment variables.
@@ -200,6 +220,9 @@ POST /api/agent/results        report probe result
 ## Verify
 
 ```powershell
-go test ./...
-golangci-lint run ./...
+./scripts/verify.ps1
+./scripts/verify.ps1 -Docker
+./scripts/verify.ps1 -Release
 ```
+
+See [release-checklist.md](docs/release-checklist.md) for the alpha release checklist.

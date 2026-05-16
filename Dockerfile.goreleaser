@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1.7
+
+FROM alpine:3.22 AS compress
+
+ARG TARGETPLATFORM
+ARG BIN
+
+RUN apk add --no-cache upx
+
+COPY ${TARGETPLATFORM}/${BIN} /tmp/orivis
+RUN upx --best --lzma /tmp/orivis || upx --best /tmp/orivis
+
+FROM alpine:3.22
+
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S orivis \
+    && adduser -S -G orivis orivis \
+    && mkdir -p /data \
+    && chown -R orivis:orivis /data
+
+WORKDIR /app
+
+COPY --from=compress /tmp/orivis /usr/local/bin/orivis
+
+USER orivis
+
+ENTRYPOINT ["orivis"]
