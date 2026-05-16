@@ -71,6 +71,10 @@ func (c *Checker) check(ctx context.Context, task protocol.AgentTask) (model.Sta
 		return c.checkDNS(ctx, task)
 	case string(model.MonitorTLS):
 		return c.checkTLS(ctx, task)
+	case string(model.MonitorRedis):
+		return c.checkRedis(ctx, task)
+	case string(model.MonitorDatabase), string(model.MonitorSQLite), string(model.MonitorMySQL), string(model.MonitorPostgres), "db", "pg", "postgresql":
+		return c.checkDatabase(ctx, task)
 	case string(model.MonitorPing):
 		return model.StatusUnknown, map[string]any{"type": task.Type}, errors.New("ping probe is not implemented yet")
 	default:

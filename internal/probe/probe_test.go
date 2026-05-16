@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	miniredis "github.com/alicebob/miniredis/v2"
+
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/probe"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
@@ -72,9 +74,65 @@ func TestDNSProbe(t *testing.T) {
 	}
 }
 
+func TestRedisProbe(t *testing.T) {
+	redisServer := miniredis.RunT(t)
+
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorRedis),
+		Target:         redisServer.Addr(),
+		TimeoutSeconds: 2,
+	})
+
+	if result.Status != model.StatusUp {
+		t.Fatalf("expected Redis probe up, got %#v", result)
+	}
+}
+
+func TestSQLiteDatabaseProbe(t *testing.T) {
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorDatabase),
+		Target:         "sqlite://file:probe-test?mode=memory&cache=shared",
+		TimeoutSeconds: 2,
+	})
+
+	if result.Status != model.StatusUp {
+		t.Fatalf("expected database probe up, got %#v", result)
+	}
+}
+
+func TestMySQLDatabaseProbeRecognized(t *testing.T) {
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorMySQL),
+		Target:         "mysql://127.0.0.1:1/orivis?timeout=1s",
+		TimeoutSeconds: 1,
+	})
+
+	if result.Status == model.StatusUnknown {
+		t.Fatalf("expected MySQL probe to be recognized, got %#v", result)
+	}
+	if result.ErrorMessage == "" {
+		t.Fatal("expected MySQL probe error message")
+	}
+}
+
+func TestPostgresDatabaseProbeRecognized(t *testing.T) {
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           "pg",
+		Target:         "postgres://127.0.0.1:1/orivis?connect_timeout=1",
+		TimeoutSeconds: 1,
+	})
+
+	if result.Status == model.StatusUnknown {
+		t.Fatalf("expected Postgres probe to be recognized, got %#v", result)
+	}
+	if result.ErrorMessage == "" {
+		t.Fatal("expected Postgres probe error message")
+	}
+}
+
 func TestUnsupportedProbe(t *testing.T) {
 	result := probe.New().Check(context.Background(), protocol.AgentTask{
-		Type:   "redis",
+		Type:   "amqp",
 		Target: "localhost:6379",
 	})
 

@@ -52,6 +52,46 @@ discovery:
         timeout: 3s
         retry_count: 0
         aggregation: majority_down
+      # Redis probe example:
+      # - name: redis-local
+      #   type: redis
+      #   target: redis://127.0.0.1:6379
+      #   environment: dev
+      #   enabled: true
+      #   interval: 15s
+      #   timeout: 3s
+      #   retry_count: 0
+      #   aggregation: majority_down
+      # SQLite database probe example:
+      # - name: sqlite-memory
+      #   type: database
+      #   target: sqlite://file:orivis?mode=memory&cache=shared
+      #   environment: dev
+      #   enabled: true
+      #   interval: 15s
+      #   timeout: 3s
+      #   retry_count: 0
+      #   aggregation: majority_down
+      # MySQL probe example:
+      # - name: mysql-local
+      #   type: mysql
+      #   target: mysql://root:password@127.0.0.1:3306/app?parseTime=true
+      #   environment: dev
+      #   enabled: true
+      #   interval: 15s
+      #   timeout: 3s
+      #   retry_count: 0
+      #   aggregation: majority_down
+      # PostgreSQL probe example:
+      # - name: postgres-local
+      #   type: postgres
+      #   target: postgres://postgres:password@127.0.0.1:5432/app?sslmode=disable
+      #   environment: dev
+      #   enabled: true
+      #   interval: 15s
+      #   timeout: 3s
+      #   retry_count: 0
+      #   aggregation: majority_down
   docker:
     enabled: false
     mode: container
