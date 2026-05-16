@@ -15,6 +15,7 @@ import (
 	adapterfiber "github.com/arcgolabs/httpx/adapter/fiber"
 	"github.com/arcgolabs/observabilityx"
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/gofiber/fiber/v2"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
@@ -28,6 +29,7 @@ type Server struct {
 	store   *store.Store
 	auth    *authx.Engine
 	obs     observabilityx.Observability
+	app     *fiber.App
 	runtime httpx.ServerRuntime
 	errCh   chan error
 }
@@ -39,7 +41,11 @@ func NewServer(
 	auth *authx.Engine,
 	obs observabilityx.Observability,
 ) *Server {
-	fiberAdapter := adapterfiber.New(nil, adapter.HumaOptions{
+	app := fiber.New(fiber.Config{
+		Views: newDashboardViews(),
+	})
+
+	fiberAdapter := adapterfiber.New(app, adapter.HumaOptions{
 		Title:       "Orivis API",
 		Version:     buildinfo.Version,
 		Description: "Distributed availability observability API",
@@ -61,6 +67,7 @@ func NewServer(
 		store:   storage,
 		auth:    auth,
 		obs:     observabilityx.Normalize(obs, logger),
+		app:     app,
 		runtime: runtime,
 		errCh:   make(chan error, 1),
 	}
@@ -95,7 +102,8 @@ func (s *Server) registerRoutes() {
 		if err := s.verifyDashboardAuth(input.Authorization); err != nil {
 			return nil, err
 		}
-		html, err := s.renderDashboard(ctx, input.Lang)
+
+		html, err := s.renderDashboardPage(ctx, input.Lang)
 		if err != nil {
 			return nil, err
 		}

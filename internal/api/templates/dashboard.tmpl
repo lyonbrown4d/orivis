@@ -1,7 +1,5 @@
-{{define "content"}}
 {{$t := .T}}
-<main>
-  <section id="overview" class="space-y-6">
+<section id="overview" class="space-y-6">
     <section class="overflow-hidden rounded-[2rem] border border-slate-900/10 bg-[#10221f] text-white shadow-2xl shadow-slate-900/15">
       <div class="relative px-6 py-8 sm:px-10">
         <div class="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-emerald-300/20 blur-3xl"></div>
@@ -47,7 +45,7 @@
       </div>
       <div class="rounded-3xl border border-slate-900/10 bg-white/80 p-5 shadow-sm">
         <p class="text-xs uppercase tracking-[0.25em] text-slate-500">{{call $t "summary.updated"}}</p>
-        <p class="mt-2 font-semibold">{{since .GeneratedAt}}</p>
+        <p class="mt-2 font-semibold">{{since $t .GeneratedAt}}</p>
         <p class="text-sm text-slate-500">{{.GeneratedAt.Format "2006-01-02 15:04:05 UTC"}} / {{call $t "summary.updated.at"}}</p>
       </div>
     </section>
@@ -122,7 +120,7 @@
               <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">{{.Status}}</span>
             </div>
             <p class="mt-3 text-sm text-slate-500">{{call $t "label.env"}}: {{join .EnvironmentCodes}}</p>
-            <p class="text-sm text-slate-500">{{call $t "label.last_seen"}}: {{since .LastSeenAt}}</p>
+            <p class="text-sm text-slate-500">{{call $t "label.last_seen"}}: {{since $t .LastSeenAt}}</p>
           </div>
           {{else}}
           <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">{{call $t "label.no_agents"}}</p>
@@ -142,7 +140,7 @@
               </div>
               <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{statusClass .Status}}">{{.Status}}</span>
             </div>
-            <p class="mt-3 text-sm text-slate-500">{{duration .Latency}} / {{since .CheckedAt}}</p>
+            <p class="mt-3 text-sm text-slate-500">{{duration .Latency}} / {{since $t .CheckedAt}}</p>
             {{if .ErrorMessage}}<p class="mt-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{{.ErrorMessage}}</p>{{end}}
           </div>
           {{else}}
@@ -152,5 +150,4 @@
       </section>
     </section>
   </section>
-</main>
-{{end}}
+</section>

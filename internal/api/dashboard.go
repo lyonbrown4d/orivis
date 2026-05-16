@@ -6,29 +6,23 @@ import (
 	"crypto/subtle"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
-	"html/template"
+	"io/fs"
 	"net/http"
+	"path"
 	"strings"
+	"sync"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/gofiber/template/html/v2"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
-
-type dashboardInput struct {
-	Authorization string `header:"Authorization"`
-	Lang          string `query:"lang"`
-}
-
-type dashboardOutput struct {
-	ContentType string `header:"Content-Type"`
-	Body        []byte
-}
 
 type dashboardView struct {
 	Lang          string
@@ -44,6 +38,16 @@ type dashboardView struct {
 	RecentResults []dashboardResultView
 	Summary       dashboardSummary
 	T             func(string) string
+}
+
+type dashboardInput struct {
+	Authorization string `header:"Authorization"`
+	Lang          string `query:"lang"`
+}
+
+type dashboardOutput struct {
+	ContentType string `header:"Content-Type"`
+	Body        []byte
 }
 
 type dashboardLanguageOption struct {
@@ -123,7 +127,7 @@ func dashboardUnauthorized() error {
 	)
 }
 
-func (s *Server) renderDashboard(ctx context.Context, lang string) ([]byte, error) {
+func (s *Server) renderDashboard(ctx context.Context, lang string) (*dashboardView, error) {
 	lang = dashboardLocale(lang)
 	view := dashboardView{
 		Lang:        lang,
@@ -167,9 +171,18 @@ func (s *Server) renderDashboard(ctx context.Context, lang string) ([]byte, erro
 		}
 	}
 
+	return &view, nil
+}
+
+func (s *Server) renderDashboardPage(ctx context.Context, lang string) ([]byte, error) {
+	view, err := s.renderDashboard(ctx, lang)
+	if err != nil {
+		return nil, err
+	}
+
 	var buf bytes.Buffer
-	if err := dashboardTemplate.Execute(&buf, view); err != nil {
-		return nil, fmt.Errorf("execute dashboard template: %w", err)
+	if err := dashboardTemplate().Render(&buf, "dashboard", view, "layout"); err != nil {
+		return nil, fmt.Errorf("render dashboard page: %w", err)
 	}
 	return buf.Bytes(), nil
 }
@@ -258,6 +271,8 @@ func dashboardStatusClass(status model.Status) string {
 		return "bg-rose-100 text-rose-700 ring-rose-200"
 	case model.StatusDegraded:
 		return "bg-amber-100 text-amber-700 ring-amber-200"
+	case model.StatusUnknown:
+		return "bg-slate-100 text-slate-600 ring-slate-200"
 	default:
 		return "bg-slate-100 text-slate-600 ring-slate-200"
 	}
@@ -280,21 +295,36 @@ func dashboardJoin(values []string) string {
 	return strings.Join(values, ", ")
 }
 
-func dashboardSince(value time.Time) string {
+func dashboardSince(t func(string) string, value time.Time) string {
 	if value.IsZero() {
 		return "-"
 	}
 	duration := time.Since(value)
 	switch {
 	case duration < time.Minute:
-		return "just now"
+		return dashboardText(t, "time.just_now", "just now")
 	case duration < time.Hour:
-		return fmt.Sprintf("%dm ago", int(duration.Minutes()))
+		return dashboardFormat(t, "time.minutes_ago", "%dm ago", int(duration.Minutes()))
 	case duration < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(duration.Hours()))
+		return dashboardFormat(t, "time.hours_ago", "%dh ago", int(duration.Hours()))
 	default:
 		return value.UTC().Format("2006-01-02 15:04 UTC")
 	}
+}
+
+func dashboardText(t func(string) string, key, fallback string) string {
+	if t == nil {
+		return fallback
+	}
+	text := t(key)
+	if strings.TrimSpace(text) == "" || text == key {
+		return fallback
+	}
+	return text
+}
+
+func dashboardFormat(t func(string) string, key, fallback string, args ...any) string {
+	return fmt.Sprintf(dashboardText(t, key, fallback), args...)
 }
 
 func dashboardLocale(lang string) string {
@@ -311,126 +341,102 @@ func dashboardLocale(lang string) string {
 }
 
 func dashboardLangOptions(activeLang string) []dashboardLanguageOption {
+	t := dashboardT(activeLang)
 	return []dashboardLanguageOption{
-		{Code: "en", Label: "English", Active: activeLang == "en"},
-		{Code: "zh", Label: "中文", Active: activeLang == "zh"},
+		{Code: "en", Label: dashboardText(t, "lang.option.en", "English"), Active: activeLang == "en"},
+		{Code: "zh", Label: dashboardText(t, "lang.option.zh", "\u4e2d\u6587"), Active: activeLang == "zh"},
 	}
 }
 
 func dashboardT(lang string) func(string) string {
-	locales := map[string]map[string]string{
-		"en": {
-			"page.title":             "Orivis Uptime",
-			"page.subtitle":          "Distributed availability observability",
-			"status.description":     "A zero-config server view for agents, discovered monitors, and recent probe results.",
-			"nav.dashboard":          "Dashboard",
-			"nav.monitors":           "Monitors",
-			"nav.agents":             "Agents",
-			"nav.results":            "Recent results",
-			"nav.refresh":            "Auto refresh: 15s",
-			"kpis.agents":            "Agents",
-			"kpis.monitors":          "Monitors",
-			"kpis.up":                "Up",
-			"kpis.down":              "Down",
-			"kpis.unknown":           "Unknown",
-			"kpis.total":             "total",
-			"summary.server":         "Server",
-			"summary.server.env":     "Environment",
-			"summary.storage":        "Storage",
-			"summary.storage.driver": "Driver",
-			"summary.updated":        "Updated",
-			"summary.updated.at":     "auto refresh 15s",
-			"section.monitors":       "Monitors",
-			"section.agents":         "Agents",
-			"section.recent_results": "Recent results",
-			"table.name":             "Name",
-			"table.target":           "Target",
-			"table.environment":      "Environment",
-			"table.interval":         "Interval",
-			"table.status":           "Status",
-			"table.latency":          "Latency",
-			"table.enabled":          "Enabled",
-			"table.disabled":         "Disabled",
-			"label.no_monitors":      "No monitors yet. Start an agent with static config or Docker labels.",
-			"label.no_agents":        "No agents registered yet.",
-			"label.no_results":       "No probe results yet.",
-			"agent.title":            "agent / status",
-			"label.env":              "env",
-			"label.last_seen":        "last seen",
-			"label.up":               "up",
-			"label.down":             "down",
-			"lang.current":           "Language",
-			"meta.group":             "Environment",
-			"status.unknown":         "unknown",
-		},
-		"zh": {
-			"page.title":             "Orivis 存活检测",
-			"page.subtitle":          "分布式可用性检测面板",
-			"status.description":     "用于 Agent、自动发现监控与最新探测结果的零配置视图。",
-			"nav.dashboard":          "概览",
-			"nav.monitors":           "监控列表",
-			"nav.agents":             "节点",
-			"nav.results":            "最近结果",
-			"nav.refresh":            "自动刷新：15秒",
-			"kpis.agents":            "节点数",
-			"kpis.monitors":          "监控数",
-			"kpis.up":                "正常",
-			"kpis.down":              "异常",
-			"kpis.unknown":           "未知",
-			"kpis.total":             "总计",
-			"summary.server":         "服务",
-			"summary.server.env":     "环境",
-			"summary.storage":        "存储",
-			"summary.storage.driver": "驱动",
-			"summary.updated":        "更新时间",
-			"summary.updated.at":     "15秒自动刷新",
-			"section.monitors":       "监控",
-			"section.agents":         "节点",
-			"section.recent_results": "最近结果",
-			"table.name":             "名称",
-			"table.target":           "目标",
-			"table.environment":      "环境",
-			"table.interval":         "间隔",
-			"table.status":           "状态",
-			"table.latency":          "耗时",
-			"table.enabled":          "启用",
-			"table.disabled":         "停用",
-			"label.no_monitors":      "暂无监控。可启动 Agent 并使用静态配置或 Docker 标签。",
-			"label.no_agents":        "暂无已注册节点。",
-			"label.no_results":       "暂无探测结果。",
-			"agent.title":            "节点 / 状态",
-			"label.env":              "环境",
-			"label.last_seen":        "最后上报",
-			"label.up":               "正常",
-			"label.down":             "异常",
-			"meta.group":             "环境分组",
-			"status.unknown":         "未知",
-		},
+	locales, err := dashboardTranslations()
+	if err != nil {
+		return func(key string) string {
+			return key
+		}
 	}
+
+	values := locales[lang]
+	fallback := locales["en"]
+
 	return func(key string) string {
-		if text, ok := locales[lang][key]; ok {
+		if text, ok := values[key]; ok {
 			return text
 		}
-		return locales["en"][key]
+		if text, ok := fallback[key]; ok {
+			return text
+		}
+		return key
 	}
 }
 
 var (
-	//go:embed "templates/*.tmpl"
+	//go:embed "templates/*.tmpl" "locales/*.json"
 	dashboardTemplateFS embed.FS
 
-	dashboardTemplate = template.Must(
-		template.New("layout.tmpl").
-			Funcs(template.FuncMap{
-				"statusClass": dashboardStatusClass,
-				"duration":    dashboardDuration,
-				"join":        dashboardJoin,
-				"since":       dashboardSince,
-			}).
-			ParseFS(
-				dashboardTemplateFS,
-				"templates/layout.tmpl",
-				"templates/dashboard.tmpl",
-			),
-	)
+	dashboardTemplateEngine = func() *html.Engine {
+		templateFS, err := fs.Sub(dashboardTemplateFS, "templates")
+		if err != nil {
+			panic(fmt.Errorf("load dashboard templates: %w", err))
+		}
+
+		engine := html.NewFileSystem(http.FS(templateFS), ".tmpl")
+		engine.AddFunc("statusClass", dashboardStatusClass)
+		engine.AddFunc("duration", dashboardDuration)
+		engine.AddFunc("join", dashboardJoin)
+		engine.AddFunc("since", dashboardSince)
+		return engine
+	}()
+
+	dashboardLocaleCatalog  = make(map[string]map[string]string)
+	dashboardLocaleLoadOnce sync.Once
+	dashboardLocaleLoadErr  error
 )
+
+func newDashboardViews() *html.Engine {
+	return dashboardTemplateEngine
+}
+
+func dashboardTemplate() *html.Engine {
+	return dashboardTemplateEngine
+}
+
+func dashboardTranslations() (map[string]map[string]string, error) {
+	dashboardLocaleLoadOnce.Do(func() {
+		localeFS, err := fs.Sub(dashboardTemplateFS, "locales")
+		if err != nil {
+			dashboardLocaleLoadErr = fmt.Errorf("load dashboard locale filesystem: %w", err)
+			return
+		}
+		entries, err := fs.ReadDir(localeFS, ".")
+		if err != nil {
+			dashboardLocaleLoadErr = fmt.Errorf("read dashboard locale files: %w", err)
+			return
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if path.Ext(name) != ".json" {
+				continue
+			}
+
+			locale := strings.TrimSuffix(name, path.Ext(name))
+			content, err := fs.ReadFile(localeFS, name)
+			if err != nil {
+				dashboardLocaleLoadErr = fmt.Errorf("read locale file %s: %w", name, err)
+				return
+			}
+			values := make(map[string]string)
+			if err := json.Unmarshal(content, &values); err != nil {
+				dashboardLocaleLoadErr = fmt.Errorf("parse locale file %s: %w", name, err)
+				return
+			}
+			dashboardLocaleCatalog[locale] = values
+		}
+	})
+
+	return dashboardLocaleCatalog, dashboardLocaleLoadErr
+}
