@@ -53,6 +53,9 @@ func main() {
 	cmd.Flags().String("db-driver", "", "database driver")
 	cmd.Flags().String("db-dsn", "", "database DSN")
 	cmd.Flags().String("auth-agent-token", "", "agent shared token")
+	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard basic auth")
+	cmd.Flags().String("auth-dashboard-username", "", "dashboard basic auth username")
+	cmd.Flags().String("auth-dashboard-password", "", "dashboard basic auth password")
 	cmd.Flags().Bool("observability-prometheus-enabled", false, "enable Prometheus observability adapter")
 	cmd.Flags().String("observability-prometheus-namespace", "", "Prometheus metric namespace")
 

@@ -27,6 +27,11 @@ type Config struct {
 		Agent struct {
 			Token string `mapstructure:"token"`
 		} `mapstructure:"agent"`
+		Dashboard struct {
+			Enabled  bool   `mapstructure:"enabled"`
+			Username string `mapstructure:"username"`
+			Password string `mapstructure:"password"`
+		} `mapstructure:"dashboard"`
 	} `mapstructure:"auth"`
 	Observability struct {
 		Prometheus struct {
@@ -64,6 +69,9 @@ func defaultOptions() []configx.Option {
 			"db.memory_result_retention":         "24h",
 			"db.memory_cleanup_interval":         "1m",
 			"auth.agent.token":                   "",
+			"auth.dashboard.enabled":             false,
+			"auth.dashboard.username":            "admin",
+			"auth.dashboard.password":            "",
 			"observability.prometheus.enabled":   false,
 			"observability.prometheus.namespace": "orivis",
 		}),

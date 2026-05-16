@@ -2,8 +2,11 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/arcgolabs/configx"
 )
 
 func TestLoadDefaults(t *testing.T) {
@@ -34,6 +37,12 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	if cfg.Discovery.Docker.Mode != "container" {
 		t.Fatalf("expected default Docker discovery mode, got %q", cfg.Discovery.Docker.Mode)
+	}
+	if !cfg.Discovery.Static.Enabled {
+		t.Fatal("expected static discovery to be enabled by default")
+	}
+	if len(cfg.Discovery.Static.Monitors) != 0 {
+		t.Fatalf("expected no default static monitors, got %#v", cfg.Discovery.Static.Monitors)
 	}
 }
 
@@ -89,5 +98,57 @@ func TestLoadDockerDiscovery(t *testing.T) {
 	}
 	if cfg.Discovery.Docker.Mode != "swarm" {
 		t.Fatalf("expected Docker discovery mode from environment, got %q", cfg.Discovery.Docker.Mode)
+	}
+}
+
+func TestLoadStaticDiscoveryFromFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent.yaml")
+	if err := os.WriteFile(path, []byte(`
+server:
+  url: http://127.0.0.1:8080
+agent:
+  name: local-agent
+  region: local
+  environments:
+    - dev
+runtime: host
+poll:
+  interval: 5s
+log:
+  level: info
+discovery:
+  static:
+    enabled: true
+    monitors:
+      - name: server health
+        type: http
+        target: http://127.0.0.1:8080/healthz
+        environment: dev
+        enabled: true
+        interval: 10s
+        timeout: 2s
+        retry_count: 1
+        aggregation: majority_down
+`), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	cfg, err := Load(configx.WithFiles(path))
+	if err != nil {
+		t.Fatalf("load config file: %v", err)
+	}
+
+	if len(cfg.Discovery.Static.Monitors) != 1 {
+		t.Fatalf("expected one static monitor, got %#v", cfg.Discovery.Static.Monitors)
+	}
+	monitor := cfg.Discovery.Static.Monitors[0]
+	if monitor.Name != "server health" || monitor.Type != "http" {
+		t.Fatalf("unexpected static monitor identity: %#v", monitor)
+	}
+	if monitor.Interval != 10*time.Second || monitor.Timeout != 2*time.Second {
+		t.Fatalf("unexpected static monitor timing: %#v", monitor)
+	}
+	if monitor.Enabled == nil || !*monitor.Enabled {
+		t.Fatalf("expected static monitor enabled flag, got %#v", monitor.Enabled)
 	}
 }

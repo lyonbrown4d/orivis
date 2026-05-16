@@ -9,6 +9,15 @@ go run ./cmd/orivis-server
 go run ./cmd/orivis-agent
 ```
 
+Local end-to-end run with the example config:
+
+```powershell
+go run ./cmd/orivis-server --config config.example.yaml
+go run ./cmd/orivis-agent --config config.example.yaml
+```
+
+The example agent config registers a static `http` monitor for `http://127.0.0.1:8080/healthz`, syncs it to the server, pulls it back as a task, probes it, and reports the result.
+
 ## Build
 
 ```powershell
@@ -45,6 +54,9 @@ The server reads:
 | `ORIVIS_DB_MEMORY_RESULT_RETENTION` | `24h` | How long in-memory probe results are retained. |
 | `ORIVIS_DB_MEMORY_CLEANUP_INTERVAL` | `1m` | How often expired in-memory probe results are removed. |
 | `ORIVIS_AUTH_AGENT_TOKEN` | empty | Optional bootstrap token required for agent registration. |
+| `ORIVIS_AUTH_DASHBOARD_ENABLED` | `false` | Enable HTTP Basic Auth for the dashboard. |
+| `ORIVIS_AUTH_DASHBOARD_USERNAME` | `admin` | Dashboard Basic Auth username. |
+| `ORIVIS_AUTH_DASHBOARD_PASSWORD` | empty | Dashboard Basic Auth password. Required when dashboard auth is enabled. |
 | `ORIVIS_OBSERVABILITY_PROMETHEUS_ENABLED` | `false` | Enable Prometheus observability adapter. |
 
 ### Storage mode
@@ -60,6 +72,14 @@ ORIVIS_DB_DSN=file:orivis.db
 ```
 
 When `ORIVIS_AUTH_AGENT_TOKEN` is set on the server, an agent must present the same token during registration. The server stores only a hashed agent token after registration.
+
+The dashboard at `/` is public by default for local zero-configuration usage. Enable Basic Auth when exposing it outside localhost:
+
+```env
+ORIVIS_AUTH_DASHBOARD_ENABLED=true
+ORIVIS_AUTH_DASHBOARD_USERNAME=admin
+ORIVIS_AUTH_DASHBOARD_PASSWORD=change-me
+```
 
 The agent reads:
 
@@ -79,7 +99,8 @@ The agent reads:
 ## HTTP Endpoints
 
 ```text
-GET /                  application metadata
+GET /                  dashboard UI
+GET /api/server/metadata application metadata
 GET /healthz          health probe
 GET /readyz           readiness probe
 POST /api/agent/register  agent registration
@@ -105,6 +126,22 @@ Currently implemented probe types:
 `ping` is defined in the shared model but is not implemented yet because ICMP needs a platform-specific adapter.
 
 ## Discovery Labels
+
+For local development, monitors can be declared directly in the agent config file:
+
+```yaml
+discovery:
+  static:
+    enabled: true
+    monitors:
+      - name: server-health
+        type: http
+        target: http://127.0.0.1:8080/healthz
+        environment: dev
+        interval: 15s
+        timeout: 3s
+        aggregation: majority_down
+```
 
 Orivis monitor discovery uses labels with an `orivis.` prefix.
 The parser is runtime-agnostic; Docker and Swarm adapters feed container or service labels into this format.

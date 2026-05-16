@@ -168,17 +168,32 @@ func (r *Runtime) syncTasks(ctx context.Context) {
 }
 
 func (r *Runtime) configureDiscovery() error {
-	if !r.cfg.Discovery.Docker.Enabled {
+	discoverers := make([]monitorDiscoverer, 0, 2)
+
+	if r.cfg.Discovery.Static.Enabled && len(r.cfg.Discovery.Static.Monitors) > 0 {
+		discoverers = append(discoverers, discovery.NewStaticDiscoverer(r.cfg.Discovery.Static.Monitors))
+		r.logger.Info("static discovery enabled", "count", len(r.cfg.Discovery.Static.Monitors))
+	}
+
+	if r.cfg.Discovery.Docker.Enabled {
+		discoverer, err := discovery.NewDockerDiscoverer(discovery.DockerOptions{
+			Mode: r.cfg.Discovery.Docker.Mode,
+		})
+		if err != nil {
+			return err
+		}
+		discoverers = append(discoverers, discoverer)
+		r.logger.Info("Docker discovery enabled", "mode", r.cfg.Discovery.Docker.Mode)
+	}
+
+	switch len(discoverers) {
+	case 0:
 		return nil
+	case 1:
+		r.discovery = discoverers[0]
+	default:
+		r.discovery = compositeDiscoverer{discoverers: discoverers}
 	}
-	discoverer, err := discovery.NewDockerDiscoverer(discovery.DockerOptions{
-		Mode: r.cfg.Discovery.Docker.Mode,
-	})
-	if err != nil {
-		return err
-	}
-	r.discovery = discoverer
-	r.logger.Info("Docker discovery enabled", "mode", r.cfg.Discovery.Docker.Mode)
 	return nil
 }
 
@@ -318,6 +333,31 @@ func taskSignature(task protocol.AgentTask) string {
 
 func taskTag(monitorID string) string {
 	return "monitor:" + monitorID
+}
+
+type compositeDiscoverer struct {
+	discoverers []monitorDiscoverer
+}
+
+func (d compositeDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
+	out := make([]protocol.AgentDiscoveredMonitor, 0)
+	for _, discoverer := range d.discoverers {
+		monitors, err := discoverer.Discover(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, monitors...)
+	}
+	return out, nil
+}
+
+func (d compositeDiscoverer) Close(ctx context.Context) error {
+	for _, discoverer := range d.discoverers {
+		if err := discoverer.Close(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func profileFromEnv(runtime string) dix.Profile {

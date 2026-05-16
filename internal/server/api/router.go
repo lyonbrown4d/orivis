@@ -90,7 +90,21 @@ func (s *Server) Stop(context.Context) error {
 }
 
 func (s *Server) registerRoutes() {
-	httpx.MustGet(s.runtime, "/", func(context.Context, *struct{}) (*metadataOutput, error) {
+	httpx.MustGet(s.runtime, "/", func(ctx context.Context, input *dashboardInput) (*dashboardOutput, error) {
+		if err := s.verifyDashboardAuth(input.Authorization); err != nil {
+			return nil, err
+		}
+		html, err := s.renderDashboard(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &dashboardOutput{
+			ContentType: "text/html; charset=utf-8",
+			Body:        html,
+		}, nil
+	})
+
+	httpx.MustGet(s.runtime, "/api/server/metadata", func(context.Context, *struct{}) (*metadataOutput, error) {
 		out := &metadataOutput{}
 		out.Body.Name = "orivis-server"
 		out.Body.Env = s.cfg.App.Env
