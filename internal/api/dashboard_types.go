@@ -18,6 +18,7 @@ type dashboardView struct {
 	Monitors        []dashboardMonitorView
 	Environments    []dashboardEnvironmentGroup
 	Groups          []dashboardServiceGroup
+	AuthEnabled     bool
 	AllMonitors     int
 	GroupSlug       string
 	SelectedGroup   string
@@ -73,4 +74,11 @@ type dashboardServiceGroup struct {
 type dashboardResultView struct {
 	store.DashboardResult
 	MonitorName string
+}
+
+type dashboardLoginView struct {
+	Lang         string
+	RedirectPath string
+	LangOptions  []dashboardLanguageOption
+	T            func(string) string
 }

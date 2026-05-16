@@ -15,16 +15,54 @@ var (
 	dashboardLocaleLoadErr  error
 )
 
-func dashboardLocale(lang string) string {
-	switch strings.ToLower(strings.TrimSpace(lang)) {
+func dashboardLocale(lang string, fallbacks ...string) string {
+	if locale := dashboardLocaleValue(lang); locale != "" {
+		return locale
+	}
+	for _, fallback := range fallbacks {
+		if locale := dashboardLocaleHeader(fallback); locale != "" {
+			return locale
+		}
+	}
+	return "en"
+}
+
+func dashboardLocaleHeader(value string) string {
+	for item := range strings.SplitSeq(value, ",") {
+		token := strings.TrimSpace(strings.SplitN(item, ";", 2)[0])
+		if locale := dashboardLocaleValue(token); locale != "" {
+			return locale
+		}
+	}
+	return ""
+}
+
+func dashboardLocaleValue(lang string) string {
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	switch lang {
 	case "zh":
 		return "zh"
 	case "zh-cn":
 		return "zh"
 	case "zh-hans":
 		return "zh"
-	default:
+	case "en":
 		return "en"
+	case "en-us":
+		return "en"
+	default:
+		return dashboardLocalePrefix(lang)
+	}
+}
+
+func dashboardLocalePrefix(lang string) string {
+	switch {
+	case strings.HasPrefix(lang, "zh-"):
+		return "zh"
+	case strings.HasPrefix(lang, "en-"):
+		return "en"
+	default:
+		return ""
 	}
 }
 

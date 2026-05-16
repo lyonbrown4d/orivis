@@ -3,10 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
-	"encoding/base64"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -15,49 +12,8 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
-func (e *dashboardEndpoint) verifyDashboardAuth(authorization string) error {
-	cfg := e.cfg.Auth.Dashboard
-	if !cfg.Enabled {
-		return nil
-	}
-
-	username := strings.TrimSpace(cfg.Username)
-	password := cfg.Password
-	if username == "" || password == "" {
-		return huma.Error500InternalServerError("dashboard auth is enabled but credentials are not configured")
-	}
-
-	const prefix = "Basic "
-	if !strings.HasPrefix(authorization, prefix) {
-		return dashboardUnauthorized()
-	}
-	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(authorization, prefix)))
-	if err != nil {
-		return dashboardUnauthorized()
-	}
-	parts := strings.SplitN(string(decoded), ":", 2)
-	if len(parts) != 2 {
-		return dashboardUnauthorized()
-	}
-
-	usernameOK := subtle.ConstantTimeCompare([]byte(parts[0]), []byte(username)) == 1
-	passwordOK := subtle.ConstantTimeCompare([]byte(parts[1]), []byte(password)) == 1
-	if !usernameOK || !passwordOK {
-		return dashboardUnauthorized()
-	}
-	return nil
-}
-
-func dashboardUnauthorized() error {
-	err := huma.ErrorWithHeaders(
-		huma.Error401Unauthorized("dashboard authentication required"),
-		http.Header{"WWW-Authenticate": []string{`Basic realm="orivis"`}},
-	)
-	return fmt.Errorf("dashboard unauthorized: %w", err)
-}
-
-func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang, group string) (*dashboardView, error) {
-	lang = dashboardLocale(lang)
+func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang, acceptLanguage, group string) (*dashboardView, error) {
+	lang = dashboardLocale(lang, acceptLanguage)
 	groupSlug := ""
 	if strings.TrimSpace(group) != "" {
 		groupSlug = dashboardGroupSlug(group)
@@ -68,6 +24,7 @@ func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang, group str
 		Env:         e.cfg.App.Env,
 		Version:     buildinfo.Current(),
 		GeneratedAt: time.Now().UTC(),
+		AuthEnabled: e.cfg.Auth.Dashboard.Enabled,
 		GroupSlug:   groupSlug,
 		LangOptions: dashboardLangOptions(lang),
 		T:           dashboardT(lang),
@@ -109,8 +66,8 @@ func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *da
 	return nil
 }
 
-func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang, group string) ([]byte, error) {
-	view, err := e.renderDashboard(ctx, lang, group)
+func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang, acceptLanguage, group string) ([]byte, error) {
+	view, err := e.renderDashboard(ctx, lang, acceptLanguage, group)
 	if err != nil {
 		return nil, err
 	}
@@ -122,20 +79,72 @@ func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang, group
 	return buf.Bytes(), nil
 }
 
+func (e *dashboardEndpoint) renderLoginPage(lang, acceptLanguage, group string) ([]byte, error) {
+	lang = dashboardLocale(lang, acceptLanguage)
+	view := dashboardLoginView{
+		Lang:         lang,
+		RedirectPath: dashboardLoginRedirectPath(group),
+		LangOptions:  dashboardLangOptions(lang),
+		T:            dashboardT(lang),
+	}
+
+	var buf bytes.Buffer
+	if err := dashboardTemplate().Render(&buf, "login", view); err != nil {
+		return nil, fmt.Errorf("render dashboard login page: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func dashboardLoginRedirectPath(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" {
+		return "/"
+	}
+	return dashboardGroupPath(group)
+}
+
 type dashboardInput struct {
-	Authorization string `header:"Authorization"`
-	Lang          string `query:"lang"`
+	AcceptLanguage string `header:"Accept-Language"`
+	SessionCookie  string `cookie:"orivis_dashboard_session"`
+	Lang           string `query:"lang"`
 }
 
 type dashboardGroupInput struct {
-	Authorization string `header:"Authorization"`
-	Lang          string `query:"lang"`
-	Group         string `path:"group"`
+	AcceptLanguage string `header:"Accept-Language"`
+	SessionCookie  string `cookie:"orivis_dashboard_session"`
+	Lang           string `query:"lang"`
+	Group          string `path:"group"`
+}
+
+type dashboardLoginInput struct {
+	AcceptLanguage string `header:"Accept-Language"`
+	Lang           string `query:"lang"`
+	Body           struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+}
+
+type dashboardLogoutInput struct {
+	SessionCookie string `cookie:"orivis_dashboard_session"`
 }
 
 type dashboardOutput struct {
 	ContentType string `header:"Content-Type"`
 	Body        []byte
+}
+
+type dashboardLoginOutput struct {
+	SetCookie string `header:"Set-Cookie"`
+	Body      struct {
+		OK bool `json:"ok"`
+	}
+}
+
+type dashboardLogoutOutput struct {
+	SetCookie string `header:"Set-Cookie"`
+	Location  string `header:"Location"`
+	Status    int    `status:"302"`
 }
 
 func dashboardMonitors(snapshot store.DashboardSnapshot) []dashboardMonitorView {

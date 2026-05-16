@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	//go:embed "templates/*.tmpl" "locales/*.json"
+	//go:embed "templates/*.html" "locales/*.json" "assets/*"
 	dashboardTemplateFS embed.FS
 
 	dashboardTemplateEngine = func() *html.Engine {
@@ -19,7 +19,7 @@ var (
 			panic(fmt.Errorf("load dashboard templates: %w", err))
 		}
 
-		engine := html.NewFileSystem(http.FS(templateFS), ".tmpl")
+		engine := html.NewFileSystem(http.FS(templateFS), ".html")
 		engine.AddFunc("statusClass", dashboardStatusClass)
 		engine.AddFunc("duration", dashboardDuration)
 		engine.AddFunc("join", dashboardJoin)

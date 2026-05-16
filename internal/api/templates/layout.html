@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="15">
+  <title>{{call .T "page.title"}} | Orivis</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.min.css">
+  <link rel="stylesheet" href="/assets/dashboard.css">
+  <script src="/assets/dashboard-head.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/uplot@1.6.32/dist/uPlot.iife.min.js"></script>
+  <script src="/assets/dashboard.js" defer></script>
+</head>
+<body class="min-h-screen bg-[#f5f1e8] text-slate-950 transition-colors dark:bg-[#07110f] dark:text-slate-100">
+  <div class="mx-auto grid min-h-screen max-w-[96rem] gap-4 px-4 py-5 lg:px-8 xl:grid-cols-[260px_minmax(0,1fr)_280px]">
+    <aside class="rounded-[1.6rem] border border-slate-900/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-950">
+      <div>
+        <p class="text-xs uppercase tracking-[0.35em] text-slate-500 dark:text-slate-400">{{call .T "page.subtitle"}}</p>
+        <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-900 dark:text-white">{{call .T "page.title"}}</h1>
+        <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">{{call .T "status.description"}}</p>
+      </div>
+
+      <div class="mt-8 space-y-1 text-sm">
+        <a class="block rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 dark:border-white/10 dark:bg-white/10" href="/?lang={{.Lang}}#overview">{{call .T "nav.dashboard"}}</a>
+        <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white dark:hover:border-white/10 dark:hover:bg-white/10" href="/?lang={{.Lang}}#timeline">{{call .T "nav.timeline"}}</a>
+        <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white dark:hover:border-white/10 dark:hover:bg-white/10" href="/?lang={{.Lang}}#monitors">{{call .T "nav.monitors"}}</a>
+        <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white dark:hover:border-white/10 dark:hover:bg-white/10" href="/?lang={{.Lang}}#agents">{{call .T "nav.agents"}}</a>
+        <a class="block rounded-xl border border-transparent px-4 py-2 hover:border-slate-200 hover:bg-white dark:hover:border-white/10 dark:hover:bg-white/10" href="/?lang={{.Lang}}#results">{{call .T "nav.results"}}</a>
+      </div>
+
+      <div class="mt-8 border-t border-slate-200 pt-4 dark:border-white/10">
+        <p class="text-xs uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">{{call .T "lang.current"}}</p>
+        <div class="mt-3 flex gap-2">
+          {{range .LangOptions}}
+          <button
+            type="button"
+            class="rounded-full px-3 py-1 text-xs {{if .Active}}bg-slate-900 text-white dark:bg-white dark:text-slate-950{{else}}border border-slate-300 bg-white text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200{{end}}"
+            onclick="switchLang('{{.Code}}')"
+          >{{.Label}}</button>
+          {{end}}
+        </div>
+      </div>
+
+      <div class="mt-6 border-t border-slate-200 pt-4 dark:border-white/10">
+        <p class="text-xs uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">{{call .T "theme.current"}}</p>
+        <div class="mt-3 grid grid-cols-3 gap-2">
+          <button type="button" class="theme-button rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200" data-theme-value="auto" onclick="switchTheme('auto')">{{call .T "theme.auto"}}</button>
+          <button type="button" class="theme-button rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200" data-theme-value="light" onclick="switchTheme('light')">{{call .T "theme.light"}}</button>
+          <button type="button" class="theme-button rounded-full border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200" data-theme-value="dark" onclick="switchTheme('dark')">{{call .T "theme.dark"}}</button>
+        </div>
+      </div>
+
+      {{if .AuthEnabled}}
+      <form class="mt-6 border-t border-slate-200 pt-4 dark:border-white/10" method="post" action="/logout">
+        <button class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-white/10" type="submit">
+          {{call .T "nav.logout"}}
+        </button>
+      </form>
+      {{end}}
+    </aside>
+
+    <main class="min-w-0 flex-1">
+      {{embed}}
+    </main>
+
+    <aside class="rounded-[1.6rem] border border-slate-900/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-slate-950">
+      <div class="sticky top-5">
+        <p class="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-slate-400">{{call .T "section.groups"}}</p>
+        <a
+          class="mt-4 block rounded-2xl border px-4 py-3 text-sm {{if eq .GroupSlug ""}}border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950{{else}}border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10{{end}}"
+          href="/?lang={{.Lang}}"
+        >
+          <span class="font-black">{{call .T "groups.all"}}</span>
+          <span class="mt-1 block text-xs opacity-75">{{.AllMonitors}} {{call .T "kpis.total"}}</span>
+        </a>
+
+        <div class="mt-3 space-y-2">
+          {{range .Groups}}
+          <a
+            class="block rounded-2xl border px-4 py-3 text-sm {{if .Active}}border-emerald-800 bg-emerald-950 text-white dark:border-emerald-200{{else}}border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10{{end}}"
+            href="{{groupPath .Slug}}?lang={{$.Lang}}"
+          >
+            <span class="font-black">{{.Name}}</span>
+            <span class="mt-1 block text-xs opacity-75">{{.Count}} {{call $.T "kpis.total"}}</span>
+            <span class="mt-2 flex gap-2 text-[11px] font-bold">
+              <span class="text-emerald-500">{{.Up}} {{call $.T "label.up"}}</span>
+              <span class="text-rose-500">{{.Down}} {{call $.T "label.down"}}</span>
+              <span class="text-slate-400">{{.Unknown}} {{call $.T "kpis.unknown"}}</span>
+            </span>
+          </a>
+          {{else}}
+          <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500 dark:bg-white/5 dark:text-slate-400">{{call .T "groups.empty"}}</p>
+          {{end}}
+        </div>
+      </div>
+    </aside>
+  </div>
+
+</body>
+</html>

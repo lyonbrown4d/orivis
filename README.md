@@ -126,9 +126,10 @@ ORIVIS_DB__DSN=file:orivis.db
 | `ORIVIS_RETENTION__RESULTTTL` | `168h` | Probe result retention TTL. |
 | `ORIVIS_RETENTION__CLEANUPINTERVAL` | `1h` | Probe result cleanup interval. |
 | `ORIVIS_AUTH__AGENT__TOKEN` | empty | Optional shared bootstrap token for agent registration. |
-| `ORIVIS_AUTH__DASHBOARD__ENABLED` | `false` | Enable dashboard Basic Auth. |
-| `ORIVIS_AUTH__DASHBOARD__USERNAME` | `admin` | Dashboard Basic Auth username. |
-| `ORIVIS_AUTH__DASHBOARD__PASSWORD` | empty | Dashboard Basic Auth password. |
+| `ORIVIS_AUTH__DASHBOARD__ENABLED` | `false` | Require dashboard login. |
+| `ORIVIS_AUTH__DASHBOARD__USERNAME` | `admin` | Dashboard login username. |
+| `ORIVIS_AUTH__DASHBOARD__PASSWORD` | empty | Dashboard login password. |
+| `ORIVIS_AUTH__DASHBOARD__SECURE_COOKIE` | `false` | Set dashboard session cookie `Secure`; enable behind HTTPS. |
 | `ORIVIS_OBSERVABILITY__PROMETHEUS__ENABLED` | `false` | Enable Prometheus metrics. |
 
 ### Agent
@@ -154,7 +155,7 @@ ORIVIS_AUTH__AGENT__TOKEN=change-me
 ORIVIS_AGENT__TOKEN=change-me
 ```
 
-Dashboard Basic Auth is disabled by default for local zero-config usage. Enable it when exposing the dashboard outside localhost:
+Dashboard login is disabled by default for local zero-config usage. Enable it when exposing the dashboard outside localhost:
 
 ```env
 ORIVIS_AUTH__DASHBOARD__ENABLED=true

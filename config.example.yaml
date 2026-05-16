@@ -28,6 +28,7 @@ auth:
     enabled: false
     username: admin
     password: ""
+    secure_cookie: false
 
 observability:
   prometheus:

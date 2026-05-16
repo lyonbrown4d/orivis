@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/arcgolabs/authx"
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/httpx"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
@@ -9,8 +10,10 @@ import (
 )
 
 type dashboardEndpoint struct {
-	cfg   config.Config
-	store *store.Store
+	cfg      config.Config
+	store    *store.Store
+	auth     *authx.Engine
+	sessions *dashboardSessionStore
 }
 
 type metadataEndpoint struct {
@@ -26,8 +29,13 @@ type agentEndpoint struct {
 	resultIngestor *ingest.ResultIngestor
 }
 
-func NewDashboardEndpoint(cfg config.Config, storage *store.Store) httpx.Endpoint {
-	return &dashboardEndpoint{cfg: cfg, store: storage}
+func NewDashboardEndpoint(cfg config.Config, storage *store.Store, auth *authx.Engine) httpx.Endpoint {
+	return &dashboardEndpoint{
+		cfg:      cfg,
+		store:    storage,
+		auth:     auth,
+		sessions: newDashboardSessionStore(dashboardSessionTTL),
+	}
 }
 
 func NewMetadataEndpoint(cfg config.Config, storage *store.Store) httpx.Endpoint {
@@ -55,6 +63,6 @@ func NewDefaultEndpoints(
 		NewMetadataEndpoint(cfg, storage),
 		NewHealthEndpoint(),
 		NewAgentEndpoint(cfg, storage, resultIngestor),
-		NewDashboardEndpoint(cfg, storage),
+		NewDashboardEndpoint(cfg, storage, nil),
 	)
 }

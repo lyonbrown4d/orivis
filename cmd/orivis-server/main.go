@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/arcgolabs/authx"
 	"github.com/arcgolabs/dix"
 	"github.com/arcgolabs/eventx"
 	"github.com/arcgolabs/httpx"
@@ -58,9 +59,9 @@ func main() {
 	cmd.Flags().String("retention-result-ttl", "", "probe result retention TTL")
 	cmd.Flags().String("retention-cleanup-interval", "", "probe result retention cleanup interval")
 	cmd.Flags().String("auth-agent-token", "", "agent shared token")
-	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard basic auth")
-	cmd.Flags().String("auth-dashboard-username", "", "dashboard basic auth username")
-	cmd.Flags().String("auth-dashboard-password", "", "dashboard basic auth password")
+	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard login")
+	cmd.Flags().String("auth-dashboard-username", "", "dashboard login username")
+	cmd.Flags().String("auth-dashboard-password", "", "dashboard login password")
 	cmd.Flags().Bool("observability-prometheus-enabled", false, "enable Prometheus observability adapter")
 	cmd.Flags().String("observability-prometheus-namespace", "", "Prometheus metric namespace")
 
@@ -129,7 +130,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
-	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule)
+	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule, securityModule)
 
 	httpModule := dix.NewModule("http",
 		dix.WithModuleImports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
@@ -210,14 +211,14 @@ func newServerIngestModule(configModule, loggingModule, storeModule, eventModule
 	)
 }
 
-func newServerEndpointModule(configModule, storeModule, ingestModule dix.Module) dix.Module {
+func newServerEndpointModule(configModule, storeModule, ingestModule, securityModule dix.Module) dix.Module {
 	return dix.NewModule("http-endpoints",
-		dix.WithModuleImports(configModule, storeModule, ingestModule),
+		dix.WithModuleImports(configModule, storeModule, ingestModule, securityModule),
 		dix.WithModuleProviders(
-			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewDashboardEndpoint, dix.Order(10)),
-			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(20)),
-			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(30)),
-			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *ingest.ResultIngestor](api.NewAgentEndpoint, dix.Order(40)),
+			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(10)),
+			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(20)),
+			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *ingest.ResultIngestor](api.NewAgentEndpoint, dix.Order(30)),
+			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *authx.Engine](api.NewDashboardEndpoint, dix.Order(100)),
 		),
 	)
 }
