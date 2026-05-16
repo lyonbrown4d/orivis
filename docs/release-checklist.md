@@ -14,6 +14,7 @@ This checklist defines the minimum bar for an alpha release.
 - `docker build --build-arg APP=orivis-agent` succeeds.
 - Docker images compress the runtime binary with UPX by default.
 - `docker compose up --build` starts server and agent.
+- `./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080` starts Redis, PostgreSQL, server, and agent.
 - `.github/workflows/release.yml` publishes tagged releases through GoReleaser.
 - `deployments/docker-compose` examples are up to date.
 - `deployments/systemd` examples are up to date.
@@ -34,6 +35,8 @@ This checklist defines the minimum bar for an alpha release.
 ./scripts/verify.ps1 -Release
 goreleaser release --snapshot --clean
 ./scripts/smoke-local.ps1
+./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080
+./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080 -SkipBuild
 docker compose up --build
 ```
 

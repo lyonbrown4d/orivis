@@ -50,9 +50,12 @@ go run ./cmd/orivis-agent
 
 ```powershell
 ./scripts/smoke-local.ps1
+./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080 -KeepRunning
+./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080 -SkipBuild -KeepRunning
 ```
 
 The script starts a temporary server and agent, waits for a full probe loop, and checks that the dashboard responds.
+The Compose smoke script builds tagged local images, starts Orivis with Redis and PostgreSQL, and checks the discovered monitors on the dashboard.
 
 ## Build
 

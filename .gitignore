@@ -17,6 +17,8 @@ coverage.html
 .env
 .env.*
 !.env.example
+deployments/docker-compose/server.env
+deployments/docker-compose/agent.env
 
 # Editor files
 .idea/
