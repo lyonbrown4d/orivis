@@ -12,6 +12,7 @@ type monitorRecord struct {
 	Name              string
 	Type              string
 	Target            string
+	GroupName         string
 	EnvironmentID     string
 	Enabled           int
 	IntervalSeconds   int
@@ -38,6 +39,7 @@ func (r *monitorRecord) model() (model.Monitor, error) {
 		Name:              r.Name,
 		Type:              model.MonitorType(r.Type),
 		Target:            r.Target,
+		GroupName:         r.GroupName,
 		EnvironmentID:     r.EnvironmentID,
 		Enabled:           r.Enabled == 1,
 		Interval:          time.Duration(r.IntervalSeconds) * time.Second,

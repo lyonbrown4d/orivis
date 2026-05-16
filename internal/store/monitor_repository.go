@@ -19,6 +19,7 @@ type monitorSchema struct {
 	Name              columnx.Column[monitorRecord, string] `dbx:"name"`
 	Type              columnx.Column[monitorRecord, string] `dbx:"type"`
 	Target            columnx.Column[monitorRecord, string] `dbx:"target"`
+	GroupName         columnx.Column[monitorRecord, string] `dbx:"group_name"`
 	EnvironmentID     columnx.Column[monitorRecord, string] `dbx:"environment_id"`
 	Enabled           columnx.Column[monitorRecord, int]    `dbx:"enabled"`
 	IntervalSeconds   columnx.Column[monitorRecord, int]    `dbx:"interval_seconds"`

@@ -60,6 +60,7 @@ type AgentDiscoveredMonitor struct {
 	Name              string `json:"name"                         validate:"required"`
 	Type              string `json:"type"                         validate:"required"`
 	Target            string `json:"target"                       validate:"required"`
+	GroupName         string `json:"group,omitempty"`
 	EnvironmentCode   string `json:"environment_code,omitempty"`
 	Enabled           *bool  `json:"enabled,omitempty"`
 	IntervalSeconds   int    `json:"interval_seconds,omitempty"`

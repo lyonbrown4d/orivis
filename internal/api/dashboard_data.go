@@ -1,13 +1,18 @@
 package api
 
 import (
+	"fmt"
+	"net/url"
 	"strings"
+	"unicode"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
+
+const dashboardDefaultGroup = "default"
 
 func dashboardLatestResults(results []store.DashboardResult) map[string]dashboardResultView {
 	latestByMonitor := make(map[string]dashboardResultView, len(results))
@@ -47,6 +52,125 @@ func dashboardEnvironmentGroups(monitors []dashboardMonitorView) []dashboardEnvi
 		addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
 	}
 	return groups
+}
+
+func dashboardServiceGroups(monitors []dashboardMonitorView, activeSlug string) []dashboardServiceGroup {
+	indexBySlug := make(map[string]int, len(monitors))
+	groups := make([]dashboardServiceGroup, 0)
+	for index := range monitors {
+		monitor := monitors[index]
+		name := dashboardGroupName(monitor.GroupName)
+		slug := dashboardGroupSlug(name)
+		groupIndex, ok := indexBySlug[slug]
+		if !ok {
+			groupIndex = len(groups)
+			indexBySlug[slug] = groupIndex
+			groups = append(groups, dashboardServiceGroup{
+				Name:   name,
+				Slug:   slug,
+				Active: slug == activeSlug,
+			})
+		}
+		group := &groups[groupIndex]
+		group.Count++
+		addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
+	}
+	return groups
+}
+
+func dashboardSelectedGroupName(groups []dashboardServiceGroup, activeSlug string) string {
+	activeSlug = strings.TrimSpace(activeSlug)
+	if activeSlug == "" {
+		return ""
+	}
+	for index := range groups {
+		if groups[index].Slug == activeSlug {
+			return groups[index].Name
+		}
+	}
+	return activeSlug
+}
+
+func dashboardFilteredSnapshot(snapshot store.DashboardSnapshot, groupSlug string) store.DashboardSnapshot {
+	groupSlug = strings.TrimSpace(groupSlug)
+	if groupSlug == "" {
+		return snapshot
+	}
+
+	out := snapshot
+	out.Monitors = make([]store.DashboardMonitor, 0, len(snapshot.Monitors))
+	monitorIDs := make(map[string]struct{}, len(snapshot.Monitors))
+	for index := range snapshot.Monitors {
+		monitor := snapshot.Monitors[index]
+		if dashboardGroupSlug(monitor.GroupName) != groupSlug {
+			continue
+		}
+		out.Monitors = append(out.Monitors, monitor)
+		monitorIDs[monitor.ID] = struct{}{}
+	}
+
+	out.Results = make([]store.DashboardResult, 0, len(snapshot.Results))
+	for index := range snapshot.Results {
+		result := snapshot.Results[index]
+		if _, ok := monitorIDs[result.MonitorID]; ok {
+			out.Results = append(out.Results, result)
+		}
+	}
+	return out
+}
+
+func dashboardGroupName(value string) string {
+	name := strings.TrimSpace(value)
+	if name == "" {
+		return dashboardDefaultGroup
+	}
+	return name
+}
+
+func dashboardGroupSlug(value string) string {
+	value = strings.ToLower(dashboardGroupName(value))
+	var builder strings.Builder
+	lastDash := false
+	for _, item := range value {
+		nextLastDash, err := writeDashboardGroupSlugRune(&builder, item, lastDash)
+		if err != nil {
+			return dashboardDefaultGroup
+		}
+		lastDash = nextLastDash
+	}
+	slug := strings.Trim(builder.String(), "-")
+	if slug == "" {
+		return dashboardDefaultGroup
+	}
+	return slug
+}
+
+func writeDashboardGroupSlugRune(builder *strings.Builder, item rune, lastDash bool) (bool, error) {
+	switch {
+	case unicode.IsLetter(item) || unicode.IsDigit(item):
+		_, err := builder.WriteRune(item)
+		if err != nil {
+			return false, fmt.Errorf("write group slug rune: %w", err)
+		}
+		return false, nil
+	case item == '-' || item == '_':
+		_, err := builder.WriteRune(item)
+		if err != nil {
+			return false, fmt.Errorf("write group slug separator: %w", err)
+		}
+		return false, nil
+	case lastDash:
+		return true, nil
+	default:
+		if err := builder.WriteByte('-'); err != nil {
+			return true, fmt.Errorf("write group slug dash: %w", err)
+		}
+		return true, nil
+	}
+}
+
+func dashboardGroupPath(value string) string {
+	return "/" + url.PathEscape(dashboardGroupSlug(value))
 }
 
 func dashboardEnvironmentGroupForMonitor(

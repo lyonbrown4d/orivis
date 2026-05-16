@@ -30,6 +30,7 @@ type DashboardMonitor struct {
 	Name              string
 	Type              model.MonitorType
 	Target            string
+	GroupName         string
 	EnvironmentCode   string
 	Enabled           bool
 	Interval          time.Duration
@@ -46,6 +47,7 @@ type DashboardResult struct {
 	AgentName       string
 	RegionCode      string
 	EnvironmentCode string
+	GroupName       string
 	Status          model.Status
 	Latency         time.Duration
 	ErrorMessage    string

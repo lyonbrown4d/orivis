@@ -15,6 +15,7 @@ type StaticMonitor struct {
 	Name              string        `mapstructure:"name"`
 	Type              string        `mapstructure:"type"`
 	Target            string        `mapstructure:"target"`
+	GroupName         string        `mapstructure:"group"`
 	EnvironmentCode   string        `mapstructure:"environment"`
 	Enabled           *bool         `mapstructure:"enabled"`
 	Interval          time.Duration `mapstructure:"interval"`
@@ -75,6 +76,7 @@ func staticMonitor(monitor StaticMonitor) (protocol.AgentDiscoveredMonitor, erro
 		Name:              name,
 		Type:              monitorType,
 		Target:            target,
+		GroupName:         strings.TrimSpace(monitor.GroupName),
 		EnvironmentCode:   strings.TrimSpace(monitor.EnvironmentCode),
 		Enabled:           monitor.Enabled,
 		IntervalSeconds:   seconds(monitor.Interval),

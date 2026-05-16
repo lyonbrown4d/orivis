@@ -17,6 +17,10 @@ type dashboardView struct {
 	Agents          []store.DashboardAgent
 	Monitors        []dashboardMonitorView
 	Environments    []dashboardEnvironmentGroup
+	Groups          []dashboardServiceGroup
+	AllMonitors     int
+	GroupSlug       string
+	SelectedGroup   string
 	LangOptions     []dashboardLanguageOption
 	RecentResults   []dashboardResultView
 	StatusChartJSON string
@@ -54,6 +58,16 @@ type dashboardEnvironmentGroup struct {
 	Up       int
 	Down     int
 	Unknown  int
+}
+
+type dashboardServiceGroup struct {
+	Name    string
+	Slug    string
+	Count   int
+	Up      int
+	Down    int
+	Unknown int
+	Active  bool
 }
 
 type dashboardResultView struct {

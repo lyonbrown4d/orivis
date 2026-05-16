@@ -24,6 +24,8 @@ var (
 		engine.AddFunc("duration", dashboardDuration)
 		engine.AddFunc("join", dashboardJoin)
 		engine.AddFunc("since", dashboardSince)
+		engine.AddFunc("groupName", dashboardGroupName)
+		engine.AddFunc("groupPath", dashboardGroupPath)
 		return engine
 	}()
 )

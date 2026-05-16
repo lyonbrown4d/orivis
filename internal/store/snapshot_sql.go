@@ -104,7 +104,7 @@ func (s *Store) sqlAgentEnvironmentCodes(ctx context.Context, agentID string) ([
 func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, error) {
 	rows, err := s.DB.QueryContext(
 		ctx,
-		`SELECT m.id, m.name, m.type, m.target, e.code, m.enabled,
+		`SELECT m.id, m.name, m.type, m.target, m.group_name, e.code, m.enabled,
                 m.interval_seconds, m.timeout_seconds, m.retry_count,
                 m.aggregation_policy, m.source
          FROM monitors m
@@ -126,6 +126,7 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, e
 			&monitor.Name,
 			&monitor.Type,
 			&monitor.Target,
+			&monitor.GroupName,
 			&monitor.EnvironmentCode,
 			&enabled,
 			&intervalSeconds,
@@ -150,9 +151,10 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, e
 func (s *Store) sqlDashboardResults(ctx context.Context, limit int) ([]DashboardResult, error) {
 	rows, err := s.DB.QueryContext(
 		ctx,
-		`SELECT pr.id, pr.monitor_id, pr.agent_id, a.name, r.code, e.code,
+		`SELECT pr.id, pr.monitor_id, pr.agent_id, a.name, r.code, e.code, m.group_name,
                 pr.status, pr.latency_ms, pr.error_message, pr.checked_at, pr.created_at
          FROM probe_results pr
+         JOIN monitors m ON m.id = pr.monitor_id
          JOIN agents a ON a.id = pr.agent_id
          JOIN regions r ON r.id = pr.region_id
          JOIN environments e ON e.id = pr.environment_id
@@ -192,6 +194,7 @@ func scanDashboardResult(rows interface {
 		&result.AgentName,
 		&result.RegionCode,
 		&result.EnvironmentCode,
+		&result.GroupName,
 		&result.Status,
 		&latencyMS,
 		&result.ErrorMessage,

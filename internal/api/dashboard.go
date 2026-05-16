@@ -56,14 +56,19 @@ func dashboardUnauthorized() error {
 	return fmt.Errorf("dashboard unauthorized: %w", err)
 }
 
-func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang string) (*dashboardView, error) {
+func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang, group string) (*dashboardView, error) {
 	lang = dashboardLocale(lang)
+	groupSlug := ""
+	if strings.TrimSpace(group) != "" {
+		groupSlug = dashboardGroupSlug(group)
+	}
 	view := dashboardView{
 		Lang:        lang,
 		Name:        "orivis-server",
 		Env:         e.cfg.App.Env,
 		Version:     buildinfo.Current(),
 		GeneratedAt: time.Now().UTC(),
+		GroupSlug:   groupSlug,
 		LangOptions: dashboardLangOptions(lang),
 		T:           dashboardT(lang),
 		Database: dashboardDatabase{
@@ -76,17 +81,22 @@ func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang string) (*
 	if e.store == nil {
 		return &view, nil
 	}
-	if err := e.applyDashboardSnapshot(ctx, &view); err != nil {
+	if err := e.applyDashboardSnapshot(ctx, &view, groupSlug); err != nil {
 		return nil, err
 	}
 	return &view, nil
 }
 
-func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *dashboardView) error {
+func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *dashboardView, groupSlug string) error {
 	snapshot, err := e.store.DashboardSnapshot(ctx, 50)
 	if err != nil {
 		return huma.Error500InternalServerError("load dashboard snapshot", err)
 	}
+	allMonitors := dashboardMonitors(snapshot)
+	view.AllMonitors = len(allMonitors)
+	view.Groups = dashboardServiceGroups(allMonitors, groupSlug)
+	view.SelectedGroup = dashboardSelectedGroupName(view.Groups, groupSlug)
+	snapshot = dashboardFilteredSnapshot(snapshot, groupSlug)
 	view.GeneratedAt = snapshot.GeneratedAt
 	view.Agents = snapshot.Agents
 	view.Summary.Agents = len(snapshot.Agents)
@@ -99,8 +109,8 @@ func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *da
 	return nil
 }
 
-func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang string) ([]byte, error) {
-	view, err := e.renderDashboard(ctx, lang)
+func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang, group string) ([]byte, error) {
+	view, err := e.renderDashboard(ctx, lang, group)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +125,12 @@ func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang string
 type dashboardInput struct {
 	Authorization string `header:"Authorization"`
 	Lang          string `query:"lang"`
+}
+
+type dashboardGroupInput struct {
+	Authorization string `header:"Authorization"`
+	Lang          string `query:"lang"`
+	Group         string `path:"group"`
 }
 
 type dashboardOutput struct {

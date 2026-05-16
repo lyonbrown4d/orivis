@@ -40,6 +40,7 @@ services:
       retries: 12
     labels:
       orivis.enable: "true"
+      orivis.group: "datastores"
       orivis.monitor.type: "redis"
       orivis.monitor.interval: "10s"
       orivis.monitor.timeout: "3s"
@@ -58,6 +59,7 @@ services:
       retries: 12
     labels:
       orivis.enable: "true"
+      orivis.group: "datastores"
       orivis.monitor.type: "postgres"
       orivis.monitor.target: "postgres://orivis:orivis@postgres:5432/orivis?sslmode=disable"
       orivis.monitor.interval: "10s"

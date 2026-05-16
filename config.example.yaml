@@ -56,6 +56,7 @@ discovery:
       - name: server-health
         type: http
         target: http://127.0.0.1:8080/healthz
+        group: core
         environment: dev
         enabled: true
         interval: 15s
@@ -66,6 +67,7 @@ discovery:
       # - name: redis-local
       #   type: redis
       #   target: redis://127.0.0.1:6379
+      #   group: datastores
       #   environment: dev
       #   enabled: true
       #   interval: 15s
@@ -76,6 +78,7 @@ discovery:
       # - name: sqlite-memory
       #   type: database
       #   target: sqlite://file:orivis?mode=memory&cache=shared
+      #   group: datastores
       #   environment: dev
       #   enabled: true
       #   interval: 15s
@@ -86,6 +89,7 @@ discovery:
       # - name: mysql-local
       #   type: mysql
       #   target: mysql://root:password@127.0.0.1:3306/app?parseTime=true
+      #   group: datastores
       #   environment: dev
       #   enabled: true
       #   interval: 15s
@@ -96,6 +100,7 @@ discovery:
       # - name: postgres-local
       #   type: postgres
       #   target: postgres://postgres:password@127.0.0.1:5432/app?sslmode=disable
+      #   group: datastores
       #   environment: dev
       #   enabled: true
       #   interval: 15s
@@ -106,6 +111,7 @@ discovery:
       # - name: loopback-ping
       #   type: ping
       #   target: 127.0.0.1
+      #   group: network
       #   environment: dev
       #   enabled: true
       #   interval: 15s

@@ -13,6 +13,7 @@ type CreateMonitorParams struct {
 	Name              string
 	Type              model.MonitorType
 	Target            string
+	GroupName         string
 	EnvironmentID     string
 	Enabled           bool
 	Interval          time.Duration
@@ -27,6 +28,7 @@ type UpsertDiscoveredMonitorParams struct {
 	Name              string
 	Type              model.MonitorType
 	Target            string
+	GroupName         string
 	EnvironmentID     string
 	Enabled           bool
 	Interval          time.Duration
@@ -40,6 +42,7 @@ type createMonitorParams struct {
 	Name              string
 	Type              model.MonitorType
 	Target            string
+	GroupName         string
 	EnvironmentID     string
 	Enabled           bool
 	Interval          time.Duration
@@ -55,6 +58,7 @@ func normalizeCreateMonitorParams(params CreateMonitorParams) (createMonitorPara
 		Name:              strings.TrimSpace(params.Name),
 		Type:              params.Type,
 		Target:            strings.TrimSpace(params.Target),
+		GroupName:         strings.TrimSpace(params.GroupName),
 		EnvironmentID:     strings.TrimSpace(params.EnvironmentID),
 		Enabled:           params.Enabled,
 		Interval:          params.Interval,
@@ -73,6 +77,7 @@ func normalizeDiscoveredMonitorParams(params UpsertDiscoveredMonitorParams) (cre
 		Name:              params.Name,
 		Type:              params.Type,
 		Target:            params.Target,
+		GroupName:         params.GroupName,
 		EnvironmentID:     params.EnvironmentID,
 		Enabled:           params.Enabled,
 		Interval:          params.Interval,

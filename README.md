@@ -188,6 +188,7 @@ Orivis monitor discovery uses labels with an `orivis.` prefix.
 ```yaml
 labels:
   orivis.enable: "true"
+  orivis.group: "datastores"
   orivis.monitor.type: "redis"
   orivis.monitor.interval: "30s"
 ```
@@ -198,7 +199,10 @@ For database probes that need credentials, keep `orivis.monitor.target` explicit
 
 Multiple monitors can still be grouped by `orivis.monitor.<name>.*`.
 
-Supported fields are `type`, `target`, `name`, `enabled`, `interval`, `timeout`, `retry`, and `aggregation`.
+Use `orivis.group` to assign all discovered monitors from a container or service to a dashboard group.
+Use `orivis.monitor.group` or `orivis.monitor.<name>.group` to override the group for a single monitor.
+
+Supported monitor fields are `type`, `target`, `name`, `group`, `enabled`, `interval`, `timeout`, `retry`, and `aggregation`.
 
 Enable Docker container labels:
 
@@ -218,6 +222,7 @@ ORIVIS_DISCOVERY__DOCKER__MODE=swarm
 
 ```text
 GET  /                         dashboard UI
+GET  /{group}                   dashboard UI filtered by service group
 GET  /api/server/metadata      application metadata
 GET  /healthz                  health probe
 GET  /readyz                   readiness probe

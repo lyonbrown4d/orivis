@@ -100,7 +100,7 @@ func preferredMonitorPorts(monitorType string) []int {
 
 func monitorField(field string) bool {
 	switch field {
-	case "type", "target", "name", "enabled", "interval", "timeout", "retry", "aggregation":
+	case "type", "target", "name", "group", "enabled", "interval", "timeout", "retry", "aggregation":
 		return true
 	default:
 		return false

@@ -97,6 +97,7 @@ type Monitor struct {
 	Name              string            `json:"name"`
 	Type              MonitorType       `json:"type"`
 	Target            string            `json:"target"`
+	GroupName         string            `json:"group_name,omitempty"`
 	EnvironmentID     string            `json:"environment_id"`
 	Enabled           bool              `json:"enabled"`
 	Interval          time.Duration     `json:"interval"`

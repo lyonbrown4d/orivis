@@ -52,9 +52,9 @@ func NewDefaultEndpoints(
 		resultIngestor = resultIngestors[0]
 	}
 	return collectionlist.NewList(
-		NewDashboardEndpoint(cfg, storage),
 		NewMetadataEndpoint(cfg, storage),
 		NewHealthEndpoint(),
 		NewAgentEndpoint(cfg, storage, resultIngestor),
+		NewDashboardEndpoint(cfg, storage),
 	)
 }

@@ -15,6 +15,7 @@ import (
 const (
 	LabelEnable      = "orivis.enable"
 	LabelEnvironment = "orivis.environment"
+	LabelGroup       = "orivis.group"
 	LabelMonitor     = "orivis.monitor."
 )
 
@@ -23,6 +24,7 @@ type LabelSource struct {
 	Labels             map[string]string
 	DefaultName        string
 	DefaultEnvironment string
+	DefaultGroup       string
 	TargetHost         string
 	Ports              []int
 }
@@ -37,6 +39,7 @@ func ParseLabels(source LabelSource) ([]protocol.AgentDiscoveredMonitor, error) 
 		return nil, nil
 	}
 	environment := firstNonEmpty(source.Labels[LabelEnvironment], source.DefaultEnvironment)
+	group := firstNonEmpty(source.Labels[LabelGroup], source.DefaultGroup)
 	groups := monitorLabelGroups(source.Labels, source.DefaultName)
 	if groups.Len() == 0 {
 		if !labelBool(enableValue, false) {
@@ -48,7 +51,7 @@ func ParseLabels(source LabelSource) ([]protocol.AgentDiscoveredMonitor, error) 
 		}
 		groups.Set(defaultMonitorKey(source.DefaultName), fields)
 	}
-	return parseMonitorGroups(sourceKey, environment, source, groups)
+	return parseMonitorGroups(sourceKey, environment, group, source, groups)
 }
 
 func monitorLabelGroups(labels map[string]string, defaultName string) *collectionmapping.Map[string, map[string]string] {
@@ -86,6 +89,7 @@ func monitorLabelField(key, defaultName string) (string, string, bool) {
 func parseMonitorGroups(
 	sourceKey string,
 	environment string,
+	defaultGroup string,
 	source LabelSource,
 	groups *collectionmapping.Map[string, map[string]string],
 ) ([]protocol.AgentDiscoveredMonitor, error) {
@@ -96,7 +100,7 @@ func parseMonitorGroups(
 	for _, name := range names {
 		fields, _ := groups.Get(name)
 		fields, _ = inferredMonitorFields(source, fields)
-		monitor, err := parseMonitor(sourceKey, environment, name, fields)
+		monitor, err := parseMonitor(sourceKey, environment, defaultGroup, name, fields)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +109,7 @@ func parseMonitorGroups(
 	return monitors, nil
 }
 
-func parseMonitor(sourceKey, environment, key string, fields map[string]string) (protocol.AgentDiscoveredMonitor, error) {
+func parseMonitor(sourceKey, environment, defaultGroup, key string, fields map[string]string) (protocol.AgentDiscoveredMonitor, error) {
 	monitorType := strings.ToLower(strings.TrimSpace(fields["type"]))
 	target := strings.TrimSpace(fields["target"])
 	if monitorType == "" {
@@ -120,6 +124,7 @@ func parseMonitor(sourceKey, environment, key string, fields map[string]string) 
 		return protocol.AgentDiscoveredMonitor{}, err
 	}
 	name := monitorName(key, fields["name"])
+	groupName := firstNonEmpty(fields["group"], defaultGroup)
 	enabled := labelBool(fields["enabled"], true)
 
 	return protocol.AgentDiscoveredMonitor{
@@ -127,6 +132,7 @@ func parseMonitor(sourceKey, environment, key string, fields map[string]string) 
 		Name:              name,
 		Type:              monitorType,
 		Target:            target,
+		GroupName:         strings.TrimSpace(groupName),
 		EnvironmentCode:   strings.TrimSpace(environment),
 		Enabled:           &enabled,
 		IntervalSeconds:   timing.interval,
