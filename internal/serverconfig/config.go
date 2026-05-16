@@ -39,6 +39,7 @@ type Config struct {
 			Enabled      bool   `mapstructure:"enabled"`
 			Username     string `mapstructure:"username"`
 			Password     string `mapstructure:"password"`
+			JWTSecret    string `mapstructure:"jwt_secret"`
 			SecureCookie bool   `mapstructure:"secure_cookie"`
 		} `mapstructure:"dashboard"`
 	} `mapstructure:"auth"`
@@ -84,6 +85,7 @@ func defaultOptions() []configx.Option {
 			"auth.dashboard.enabled":             false,
 			"auth.dashboard.username":            "admin",
 			"auth.dashboard.password":            "",
+			"auth.dashboard.jwt_secret":          "",
 			"auth.dashboard.secure_cookie":       false,
 			"observability.prometheus.enabled":   false,
 			"observability.prometheus.namespace": "orivis",

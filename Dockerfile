@@ -1,6 +1,6 @@
-ARG GO_VERSION=1.26
+ARG GO_VERSION=1.26-alpine
 
-FROM golang:${GO_VERSION}-alpine AS build
+FROM golang:${GO_VERSION} AS build
 WORKDIR /src
 
 RUN apk add --no-cache ca-certificates git upx

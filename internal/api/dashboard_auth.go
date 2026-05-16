@@ -11,13 +11,6 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/security"
 )
 
-func (e *dashboardEndpoint) authenticateDashboardSession(cookie string) bool {
-	if !e.cfg.Auth.Dashboard.Enabled {
-		return true
-	}
-	return e.sessions.Authenticate(cookie)
-}
-
 func (e *dashboardEndpoint) loginDashboard(ctx context.Context, username, password string) (string, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
@@ -39,9 +32,9 @@ func (e *dashboardEndpoint) loginDashboard(ctx context.Context, username, passwo
 	if !dashboardPrincipalAllowed(ctx, e.auth, result.Principal) {
 		return "", fmt.Errorf("%w: dashboard role is required", errDashboardLoginFailed)
 	}
-	token, _, err := e.sessions.Create(username)
+	token, err := e.createDashboardJWT(username)
 	if err != nil {
-		return "", huma.Error500InternalServerError("create dashboard session", err)
+		return "", huma.Error500InternalServerError("create dashboard JWT", err)
 	}
 	return token, nil
 }

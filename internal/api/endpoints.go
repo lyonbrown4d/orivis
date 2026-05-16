@@ -10,10 +10,9 @@ import (
 )
 
 type dashboardEndpoint struct {
-	cfg      config.Config
-	store    *store.Store
-	auth     *authx.Engine
-	sessions *dashboardSessionStore
+	cfg   config.Config
+	store *store.Store
+	auth  *authx.Engine
 }
 
 type metadataEndpoint struct {
@@ -27,15 +26,6 @@ type agentEndpoint struct {
 	cfg            config.Config
 	store          *store.Store
 	resultIngestor *ingest.ResultIngestor
-}
-
-func NewDashboardEndpoint(cfg config.Config, storage *store.Store, auth *authx.Engine) httpx.Endpoint {
-	return &dashboardEndpoint{
-		cfg:      cfg,
-		store:    storage,
-		auth:     auth,
-		sessions: newDashboardSessionStore(dashboardSessionTTL),
-	}
 }
 
 func NewMetadataEndpoint(cfg config.Config, storage *store.Store) httpx.Endpoint {
@@ -63,6 +53,5 @@ func NewDefaultEndpoints(
 		NewMetadataEndpoint(cfg, storage),
 		NewHealthEndpoint(),
 		NewAgentEndpoint(cfg, storage, resultIngestor),
-		NewDashboardEndpoint(cfg, storage, nil),
 	)
 }

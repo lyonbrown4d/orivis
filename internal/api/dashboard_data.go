@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"unicode"
 
@@ -32,7 +31,11 @@ func dashboardMonitorViews(
 	return collectionlist.MapList(
 		collectionlist.NewList(monitors...),
 		func(_ int, monitor store.DashboardMonitor) dashboardMonitorView {
-			item := dashboardMonitorView{DashboardMonitor: monitor}
+			item := dashboardMonitorView{
+				DashboardMonitor: monitor,
+				DiscoverySource:  dashboardDiscoverySource(monitor.SourceKey, string(monitor.Source)),
+				DiscoveryDetail:  dashboardDiscoveryDetail(monitor.SourceKey),
+			}
 			if latest, ok := latestByMonitor[monitor.ID]; ok {
 				latest.MonitorName = monitor.Name
 				item.Latest = &latest
@@ -169,10 +172,6 @@ func writeDashboardGroupSlugRune(builder *strings.Builder, item rune, lastDash b
 	}
 }
 
-func dashboardGroupPath(value string) string {
-	return "/" + url.PathEscape(dashboardGroupSlug(value))
-}
-
 func dashboardEnvironmentGroupForMonitor(
 	monitor *dashboardMonitorView,
 	indexByName map[string]int,
@@ -212,6 +211,41 @@ func dashboardResults(snapshot store.DashboardSnapshot, limit int) []dashboardRe
 		return results[:limit]
 	}
 	return results
+}
+
+func dashboardDiscoverySource(sourceKey, fallback string) string {
+	sourceKey = strings.ToLower(strings.TrimSpace(sourceKey))
+	switch {
+	case strings.HasPrefix(sourceKey, "docker:swarm:"):
+		return "Docker Swarm"
+	case strings.HasPrefix(sourceKey, "docker:compose:"):
+		return "Docker Compose"
+	case strings.HasPrefix(sourceKey, "docker:container:"):
+		return "Docker"
+	case strings.HasPrefix(sourceKey, "static:"):
+		return "Config file"
+	}
+	fallback = strings.TrimSpace(fallback)
+	if fallback == "" {
+		return "Unknown"
+	}
+	return fallback
+}
+
+func dashboardDiscoveryDetail(sourceKey string) string {
+	sourceKey = strings.TrimSpace(sourceKey)
+	switch {
+	case strings.HasPrefix(sourceKey, "docker:compose:"):
+		return strings.TrimPrefix(sourceKey, "docker:compose:")
+	case strings.HasPrefix(sourceKey, "docker:container:"):
+		return strings.TrimPrefix(sourceKey, "docker:container:")
+	case strings.HasPrefix(sourceKey, "docker:swarm:"):
+		return strings.TrimPrefix(sourceKey, "docker:swarm:")
+	case strings.HasPrefix(sourceKey, "static:"):
+		return strings.TrimPrefix(sourceKey, "static:")
+	default:
+		return sourceKey
+	}
 }
 
 func dashboardMonitorStatusTotals(monitors []dashboardMonitorView) (int, int, int) {

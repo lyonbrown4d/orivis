@@ -4,6 +4,7 @@ param(
     [int]$HostPort = 18080,
     [int]$DurationSeconds = 45,
     [switch]$SkipBuild,
+    [switch]$DisableDashboardAuth,
     [switch]$KeepRunning
 )
 
@@ -30,6 +31,11 @@ function Invoke-CheckedCommand {
 
 Copy-Item -Force $serverEnvExample $serverEnv
 Copy-Item -Force $agentEnvExample $agentEnv
+if ($DisableDashboardAuth) {
+    $serverEnvContent = Get-Content -Raw $serverEnv
+    $serverEnvContent = $serverEnvContent.Replace("ORIVIS_AUTH__DASHBOARD__ENABLED=true", "ORIVIS_AUTH__DASHBOARD__ENABLED=false")
+    Set-Content -NoNewline -Path $serverEnv -Value $serverEnvContent
+}
 
 $previousTag = $env:ORIVIS_IMAGE_TAG
 $previousPort = $env:ORIVIS_HTTP_PORT
@@ -68,9 +74,17 @@ try {
 
     Start-Sleep -Seconds $DurationSeconds
 
-    $basicAuth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("admin:change-me"))
-    $dashboard = Invoke-WebRequest -UseBasicParsing "$baseURL/" -Headers @{
-        Authorization = "Basic $basicAuth"
+    if ($DisableDashboardAuth) {
+        $dashboard = Invoke-WebRequest -UseBasicParsing "$baseURL/"
+    }
+    else {
+        $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        Invoke-WebRequest -UseBasicParsing "$baseURL/login" `
+            -Method Post `
+            -WebSession $session `
+            -ContentType "application/json" `
+            -Body '{"username":"admin","password":"change-me"}' | Out-Null
+        $dashboard = Invoke-WebRequest -UseBasicParsing "$baseURL/" -WebSession $session
     }
     foreach ($expected in @("server-health", "redis", "postgres")) {
         if ($dashboard.Content -notmatch [regex]::Escape($expected)) {

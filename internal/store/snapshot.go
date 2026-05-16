@@ -27,6 +27,7 @@ type DashboardAgent struct {
 
 type DashboardMonitor struct {
 	ID                string
+	SourceKey         string
 	Name              string
 	Type              model.MonitorType
 	Target            string

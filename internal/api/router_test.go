@@ -17,7 +17,6 @@ func TestRoutesAreRegistered(t *testing.T) {
 		method string
 		path   string
 	}{
-		{method: http.MethodGet, path: "/"},
 		{method: http.MethodGet, path: "/api/server/metadata"},
 		{method: http.MethodGet, path: "/healthz"},
 		{method: http.MethodGet, path: "/readyz"},

@@ -104,7 +104,7 @@ func (s *Store) sqlAgentEnvironmentCodes(ctx context.Context, agentID string) ([
 func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, error) {
 	rows, err := s.DB.QueryContext(
 		ctx,
-		`SELECT m.id, m.name, m.type, m.target, m.group_name, e.code, m.enabled,
+		`SELECT m.id, m.source_key, m.name, m.type, m.target, m.group_name, e.code, m.enabled,
                 m.interval_seconds, m.timeout_seconds, m.retry_count,
                 m.aggregation_policy, m.source
          FROM monitors m
@@ -123,6 +123,7 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, e
 		var intervalSeconds, timeoutSeconds int
 		if err := rows.Scan(
 			&monitor.ID,
+			&monitor.SourceKey,
 			&monitor.Name,
 			&monitor.Type,
 			&monitor.Target,

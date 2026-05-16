@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/arcgolabs/authx"
 	"github.com/arcgolabs/dix"
 	"github.com/arcgolabs/eventx"
 	"github.com/arcgolabs/httpx"
@@ -62,6 +61,7 @@ func main() {
 	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard login")
 	cmd.Flags().String("auth-dashboard-username", "", "dashboard login username")
 	cmd.Flags().String("auth-dashboard-password", "", "dashboard login password")
+	cmd.Flags().String("auth-dashboard-jwt-secret", "", "dashboard JWT signing secret")
 	cmd.Flags().Bool("observability-prometheus-enabled", false, "enable Prometheus observability adapter")
 	cmd.Flags().String("observability-prometheus-namespace", "", "Prometheus metric namespace")
 
@@ -123,19 +123,15 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
-	securityModule := dix.NewModule("security",
-		dix.WithModuleImports(configModule, loggingModule, observabilityModule),
-		dix.WithModuleProviders(
-			dix.Provider3(security.NewEngine),
-		),
-	)
+	securityModule := newServerSecurityModule(configModule, loggingModule, observabilityModule)
 
-	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule, securityModule)
+	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule)
 
 	httpModule := dix.NewModule("http",
 		dix.WithModuleImports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
 		dix.WithModuleProviders(
-			dix.Provider6(api.NewServer),
+			dix.Provider2(api.NewServerRuntimeDeps),
+			dix.Provider5(api.NewServer),
 		),
 		dix.WithModuleHooks(
 			dix.OnStart[*api.Server](func(ctx context.Context, server *api.Server) error {
@@ -153,6 +149,15 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.WithAppDescription("distributed availability observability platform"),
 		dix.WithRunStopTimeout(10*time.Second),
 		dix.WithModules(httpModule, retentionModule),
+	)
+}
+
+func newServerSecurityModule(configModule, loggingModule, observabilityModule dix.Module) dix.Module {
+	return dix.NewModule("security",
+		dix.WithModuleImports(configModule, loggingModule, observabilityModule),
+		dix.WithModuleProviders(
+			dix.Provider3(security.NewEngine),
+		),
 	)
 }
 
@@ -211,14 +216,13 @@ func newServerIngestModule(configModule, loggingModule, storeModule, eventModule
 	)
 }
 
-func newServerEndpointModule(configModule, storeModule, ingestModule, securityModule dix.Module) dix.Module {
+func newServerEndpointModule(configModule, storeModule, ingestModule dix.Module) dix.Module {
 	return dix.NewModule("http-endpoints",
-		dix.WithModuleImports(configModule, storeModule, ingestModule, securityModule),
+		dix.WithModuleImports(configModule, storeModule, ingestModule),
 		dix.WithModuleProviders(
 			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(10)),
 			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(20)),
 			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *ingest.ResultIngestor](api.NewAgentEndpoint, dix.Order(30)),
-			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *authx.Engine](api.NewDashboardEndpoint, dix.Order(100)),
 		),
 	)
 }

@@ -1,52 +1,34 @@
 package api
 
 import (
-	"encoding/json"
 	"slices"
-	"time"
 
-	"github.com/lyonbrown4d/orivis/internal/model"
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
-type dashboardStatusChartPoint struct {
-	Time        string  `json:"time"`
-	Label       string  `json:"label"`
-	MonitorName string  `json:"monitor_name"`
-	Status      string  `json:"status"`
-	Score       float64 `json:"score"`
-	LatencyMS   int64   `json:"latency_ms"`
-}
-
-func dashboardStatusChartJSON(snapshot store.DashboardSnapshot, limit int) string {
-	points := dashboardStatusChartPoints(snapshot, limit)
-	content, err := json.Marshal(points)
-	if err != nil {
-		return "[]"
-	}
-	return string(content)
-}
-
-func dashboardStatusChartPoints(snapshot store.DashboardSnapshot, limit int) []dashboardStatusChartPoint {
+func dashboardStatusLights(snapshot store.DashboardSnapshot, limit int) []dashboardStatusLight {
 	monitorNames := dashboardMonitorNameMap(snapshot.Monitors)
 	results := snapshot.Results
 	if limit > 0 && len(results) > limit {
 		results = results[:limit]
 	}
 
-	points := make([]dashboardStatusChartPoint, 0, len(results))
+	ordered := make([]store.DashboardResult, 0, len(results))
 	for index := range slices.Backward(results) {
-		result := results[index]
-		points = append(points, dashboardStatusChartPoint{
-			Time:        result.CheckedAt.UTC().Format(time.RFC3339),
-			Label:       result.CheckedAt.UTC().Format("15:04:05"),
-			MonitorName: monitorNames[result.MonitorID],
-			Status:      string(result.Status),
-			Score:       dashboardStatusScore(result.Status),
-			LatencyMS:   result.Latency.Milliseconds(),
-		})
+		ordered = append(ordered, results[index])
 	}
-	return points
+	return collectionlist.MapList(
+		collectionlist.NewList(ordered...),
+		func(_ int, result store.DashboardResult) dashboardStatusLight {
+			return dashboardStatusLight{
+				MonitorName: monitorNames[result.MonitorID],
+				Status:      result.Status,
+				Latency:     result.Latency,
+				CheckedAt:   result.CheckedAt,
+			}
+		},
+	).Values()
 }
 
 func dashboardMonitorNameMap(monitors []store.DashboardMonitor) map[string]string {
@@ -56,19 +38,4 @@ func dashboardMonitorNameMap(monitors []store.DashboardMonitor) map[string]strin
 		out[monitor.ID] = monitor.Name
 	}
 	return out
-}
-
-func dashboardStatusScore(status model.Status) float64 {
-	switch status {
-	case model.StatusUp:
-		return 1
-	case model.StatusDegraded:
-		return 0.55
-	case model.StatusUnknown:
-		return 0.25
-	case model.StatusDown:
-		return 0
-	default:
-		return 0.25
-	}
 }

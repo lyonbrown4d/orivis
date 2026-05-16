@@ -29,17 +29,29 @@ type Server struct {
 	errCh   chan error
 }
 
+type ServerRuntimeDeps struct {
+	Auth *authx.Engine
+	Obs  observabilityx.Observability
+}
+
+func NewServerRuntimeDeps(
+	auth *authx.Engine,
+	obs observabilityx.Observability,
+) ServerRuntimeDeps {
+	return ServerRuntimeDeps{
+		Auth: auth,
+		Obs:  obs,
+	}
+}
+
 func NewServer(
 	cfg config.Config,
 	logger *slog.Logger,
 	storage *store.Store,
-	auth *authx.Engine,
-	obs observabilityx.Observability,
+	deps ServerRuntimeDeps,
 	endpoints *collectionlist.List[httpx.Endpoint],
 ) *Server {
-	app := fiber.New(fiber.Config{
-		Views: newDashboardViews(),
-	})
+	app := fiber.New()
 
 	fiberAdapter := adapterfiber.New(app, adapter.HumaOptions{
 		Title:       "Orivis API",
@@ -61,13 +73,14 @@ func NewServer(
 		cfg:     cfg,
 		logger:  logger,
 		store:   storage,
-		auth:    auth,
-		obs:     observabilityx.Normalize(obs, logger),
+		auth:    deps.Auth,
+		obs:     observabilityx.Normalize(deps.Obs, logger),
 		app:     app,
 		runtime: runtime,
 		errCh:   make(chan error, 1),
 	}
 	server.registerEndpoints(endpoints)
+	server.registerDashboardRoutes()
 	return server
 }
 

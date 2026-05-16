@@ -2,6 +2,9 @@
 /bin/
 /dist/
 /tmp/
+.codex-smoke/
+web/dist/
+web/node_modules/
 *.exe
 *.test
 *.out

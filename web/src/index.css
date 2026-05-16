@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 38% 94%;
+    --foreground: 171 32% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 171 32% 10%;
+    --muted: 43 26% 88%;
+    --muted-foreground: 215 16% 45%;
+    --border: 39 18% 82%;
+    --input: 39 18% 82%;
+    --ring: 161 84% 31%;
+    --primary: 164 74% 18%;
+    --primary-foreground: 151 81% 96%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 166 42% 5%;
+    --foreground: 151 81% 96%;
+    --card: 166 32% 8%;
+    --card-foreground: 151 81% 96%;
+    --muted: 166 26% 13%;
+    --muted-foreground: 215 18% 72%;
+    --border: 166 20% 16%;
+    --input: 166 20% 16%;
+    --ring: 158 64% 52%;
+    --primary: 153 61% 48%;
+    --primary-foreground: 166 42% 5%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(circle at top left, rgba(16, 185, 129, 0.18), transparent 28rem),
+      radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.16), transparent 24rem);
+  }
+}
+
+.status-light {
+  position: relative;
+  display: inline-block;
+  height: 2rem;
+  width: 0.72rem;
+  border-radius: 999px;
+  background: var(--status-dot);
+  box-shadow: 0 0.85rem 1.5rem -0.65rem var(--status-shadow);
+}
+
+.status-light::after {
+  content: attr(data-title);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.6rem);
+  z-index: 30;
+  display: none;
+  min-width: 14rem;
+  transform: translateX(-50%);
+  border-radius: 0.85rem;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1rem 2.2rem rgba(15, 23, 42, 0.28);
+}
+
+.status-light:hover::after {
+  display: block;
+}
+
+.status-up {
+  --status-dot: #10b981;
+  --status-shadow: rgba(16, 185, 129, 0.58);
+}
+
+.status-down {
+  --status-dot: #f43f5e;
+  --status-shadow: rgba(244, 63, 94, 0.58);
+}
+
+.status-degraded {
+  --status-dot: #f59e0b;
+  --status-shadow: rgba(245, 158, 11, 0.58);
+}
+
+.status-unknown {
+  --status-dot: #94a3b8;
+  --status-shadow: rgba(100, 116, 139, 0.45);
+}
