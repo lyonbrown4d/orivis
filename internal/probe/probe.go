@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -76,20 +74,20 @@ func (c *Checker) check(ctx context.Context, task protocol.AgentTask) (model.Sta
 	case string(model.MonitorDatabase), string(model.MonitorSQLite), string(model.MonitorMySQL), string(model.MonitorPostgres), "db", "pg", "postgresql":
 		return c.checkDatabase(ctx, task)
 	case string(model.MonitorPing):
-		return model.StatusUnknown, map[string]any{"type": task.Type}, errors.New("ping probe is not implemented yet")
+		return model.StatusUnknown, map[string]any{"type": task.Type}, newError("ping probe is not implemented yet")
 	default:
-		return model.StatusUnknown, map[string]any{"type": task.Type}, fmt.Errorf("unsupported monitor type %q", task.Type)
+		return model.StatusUnknown, map[string]any{"type": task.Type}, errorf("unsupported monitor type %q", task.Type)
 	}
 }
 
 func (c *Checker) checkHTTP(ctx context.Context, task protocol.AgentTask) (model.Status, map[string]any, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, task.Target, http.NoBody)
 	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target}, fmt.Errorf("build HTTP probe request: %w", err)
+		return model.StatusDown, map[string]any{"target": task.Target}, wrapError(err, "build HTTP probe request")
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target}, fmt.Errorf("execute HTTP probe: %w", err)
+		return model.StatusDown, map[string]any{"target": task.Target}, wrapError(err, "execute HTTP probe")
 	}
 	defer closeSilently(resp.Body)
 
@@ -97,14 +95,14 @@ func (c *Checker) checkHTTP(ctx context.Context, task protocol.AgentTask) (model
 	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
 		return model.StatusUp, detail, nil
 	}
-	return model.StatusDown, detail, fmt.Errorf("http status %d", resp.StatusCode)
+	return model.StatusDown, detail, errorf("http status %d", resp.StatusCode)
 }
 
 func (c *Checker) checkTCP(ctx context.Context, task protocol.AgentTask) (model.Status, map[string]any, error) {
 	dialer := net.Dialer{}
 	conn, err := dialer.DialContext(ctx, "tcp", task.Target)
 	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target}, fmt.Errorf("execute TCP probe: %w", err)
+		return model.StatusDown, map[string]any{"target": task.Target}, wrapError(err, "execute TCP probe")
 	}
 	closeSilently(conn)
 	return model.StatusUp, map[string]any{"target": task.Target}, nil
@@ -114,7 +112,7 @@ func (c *Checker) checkDNS(ctx context.Context, task protocol.AgentTask) (model.
 	host := dnsTargetHost(task.Target)
 	ips, err := c.resolver.LookupHost(ctx, host)
 	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target, "host": host}, fmt.Errorf("execute DNS probe: %w", err)
+		return model.StatusDown, map[string]any{"target": task.Target, "host": host}, wrapError(err, "execute DNS probe")
 	}
 	return model.StatusUp, map[string]any{"target": task.Target, "host": host, "answers": ips}, nil
 }
@@ -127,7 +125,7 @@ func (c *Checker) checkTLS(ctx context.Context, task protocol.AgentTask) (model.
 	dialer := tls.Dialer{Config: &tls.Config{ServerName: host}}
 	conn, err := dialer.DialContext(ctx, "tcp", task.Target)
 	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target, "server_name": host}, fmt.Errorf("execute TLS probe: %w", err)
+		return model.StatusDown, map[string]any{"target": task.Target, "server_name": host}, wrapError(err, "execute TLS probe")
 	}
 	defer closeSilently(conn)
 

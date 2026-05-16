@@ -3,8 +3,6 @@ package probe
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -29,11 +27,11 @@ func (c *Checker) checkDatabase(ctx context.Context, task protocol.AgentTask) (m
 
 	db, err := sql.Open(driver, dsn)
 	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target, "driver": driver}, fmt.Errorf("open database probe target: %w", err)
+		return model.StatusDown, map[string]any{"target": task.Target, "driver": driver}, wrapError(err, "open database probe target")
 	}
 	defer closeSilently(db)
 	if pingErr := db.PingContext(ctx); pingErr != nil {
-		return model.StatusDown, map[string]any{"target": task.Target, "driver": driver}, fmt.Errorf("execute database probe: %w", pingErr)
+		return model.StatusDown, map[string]any{"target": task.Target, "driver": driver}, wrapError(pingErr, "execute database probe")
 	}
 	return model.StatusUp, map[string]any{"target": task.Target, "driver": driver}, nil
 }
@@ -41,7 +39,7 @@ func (c *Checker) checkDatabase(ctx context.Context, task protocol.AgentTask) (m
 func databaseProbeTarget(monitorType, target string) (string, string, error) {
 	trimmed := strings.TrimSpace(target)
 	if trimmed == "" {
-		return "", "", errors.New("database target is empty")
+		return "", "", newError("database target is empty")
 	}
 	lowerTarget := strings.ToLower(trimmed)
 	lowerType := strings.ToLower(strings.TrimSpace(monitorType))
@@ -70,7 +68,7 @@ func databaseProbeTargetByPrefix(lowerTarget, trimmed, target string) (string, s
 	case strings.HasPrefix(lowerTarget, "file:"), trimmed == ":memory:":
 		return "sqlite", trimmed, nil
 	default:
-		return "", "", fmt.Errorf("unsupported database probe target %q", target)
+		return "", "", errorf("unsupported database probe target %q", target)
 	}
 }
 
@@ -100,11 +98,11 @@ func mysqlProbeTarget(target string) (string, string, error) {
 func mysqlURLDSN(target string) (string, error) {
 	parsed, err := url.Parse(target)
 	if err != nil {
-		return "", fmt.Errorf("parse MySQL URL: %w", err)
+		return "", wrapError(err, "parse MySQL URL")
 	}
 	host := parsed.Hostname()
 	if host == "" {
-		return "", errors.New("mysql URL host is empty")
+		return "", newError("mysql URL host is empty")
 	}
 	password, _ := parsed.User.Password()
 	config := mysql.Config{

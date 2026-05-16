@@ -2,17 +2,18 @@ package collector
 
 import (
 	"context"
-	"fmt"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	agentdiscovery "github.com/lyonbrown4d/orivis/internal/discovery"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
+	"github.com/samber/oops"
 )
 
 func (r *Runner) configureDiscovery() error {
-	discoverers := make([]monitorDiscoverer, 0, 2)
+	discoverers := collectionlist.NewListWithCapacity[monitorDiscoverer](2)
 
 	if r.cfg.Discovery.Static.Enabled && len(r.cfg.Discovery.Static.Monitors) > 0 {
-		discoverers = append(discoverers, agentdiscovery.NewStaticDiscoverer(r.cfg.Discovery.Static.Monitors))
+		discoverers.Add(agentdiscovery.NewStaticDiscoverer(r.cfg.Discovery.Static.Monitors))
 		r.logger.Info("static discovery enabled", "count", len(r.cfg.Discovery.Static.Monitors))
 	}
 
@@ -21,17 +22,18 @@ func (r *Runner) configureDiscovery() error {
 			Mode: r.cfg.Discovery.Docker.Mode,
 		})
 		if err != nil {
-			return fmt.Errorf("create Docker discoverer: %w", err)
+			return oops.Wrapf(err, "create Docker discoverer")
 		}
-		discoverers = append(discoverers, discoverer)
+		discoverers.Add(discoverer)
 		r.logger.Info("Docker discovery enabled", "mode", r.cfg.Discovery.Docker.Mode)
 	}
 
-	switch len(discoverers) {
+	switch discoverers.Len() {
 	case 0:
 		return nil
 	case 1:
-		r.discovery = discoverers[0]
+		discoverer, _ := discoverers.GetFirst()
+		r.discovery = discoverer
 	default:
 		r.discovery = compositeDiscoverer{discoverers: discoverers}
 	}
@@ -39,26 +41,38 @@ func (r *Runner) configureDiscovery() error {
 }
 
 type compositeDiscoverer struct {
-	discoverers []monitorDiscoverer
+	discoverers *collectionlist.List[monitorDiscoverer]
 }
 
 func (d compositeDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
-	out := make([]protocol.AgentDiscoveredMonitor, 0)
-	for _, discoverer := range d.discoverers {
+	out := collectionlist.NewList[protocol.AgentDiscoveredMonitor]()
+	var discoverErr error
+	d.discoverers.Range(func(_ int, discoverer monitorDiscoverer) bool {
 		monitors, err := discoverer.Discover(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("discover monitors: %w", err)
+			discoverErr = oops.Wrapf(err, "discover monitors")
+			return false
 		}
-		out = append(out, monitors...)
+		out.Add(monitors...)
+		return true
+	})
+	if discoverErr != nil {
+		return nil, discoverErr
 	}
-	return out, nil
+	return out.Values(), nil
 }
 
 func (d compositeDiscoverer) Close(ctx context.Context) error {
-	for _, discoverer := range d.discoverers {
+	var closeErr error
+	d.discoverers.Range(func(_ int, discoverer monitorDiscoverer) bool {
 		if err := discoverer.Close(ctx); err != nil {
-			return fmt.Errorf("close discoverer: %w", err)
+			closeErr = oops.Wrapf(err, "close discoverer")
+			return false
 		}
+		return true
+	})
+	if closeErr != nil {
+		return closeErr
 	}
 	return nil
 }

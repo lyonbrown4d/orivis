@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/arcgolabs/dix"
+	"github.com/arcgolabs/eventx"
 	"github.com/arcgolabs/httpx"
 	"github.com/arcgolabs/logx"
 	"github.com/lyonbrown4d/orivis/internal/api"
@@ -106,7 +107,8 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
-	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule)
+	eventModule := newServerEventModule(loggingModule)
+	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule)
 
 	observabilityModule := dix.NewModule("observability",
 		dix.Imports(configModule, loggingModule),
@@ -148,11 +150,32 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	)
 }
 
-func newServerIngestModule(configModule, loggingModule, storeModule dix.Module) dix.Module {
-	return dix.NewModule("ingest",
-		dix.Imports(configModule, loggingModule, storeModule),
+func newServerEventModule(loggingModule dix.Module) dix.Module {
+	return dix.NewModule("event",
+		dix.Imports(loggingModule),
 		dix.Providers(
-			dix.ProviderErr3(ingest.NewResultIngestor),
+			dix.Provider1(func(logger *slog.Logger) eventx.BusRuntime {
+				return eventx.New(
+					eventx.WithParallelDispatch(true),
+					eventx.WithAsyncErrorHandler(func(_ context.Context, event eventx.Event, err error) {
+						logger.Error("handle async event failed", "event", event.Name(), "error", err)
+					}),
+				)
+			}),
+		),
+		dix.Hooks(
+			dix.OnStop[eventx.BusRuntime](func(_ context.Context, bus eventx.BusRuntime) error {
+				return bus.Close()
+			}),
+		),
+	)
+}
+
+func newServerIngestModule(configModule, loggingModule, storeModule, eventModule dix.Module) dix.Module {
+	return dix.NewModule("ingest",
+		dix.Imports(configModule, loggingModule, storeModule, eventModule),
+		dix.Providers(
+			dix.ProviderErr4(ingest.NewResultIngestor),
 		),
 		dix.Hooks(
 			dix.OnStart[*ingest.ResultIngestor](func(ctx context.Context, resultIngestor *ingest.ResultIngestor) error {

@@ -3,26 +3,21 @@ package ingest
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	"github.com/arcgolabs/eventx"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
-)
-
-var (
-	ErrQueueFull = errors.New("ingest: result queue is full")
-	ErrClosed    = errors.New("ingest: result ingestor is closed")
 )
 
 type ResultIngestor struct {
 	store         *store.Store
 	logger        *slog.Logger
+	bus           eventx.BusRuntime
 	queue         *resultQueue
 	batchSize     int
 	flushInterval time.Duration
@@ -32,22 +27,23 @@ type ResultIngestor struct {
 	startOnce     sync.Once
 	stopOnce      sync.Once
 	started       atomic.Bool
+	unsubscribe   func()
 }
 
-type resultQueue struct {
-	mu       sync.Mutex
-	items    *collectionlist.PriorityQueue[resultQueueItem]
-	capacity int
-	next     uint64
-	closed   bool
+type probeResultReceivedEvent struct {
+	params store.RecordProbeResultParams
 }
 
-type resultQueueItem struct {
-	sequence uint64
-	params   store.RecordProbeResultParams
+func (e probeResultReceivedEvent) Name() string {
+	return "orivis.probe.result.received"
 }
 
-func NewResultIngestor(cfg config.Config, storage *store.Store, logger *slog.Logger) (*ResultIngestor, error) {
+func NewResultIngestor(
+	cfg config.Config,
+	storage *store.Store,
+	logger *slog.Logger,
+	bus eventx.BusRuntime,
+) (*ResultIngestor, error) {
 	queueSize := cfg.Ingest.QueueSize
 	if queueSize <= 0 {
 		queueSize = 4096
@@ -58,7 +54,7 @@ func NewResultIngestor(cfg config.Config, storage *store.Store, logger *slog.Log
 	}
 	flushInterval, err := time.ParseDuration(cfg.Ingest.FlushInterval)
 	if err != nil {
-		return nil, fmt.Errorf("parse ingest flush interval: %w", err)
+		return nil, wrapError(err, "parse ingest flush interval")
 	}
 	if flushInterval <= 0 {
 		flushInterval = time.Second
@@ -71,6 +67,7 @@ func NewResultIngestor(cfg config.Config, storage *store.Store, logger *slog.Log
 	return &ResultIngestor{
 		store:         storage,
 		logger:        logger,
+		bus:           bus,
 		queue:         queue,
 		batchSize:     batchSize,
 		flushInterval: flushInterval,
@@ -82,18 +79,17 @@ func NewResultIngestor(cfg config.Config, storage *store.Store, logger *slog.Log
 
 func (i *ResultIngestor) Enqueue(ctx context.Context, params store.RecordProbeResultParams) error {
 	if i == nil {
-		return ErrClosed
+		return wrapError(ErrClosed, "enqueue probe result")
 	}
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("enqueue probe result: %w", err)
+		return wrapError(err, "enqueue probe result")
 	}
-
-	size, err := i.queue.push(cloneRecordProbeResultParams(params))
-	if err != nil {
-		return err
+	if i.bus == nil {
+		return wrapError(ErrClosed, "enqueue probe result")
 	}
-	if size >= i.batchSize {
-		i.notify()
+	event := probeResultReceivedEvent{params: cloneRecordProbeResultParams(params)}
+	if err := i.bus.PublishAsync(context.WithoutCancel(ctx), event); err != nil {
+		return wrapError(err, "publish probe result received event")
 	}
 	return nil
 }
@@ -102,16 +98,27 @@ func (i *ResultIngestor) Start(ctx context.Context) error {
 	if i == nil {
 		return nil
 	}
+	var startErr error
 	i.startOnce.Do(func() {
+		unsubscribe, err := eventx.Subscribe[probeResultReceivedEvent](i.bus, i.handleProbeResultReceived)
+		if err != nil {
+			startErr = wrapError(err, "subscribe probe result received event")
+			return
+		}
+		i.unsubscribe = unsubscribe
 		i.started.Store(true)
 		go i.run(ctx)
 	})
-	return nil
+	return startErr
 }
 
 func (i *ResultIngestor) Stop(ctx context.Context) error {
 	if i == nil {
 		return nil
+	}
+	if i.unsubscribe != nil {
+		i.unsubscribe()
+		i.unsubscribe = nil
 	}
 	i.queue.close()
 	if !i.started.Load() {
@@ -125,7 +132,7 @@ func (i *ResultIngestor) Stop(ctx context.Context) error {
 	case <-i.done:
 		return nil
 	case <-ctx.Done():
-		return fmt.Errorf("stop result ingestor: %w", ctx.Err())
+		return wrapError(ctx.Err(), "stop result ingestor")
 	}
 }
 
@@ -165,16 +172,30 @@ func (i *ResultIngestor) notify() {
 	}
 }
 
+func (i *ResultIngestor) handleProbeResultReceived(ctx context.Context, event probeResultReceivedEvent) error {
+	if err := ctx.Err(); err != nil {
+		return wrapError(err, "handle probe result received event")
+	}
+	size, err := i.queue.push(event.params)
+	if err != nil {
+		return err
+	}
+	if size >= i.batchSize {
+		i.notify()
+	}
+	return nil
+}
+
 func (i *ResultIngestor) flush(ctx context.Context) error {
 	if i.store == nil || i.store.ResultStore() == nil {
-		return errors.New("ingest: result store is not available")
+		return newError("ingest: result store is not available")
 	}
 
 	var flushErr error
 	for {
 		done, err := i.flushNextBatch(ctx)
 		if err != nil {
-			flushErr = errors.Join(flushErr, err)
+			flushErr = joinErrors(flushErr, err)
 		}
 		if done {
 			return flushErr
@@ -184,7 +205,7 @@ func (i *ResultIngestor) flush(ctx context.Context) error {
 
 func (i *ResultIngestor) flushNextBatch(ctx context.Context) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return true, fmt.Errorf("flush result ingest queue: %w", err)
+		return true, wrapError(err, "flush result ingest queue")
 	}
 
 	batch := i.queue.popBatch(i.batchSize)
@@ -200,9 +221,9 @@ func (i *ResultIngestor) flushNextBatch(ctx context.Context) (bool, error) {
 func (i *ResultIngestor) recordBatch(ctx context.Context, batch []store.RecordProbeResultParams) error {
 	if _, err := i.store.ResultStore().RecordBatch(ctx, batch); err != nil {
 		if len(batch) == 1 {
-			return fmt.Errorf("record probe result batch: %w", err)
+			return wrapError(err, "record probe result batch")
 		}
-		i.logFlushError(fmt.Errorf("record probe result batch: %w", err))
+		i.logFlushError(wrapError(err, "record probe result batch"))
 		return i.recordIndividually(ctx, batch)
 	}
 	return nil
@@ -210,11 +231,12 @@ func (i *ResultIngestor) recordBatch(ctx context.Context, batch []store.RecordPr
 
 func (i *ResultIngestor) recordIndividually(ctx context.Context, batch []store.RecordProbeResultParams) error {
 	var batchErr error
-	for index := range batch {
+	collectionlist.NewList(batch...).Range(func(index int, _ store.RecordProbeResultParams) bool {
 		if _, err := i.store.ResultStore().Record(ctx, batch[index]); err != nil {
-			batchErr = errors.Join(batchErr, err)
+			batchErr = joinErrors(batchErr, err)
 		}
-	}
+		return true
+	})
 	return batchErr
 }
 
@@ -231,66 +253,4 @@ func (i *ResultIngestor) logFlushError(err error) {
 	if err != nil && i.logger != nil {
 		i.logger.Error("flush result ingest queue", "error", err)
 	}
-}
-
-func newResultQueue(capacity int) (*resultQueue, error) {
-	items, err := collectionlist.NewPriorityQueue(func(a, b resultQueueItem) bool {
-		return a.sequence < b.sequence
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create result ingest queue: %w", err)
-	}
-	return &resultQueue{
-		items:    items,
-		capacity: capacity,
-	}, nil
-}
-
-func (q *resultQueue) push(params store.RecordProbeResultParams) (int, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	if q.closed {
-		return q.items.Len(), ErrClosed
-	}
-	if q.items.Len() >= q.capacity {
-		return q.items.Len(), ErrQueueFull
-	}
-	q.next++
-	q.items.Push(resultQueueItem{
-		sequence: q.next,
-		params:   params,
-	})
-	return q.items.Len(), nil
-}
-
-func (q *resultQueue) popBatch(limit int) []store.RecordProbeResultParams {
-	if limit <= 0 {
-		return nil
-	}
-
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	out := make([]store.RecordProbeResultParams, 0, min(limit, q.items.Len()))
-	for len(out) < limit {
-		item, ok := q.items.Pop()
-		if !ok {
-			return out
-		}
-		out = append(out, item.params)
-	}
-	return out
-}
-
-func (q *resultQueue) close() {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	q.closed = true
-}
-
-func cloneRecordProbeResultParams(params store.RecordProbeResultParams) store.RecordProbeResultParams {
-	params.RawDetail = append([]byte(nil), params.RawDetail...)
-	return params
 }

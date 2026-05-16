@@ -2,11 +2,11 @@ package collector
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
+	collectionmapping "github.com/arcgolabs/collectionx/mapping"
 	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/go-co-op/gocron"
 	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
@@ -15,6 +15,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/probe"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
+	"github.com/samber/oops"
 )
 
 type Runner struct {
@@ -26,7 +27,7 @@ type Runner struct {
 	agentID   string
 	stop      context.CancelFunc
 	sched     *gocron.Scheduler
-	tasks     map[string]scheduledTask
+	tasks     *collectionmapping.Map[string, scheduledTask]
 }
 
 type monitorDiscoverer interface {
@@ -44,7 +45,7 @@ func NewRunner(cfg config.Config, logger *slog.Logger, client *agentclient.Clien
 		logger:  logger,
 		client:  client,
 		checker: probe.New(),
-		tasks:   map[string]scheduledTask{},
+		tasks:   collectionmapping.NewMap[string, scheduledTask](),
 	}
 }
 
@@ -66,13 +67,13 @@ func (r *Runner) Start(ctx context.Context) error {
 		Version:          buildinfo.Version,
 	})
 	if err != nil {
-		return fmt.Errorf("register agent: %w", err)
+		return oops.Wrapf(err, "register agent")
 	}
 	r.agentID = registration.AgentID
 	r.logger.Info("agent registered", "agent_id", r.agentID, "status", registration.Status)
 
 	if err := r.configureDiscovery(); err != nil {
-		return fmt.Errorf("configure monitor discovery: %w", err)
+		return oops.Wrapf(err, "configure monitor discovery")
 	}
 
 	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
@@ -83,7 +84,7 @@ func (r *Runner) Start(ctx context.Context) error {
 		r.syncTasks(runCtx)
 	}); err != nil {
 		stop()
-		return fmt.Errorf("schedule agent sync: %w", err)
+		return oops.Wrapf(err, "schedule agent sync")
 	}
 	r.sched = scheduler
 	scheduler.StartAsync()
@@ -134,7 +135,7 @@ func (r *Runner) heartbeat(ctx context.Context) error {
 		SentAt:  time.Now().UTC(),
 	})
 	if err != nil {
-		return fmt.Errorf("send agent heartbeat: %w", err)
+		return oops.Wrapf(err, "send agent heartbeat")
 	}
 	r.logger.Debug("agent heartbeat accepted", "agent_id", response.AgentID, "status", response.Status)
 	return nil
@@ -146,7 +147,7 @@ func (r *Runner) pullTasks(ctx context.Context) (protocol.AgentTasksResponse, er
 		Token:   r.cfg.Agent.Token,
 	})
 	if err != nil {
-		return protocol.AgentTasksResponse{}, fmt.Errorf("pull agent tasks: %w", err)
+		return protocol.AgentTasksResponse{}, oops.Wrapf(err, "pull agent tasks")
 	}
 	return response, nil
 }
@@ -157,7 +158,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 	}
 	monitors, err := r.discovery.Discover(ctx)
 	if err != nil {
-		return fmt.Errorf("discover monitors: %w", err)
+		return oops.Wrapf(err, "discover monitors")
 	}
 	if len(monitors) == 0 {
 		return nil
@@ -168,7 +169,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 		Monitors: monitors,
 	})
 	if err != nil {
-		return fmt.Errorf("sync discovered monitors: %w", err)
+		return oops.Wrapf(err, "sync discovered monitors")
 	}
 	r.logger.Debug("agent discovered monitors synced", "count", response.Synced)
 	return nil
@@ -191,7 +192,7 @@ func (r *Runner) reconcileTasks(ctx context.Context, tasks []protocol.AgentTask)
 
 func (r *Runner) reconcileTask(ctx context.Context, task protocol.AgentTask) {
 	signature := taskSignature(task)
-	current, ok := r.tasks[task.MonitorID]
+	current, ok := r.tasks.Get(task.MonitorID)
 	if ok && current.signature == signature {
 		return
 	}
@@ -204,11 +205,12 @@ func (r *Runner) reconcileTask(ctx context.Context, task protocol.AgentTask) {
 }
 
 func (r *Runner) removeMissingTasks(contains func(string) bool) {
-	for monitorID := range r.tasks {
+	r.tasks.Range(func(monitorID string, _ scheduledTask) bool {
 		if !contains(monitorID) {
 			r.removeTask(monitorID)
 		}
-	}
+		return true
+	})
 }
 
 func (r *Runner) scheduleTask(ctx context.Context, task protocol.AgentTask, signature string) error {
@@ -218,10 +220,10 @@ func (r *Runner) scheduleTask(ctx context.Context, task protocol.AgentTask, sign
 		r.runTask(ctx, taskCopy)
 	})
 	if err != nil {
-		return fmt.Errorf("schedule probe task: %w", err)
+		return oops.Wrapf(err, "schedule probe task")
 	}
 	job.Tag(taskTag(task.MonitorID))
-	r.tasks[task.MonitorID] = scheduledTask{signature: signature}
+	r.tasks.Set(task.MonitorID, scheduledTask{signature: signature})
 	r.logger.Info("agent task scheduled", "monitor_id", task.MonitorID, "interval", interval)
 	return nil
 }
@@ -230,7 +232,7 @@ func (r *Runner) removeTask(monitorID string) {
 	if err := r.sched.RemoveByTag(taskTag(monitorID)); err != nil {
 		r.logger.Warn("remove agent task failed", "monitor_id", monitorID, "error", err)
 	}
-	delete(r.tasks, monitorID)
+	r.tasks.Delete(monitorID)
 }
 
 func (r *Runner) runTask(ctx context.Context, task protocol.AgentTask) {

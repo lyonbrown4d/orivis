@@ -2,8 +2,6 @@ package probe
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net"
 	"strings"
 
@@ -25,7 +23,7 @@ func (c *Checker) checkRedis(ctx context.Context, task protocol.AgentTask) (mode
 	defer closeSilently(client)
 
 	if _, err := client.Ping(ctx).Result(); err != nil {
-		return model.StatusDown, detail, fmt.Errorf("execute Redis probe: %w", err)
+		return model.StatusDown, detail, wrapError(err, "execute Redis probe")
 	}
 	return model.StatusUp, detail, nil
 }
@@ -33,12 +31,12 @@ func (c *Checker) checkRedis(ctx context.Context, task protocol.AgentTask) (mode
 func redisProbeOptions(rawTarget string) (*redis.Options, map[string]any, error) {
 	target := strings.TrimSpace(rawTarget)
 	if target == "" {
-		return nil, nil, errors.New("redis target is empty")
+		return nil, nil, newError("redis target is empty")
 	}
 	if strings.HasPrefix(strings.ToLower(target), "redis://") || strings.HasPrefix(strings.ToLower(target), "rediss://") {
 		options, err := redis.ParseURL(target)
 		if err != nil {
-			return nil, nil, fmt.Errorf("parse Redis URL: %w", err)
+			return nil, nil, wrapError(err, "parse Redis URL")
 		}
 		return options, redisDetail(options), nil
 	}
