@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/subtle"
+	"embed"
 	"encoding/base64"
 	"fmt"
 	"html/template"
@@ -21,6 +22,7 @@ import (
 
 type dashboardInput struct {
 	Authorization string `header:"Authorization"`
+	Lang          string `query:"lang"`
 }
 
 type dashboardOutput struct {
@@ -29,6 +31,7 @@ type dashboardOutput struct {
 }
 
 type dashboardView struct {
+	Lang          string
 	Name          string
 	Env           string
 	Version       buildinfo.Info
@@ -37,8 +40,16 @@ type dashboardView struct {
 	Agents        []store.DashboardAgent
 	Monitors      []dashboardMonitorView
 	Environments  []dashboardEnvironmentGroup
+	LangOptions   []dashboardLanguageOption
 	RecentResults []dashboardResultView
 	Summary       dashboardSummary
+	T             func(string) string
+}
+
+type dashboardLanguageOption struct {
+	Code   string
+	Label  string
+	Active bool
 }
 
 type dashboardDatabase struct {
@@ -112,12 +123,16 @@ func dashboardUnauthorized() error {
 	)
 }
 
-func (s *Server) renderDashboard(ctx context.Context) ([]byte, error) {
+func (s *Server) renderDashboard(ctx context.Context, lang string) ([]byte, error) {
+	lang = dashboardLocale(lang)
 	view := dashboardView{
+		Lang:        lang,
 		Name:        "orivis-server",
 		Env:         s.cfg.App.Env,
 		Version:     buildinfo.Current(),
 		GeneratedAt: time.Now().UTC(),
+		LangOptions: dashboardLangOptions(lang),
+		T:           dashboardT(lang),
 		Database: dashboardDatabase{
 			Driver: s.cfg.DB.Driver,
 		},
@@ -248,13 +263,6 @@ func dashboardStatusClass(status model.Status) string {
 	}
 }
 
-func dashboardBoolLabel(value bool) string {
-	if value {
-		return "enabled"
-	}
-	return "disabled"
-}
-
 func dashboardDuration(value time.Duration) string {
 	if value <= 0 {
 		return "-"
@@ -289,174 +297,140 @@ func dashboardSince(value time.Time) string {
 	}
 }
 
-var dashboardTemplate = template.Must(template.New("dashboard").Funcs(template.FuncMap{
-	"statusClass": dashboardStatusClass,
-	"boolLabel":   dashboardBoolLabel,
-	"duration":    dashboardDuration,
-	"join":        dashboardJoin,
-	"since":       dashboardSince,
-}).Parse(`<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="15">
-  <title>Orivis Uptime</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="min-h-screen bg-[#f5f1e8] text-slate-950">
-  <main class="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-    <section class="overflow-hidden rounded-[2rem] border border-slate-900/10 bg-[#10221f] text-white shadow-2xl shadow-slate-900/15">
-      <div class="relative px-6 py-8 sm:px-10">
-        <div class="absolute -right-20 -top-24 h-72 w-72 rounded-full bg-emerald-300/20 blur-3xl"></div>
-        <div class="absolute bottom-0 right-24 h-40 w-40 rounded-full bg-amber-300/20 blur-2xl"></div>
-        <div class="relative grid gap-8 lg:grid-cols-[1.4fr_1fr] lg:items-end">
-          <div>
-            <p class="text-sm uppercase tracking-[0.35em] text-emerald-200">distributed uptime</p>
-            <h1 class="mt-4 text-4xl font-black tracking-tight sm:text-6xl">Orivis</h1>
-            <p class="mt-4 max-w-2xl text-lg text-emerald-50/80">A zero-config server view for agents, discovered monitors, and recent probe results.</p>
-          </div>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-            <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
-              <p class="text-sm text-emerald-100">Agents</p>
-              <p class="mt-2 text-3xl font-black">{{.Summary.Agents}}</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
-              <p class="text-sm text-emerald-100">Monitors</p>
-              <p class="mt-2 text-3xl font-black">{{.Summary.Monitors}}</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
-              <p class="text-sm text-emerald-100">Up</p>
-              <p class="mt-2 text-3xl font-black text-emerald-200">{{.Summary.Up}}</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/10">
-              <p class="text-sm text-emerald-100">Down</p>
-              <p class="mt-2 text-3xl font-black text-rose-200">{{.Summary.Down}}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+func dashboardLocale(lang string) string {
+	switch strings.ToLower(strings.TrimSpace(lang)) {
+	case "zh":
+		return "zh"
+	case "zh-cn":
+		return "zh"
+	case "zh-hans":
+		return "zh"
+	default:
+		return "en"
+	}
+}
 
-    <section class="mt-6 grid gap-4 lg:grid-cols-3">
-      <div class="rounded-3xl border border-slate-900/10 bg-white/80 p-5 shadow-sm">
-        <p class="text-xs uppercase tracking-[0.25em] text-slate-500">server</p>
-        <p class="mt-2 font-semibold">{{.Name}}</p>
-        <p class="text-sm text-slate-500">env: {{.Env}}</p>
-      </div>
-      <div class="rounded-3xl border border-slate-900/10 bg-white/80 p-5 shadow-sm">
-        <p class="text-xs uppercase tracking-[0.25em] text-slate-500">storage</p>
-        <p class="mt-2 font-semibold">{{.Database.Driver}}</p>
-        <p class="text-sm text-slate-500">{{if .Database.Dialect}}{{.Database.Dialect}}{{else}}memory{{end}}</p>
-      </div>
-      <div class="rounded-3xl border border-slate-900/10 bg-white/80 p-5 shadow-sm">
-        <p class="text-xs uppercase tracking-[0.25em] text-slate-500">updated</p>
-        <p class="mt-2 font-semibold">{{since .GeneratedAt}}</p>
-        <p class="text-sm text-slate-500">{{.GeneratedAt.Format "2006-01-02 15:04:05 UTC"}} / auto refresh 15s</p>
-      </div>
-    </section>
+func dashboardLangOptions(activeLang string) []dashboardLanguageOption {
+	return []dashboardLanguageOption{
+		{Code: "en", Label: "English", Active: activeLang == "en"},
+		{Code: "zh", Label: "中文", Active: activeLang == "zh"},
+	}
+}
 
-    <section class="mt-8 grid gap-6 xl:grid-cols-[1.45fr_0.9fr]">
-      <div class="rounded-[1.75rem] border border-slate-900/10 bg-white p-5 shadow-sm">
-        <div class="flex items-center justify-between gap-4">
-          <h2 class="text-xl font-black">Monitors</h2>
-          <span class="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">{{.Summary.Monitors}} total</span>
-        </div>
-        <div class="mt-5 overflow-x-auto">
-          <table class="w-full min-w-[760px] text-left text-sm">
-            <thead class="text-xs uppercase tracking-wider text-slate-500">
-              <tr class="border-b border-slate-200">
-                <th class="py-3 pr-4">Name</th>
-                <th class="py-3 pr-4">Target</th>
-                <th class="py-3 pr-4">Env</th>
-                <th class="py-3 pr-4">Interval</th>
-                <th class="py-3 pr-4">Status</th>
-                <th class="py-3 pr-4">Latency</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              {{range .Environments}}
-              <tr class="bg-slate-50">
-                <td class="py-3 pr-4 font-black text-slate-700" colspan="6">
-                  <span class="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200">{{.Name}}</span>
-                  <span class="ml-2 text-xs font-semibold text-emerald-700">{{.Up}} up</span>
-                  <span class="ml-2 text-xs font-semibold text-rose-700">{{.Down}} down</span>
-                  <span class="ml-2 text-xs font-semibold text-slate-500">{{.Unknown}} unknown</span>
-                </td>
-              </tr>
-              {{range .Monitors}}
-              <tr>
-                <td class="py-4 pr-4">
-                  <div class="font-semibold">{{.Name}}</div>
-                  <div class="text-xs text-slate-500">{{.Type}} / {{boolLabel .Enabled}}</div>
-                </td>
-                <td class="max-w-[320px] truncate py-4 pr-4 text-slate-600">{{.Target}}</td>
-                <td class="py-4 pr-4">{{.EnvironmentCode}}</td>
-                <td class="py-4 pr-4">{{duration .Interval}}</td>
-                <td class="py-4 pr-4">
-                  {{if .Latest}}
-                  <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{statusClass .Latest.Status}}">{{.Latest.Status}}</span>
-                  {{else}}
-                  <span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-slate-200">unknown</span>
-                  {{end}}
-                </td>
-                <td class="py-4 pr-4">{{if .Latest}}{{duration .Latest.Latency}}{{else}}-{{end}}</td>
-              </tr>
-              {{end}}
-              {{else}}
-              <tr>
-                <td class="py-10 text-center text-slate-500" colspan="6">No monitors yet. Start an agent with static config or Docker labels.</td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-      </div>
+func dashboardT(lang string) func(string) string {
+	locales := map[string]map[string]string{
+		"en": {
+			"page.title":             "Orivis Uptime",
+			"page.subtitle":          "Distributed availability observability",
+			"status.description":     "A zero-config server view for agents, discovered monitors, and recent probe results.",
+			"nav.dashboard":          "Dashboard",
+			"nav.monitors":           "Monitors",
+			"nav.agents":             "Agents",
+			"nav.results":            "Recent results",
+			"nav.refresh":            "Auto refresh: 15s",
+			"kpis.agents":            "Agents",
+			"kpis.monitors":          "Monitors",
+			"kpis.up":                "Up",
+			"kpis.down":              "Down",
+			"kpis.unknown":           "Unknown",
+			"kpis.total":             "total",
+			"summary.server":         "Server",
+			"summary.server.env":     "Environment",
+			"summary.storage":        "Storage",
+			"summary.storage.driver": "Driver",
+			"summary.updated":        "Updated",
+			"summary.updated.at":     "auto refresh 15s",
+			"section.monitors":       "Monitors",
+			"section.agents":         "Agents",
+			"section.recent_results": "Recent results",
+			"table.name":             "Name",
+			"table.target":           "Target",
+			"table.environment":      "Environment",
+			"table.interval":         "Interval",
+			"table.status":           "Status",
+			"table.latency":          "Latency",
+			"table.enabled":          "Enabled",
+			"table.disabled":         "Disabled",
+			"label.no_monitors":      "No monitors yet. Start an agent with static config or Docker labels.",
+			"label.no_agents":        "No agents registered yet.",
+			"label.no_results":       "No probe results yet.",
+			"agent.title":            "agent / status",
+			"label.env":              "env",
+			"label.last_seen":        "last seen",
+			"label.up":               "up",
+			"label.down":             "down",
+			"lang.current":           "Language",
+			"meta.group":             "Environment",
+			"status.unknown":         "unknown",
+		},
+		"zh": {
+			"page.title":             "Orivis 存活检测",
+			"page.subtitle":          "分布式可用性检测面板",
+			"status.description":     "用于 Agent、自动发现监控与最新探测结果的零配置视图。",
+			"nav.dashboard":          "概览",
+			"nav.monitors":           "监控列表",
+			"nav.agents":             "节点",
+			"nav.results":            "最近结果",
+			"nav.refresh":            "自动刷新：15秒",
+			"kpis.agents":            "节点数",
+			"kpis.monitors":          "监控数",
+			"kpis.up":                "正常",
+			"kpis.down":              "异常",
+			"kpis.unknown":           "未知",
+			"kpis.total":             "总计",
+			"summary.server":         "服务",
+			"summary.server.env":     "环境",
+			"summary.storage":        "存储",
+			"summary.storage.driver": "驱动",
+			"summary.updated":        "更新时间",
+			"summary.updated.at":     "15秒自动刷新",
+			"section.monitors":       "监控",
+			"section.agents":         "节点",
+			"section.recent_results": "最近结果",
+			"table.name":             "名称",
+			"table.target":           "目标",
+			"table.environment":      "环境",
+			"table.interval":         "间隔",
+			"table.status":           "状态",
+			"table.latency":          "耗时",
+			"table.enabled":          "启用",
+			"table.disabled":         "停用",
+			"label.no_monitors":      "暂无监控。可启动 Agent 并使用静态配置或 Docker 标签。",
+			"label.no_agents":        "暂无已注册节点。",
+			"label.no_results":       "暂无探测结果。",
+			"agent.title":            "节点 / 状态",
+			"label.env":              "环境",
+			"label.last_seen":        "最后上报",
+			"label.up":               "正常",
+			"label.down":             "异常",
+			"meta.group":             "环境分组",
+			"status.unknown":         "未知",
+		},
+	}
+	return func(key string) string {
+		if text, ok := locales[lang][key]; ok {
+			return text
+		}
+		return locales["en"][key]
+	}
+}
 
-      <div class="space-y-6">
-        <div class="rounded-[1.75rem] border border-slate-900/10 bg-white p-5 shadow-sm">
-          <h2 class="text-xl font-black">Agents</h2>
-          <div class="mt-4 space-y-3">
-            {{range .Agents}}
-            <div class="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="font-bold">{{.Name}}</p>
-                  <p class="text-sm text-slate-500">{{.RuntimeType}} / {{.RegionCode}}</p>
-                </div>
-                <span class="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">{{.Status}}</span>
-              </div>
-              <p class="mt-3 text-sm text-slate-500">env: {{join .EnvironmentCodes}}</p>
-              <p class="text-sm text-slate-500">last seen: {{since .LastSeenAt}}</p>
-            </div>
-            {{else}}
-            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No agents registered yet.</p>
-            {{end}}
-          </div>
-        </div>
+var (
+	//go:embed "templates/*.tmpl"
+	dashboardTemplateFS embed.FS
 
-        <div class="rounded-[1.75rem] border border-slate-900/10 bg-white p-5 shadow-sm">
-          <h2 class="text-xl font-black">Recent results</h2>
-          <div class="mt-4 space-y-3">
-            {{range .RecentResults}}
-            <div class="rounded-2xl border border-slate-100 p-4">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <p class="font-bold">{{if .MonitorName}}{{.MonitorName}}{{else}}{{.MonitorID}}{{end}}</p>
-                  <p class="text-sm text-slate-500">{{.AgentName}} / {{.EnvironmentCode}}</p>
-                </div>
-                <span class="rounded-full px-2.5 py-1 text-xs font-bold ring-1 {{statusClass .Status}}">{{.Status}}</span>
-              </div>
-              <p class="mt-3 text-sm text-slate-500">{{duration .Latency}} / {{since .CheckedAt}}</p>
-              {{if .ErrorMessage}}<p class="mt-2 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{{.ErrorMessage}}</p>{{end}}
-            </div>
-            {{else}}
-            <p class="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No probe results yet.</p>
-            {{end}}
-          </div>
-        </div>
-      </div>
-    </section>
-  </main>
-</body>
-</html>`))
+	dashboardTemplate = template.Must(
+		template.New("layout.tmpl").
+			Funcs(template.FuncMap{
+				"statusClass": dashboardStatusClass,
+				"duration":    dashboardDuration,
+				"join":        dashboardJoin,
+				"since":       dashboardSince,
+			}).
+			ParseFS(
+				dashboardTemplateFS,
+				"templates/layout.tmpl",
+				"templates/dashboard.tmpl",
+			),
+	)
+)

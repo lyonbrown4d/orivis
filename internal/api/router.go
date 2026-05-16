@@ -95,7 +95,7 @@ func (s *Server) registerRoutes() {
 		if err := s.verifyDashboardAuth(input.Authorization); err != nil {
 			return nil, err
 		}
-		html, err := s.renderDashboard(ctx)
+		html, err := s.renderDashboard(ctx, input.Lang)
 		if err != nil {
 			return nil, err
 		}
