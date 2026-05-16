@@ -10,8 +10,8 @@ log:
 db:
   driver: memory
   dsn: ""
-  memory_result_retention: 24h
-  memory_cleanup_interval: 1m
+  resultretention: 24h
+  cleanupinterval: 1m
 
 auth:
   agent:

@@ -4,13 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	agentapp "github.com/lyonbrown4d/orivis/internal/agent/app"
-	"github.com/lyonbrown4d/orivis/internal/agent/config"
-	"github.com/lyonbrown4d/orivis/internal/shared/logging"
+	"github.com/arcgolabs/dix"
+	"github.com/arcgolabs/logx"
+	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
+	agentconfig "github.com/lyonbrown4d/orivis/internal/agentconfig"
+	"github.com/lyonbrown4d/orivis/internal/buildinfo"
+	"github.com/lyonbrown4d/orivis/internal/collector"
+	"github.com/lyonbrown4d/orivis/internal/observability"
 	"github.com/spf13/cobra"
 )
 
@@ -23,25 +29,13 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.LoadFromFlags(cmd.Flags(), configFile)
-			if err != nil {
-				return err
-			}
-
-			logger, err := logging.New(cfg.Log.Level)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = logging.Close(logger) }()
-
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			if err := agentapp.Run(ctx, cfg, logger); err != nil && !errors.Is(err, context.Canceled) {
-				logger.Error("agent exited", "error", err)
+			app := newAgentApp(cmd, configFile)
+			if err := app.RunContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
 				return err
 			}
-
 			return nil
 		},
 	}
@@ -62,4 +56,73 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
+	configModule := dix.NewModule("config",
+		dix.Providers(
+			dix.ProviderErr0(func() (agentconfig.Config, error) {
+				return agentconfig.LoadFromFlags(cmd.Flags(), configFile)
+			}),
+		),
+	)
+
+	loggingModule := dix.NewModule("logging",
+		dix.Imports(configModule),
+		dix.Providers(
+			dix.ProviderErr1(func(cfg agentconfig.Config) (*slog.Logger, error) {
+				return logx.New(
+					logx.WithConsole(true),
+					logx.WithLevelString(cfg.Log.Level),
+					logx.WithCaller(true),
+				)
+			}),
+		),
+		dix.Hooks(
+			dix.OnStop[*slog.Logger](func(_ context.Context, logger *slog.Logger) error {
+				return logx.Close(logger)
+			}),
+		),
+	)
+
+	observabilityModule := dix.NewModule("observability",
+		dix.Imports(loggingModule),
+		dix.Providers(
+			dix.Provider1(observability.NewNop),
+		),
+	)
+
+	clientModule := dix.NewModule("agent-client",
+		dix.Imports(configModule, loggingModule, observabilityModule),
+		dix.Providers(
+			dix.ProviderErr3(agentclient.New),
+		),
+		dix.Hooks(
+			dix.OnStop[*agentclient.Client](func(ctx context.Context, client *agentclient.Client) error {
+				return client.Close(ctx)
+			}),
+		),
+	)
+
+	collectorModule := dix.NewModule("collector",
+		dix.Imports(configModule, loggingModule, clientModule),
+		dix.Providers(
+			dix.Provider3(collector.NewRunner),
+		),
+		dix.Hooks(
+			dix.OnStart[*collector.Runner](func(ctx context.Context, runner *collector.Runner) error {
+				return runner.Start(ctx)
+			}),
+			dix.OnStop[*collector.Runner](func(ctx context.Context, runner *collector.Runner) error {
+				return runner.Stop(ctx)
+			}),
+		),
+	)
+
+	return dix.New("orivis-agent",
+		dix.UseProfile(dix.ProfileDev),
+		dix.Version(buildinfo.Version),
+		dix.RunStopTimeout(10*time.Second),
+		dix.Modules(collectorModule),
+	)
 }

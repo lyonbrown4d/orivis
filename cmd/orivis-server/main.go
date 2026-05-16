@@ -4,13 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	serverapp "github.com/lyonbrown4d/orivis/internal/server/app"
-	"github.com/lyonbrown4d/orivis/internal/server/config"
-	"github.com/lyonbrown4d/orivis/internal/shared/logging"
+	"github.com/arcgolabs/dix"
+	"github.com/arcgolabs/logx"
+	"github.com/lyonbrown4d/orivis/internal/api"
+	"github.com/lyonbrown4d/orivis/internal/buildinfo"
+	"github.com/lyonbrown4d/orivis/internal/security"
+	serverconfig "github.com/lyonbrown4d/orivis/internal/serverconfig"
+	serverobs "github.com/lyonbrown4d/orivis/internal/serverobservability"
+	"github.com/lyonbrown4d/orivis/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -23,25 +30,13 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cfg, err := config.LoadFromFlags(cmd.Flags(), configFile)
-			if err != nil {
-				return err
-			}
-
-			logger, err := logging.New(cfg.Log.Level)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = logging.Close(logger) }()
-
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 
-			if err := serverapp.Run(ctx, cfg, logger); err != nil && !errors.Is(err, context.Canceled) {
-				logger.Error("server exited", "error", err)
+			app := newServerApp(cmd, configFile)
+			if err := app.RunContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
 				return err
 			}
-
 			return nil
 		},
 	}
@@ -63,4 +58,81 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
+	configModule := dix.NewModule("config",
+		dix.Providers(
+			dix.ProviderErr0(func() (serverconfig.Config, error) {
+				return serverconfig.LoadFromFlags(cmd.Flags(), configFile)
+			}),
+		),
+	)
+
+	loggingModule := dix.NewModule("logging",
+		dix.Imports(configModule),
+		dix.Providers(
+			dix.ProviderErr1(func(cfg serverconfig.Config) (*slog.Logger, error) {
+				return logx.New(
+					logx.WithConsole(true),
+					logx.WithLevelString(cfg.Log.Level),
+					logx.WithCaller(true),
+				)
+			}),
+		),
+		dix.Hooks(
+			dix.OnStop[*slog.Logger](func(_ context.Context, logger *slog.Logger) error {
+				return logx.Close(logger)
+			}),
+		),
+	)
+
+	storeModule := dix.NewModule("store",
+		dix.Imports(configModule, loggingModule),
+		dix.Providers(
+			dix.ProviderErr2(store.Open),
+		),
+		dix.Hooks(
+			dix.OnStop[*store.Store](func(ctx context.Context, storage *store.Store) error {
+				return storage.Close(ctx)
+			}),
+		),
+	)
+
+	observabilityModule := dix.NewModule("observability",
+		dix.Imports(configModule, loggingModule),
+		dix.Providers(
+			dix.Provider2(serverobs.New),
+		),
+	)
+
+	securityModule := dix.NewModule("security",
+		dix.Imports(configModule, loggingModule, observabilityModule),
+		dix.Providers(
+			dix.Provider3(security.NewEngine),
+		),
+	)
+
+	httpModule := dix.NewModule("http",
+		dix.Imports(configModule, loggingModule, storeModule, securityModule, observabilityModule),
+		dix.Providers(
+			dix.Provider5(api.NewServer),
+		),
+		dix.Hooks(
+			dix.OnStart[*api.Server](func(ctx context.Context, server *api.Server) error {
+				return server.Start(ctx)
+			}),
+			dix.OnStop[*api.Server](func(ctx context.Context, server *api.Server) error {
+				return server.Stop(ctx)
+			}),
+		),
+	)
+
+	return dix.New("orivis-server",
+		dix.UseProfile(dix.ProfileDev),
+		dix.Version(buildinfo.Version),
+		dix.AppDescription("distributed availability observability platform"),
+		dix.RunStopTimeout(10*time.Second),
+		dix.Modules(httpModule),
+	)
 }

@@ -304,10 +304,10 @@ services:
     container_name: orivis-agent
     restart: always
     environment:
-      ORIVIS_SERVER_URL: "https://orivis.example.com"
-      ORIVIS_AGENT_TOKEN: "agent-token"
-      ORIVIS_AGENT_NAME: "agent-guangdong-01"
-      ORIVIS_REGION: "guangdong"
+      ORIVIS_SERVER__URL: "https://orivis.example.com"
+      ORIVIS_AGENT__TOKEN: "agent-token"
+      ORIVIS_AGENT__NAME: "agent-guangdong-01"
+      ORIVIS_AGENT__REGION: "guangdong"
       ORIVIS_RUNTIME: "docker"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -356,14 +356,22 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/orivis-agent \
-  --server-url=https://orivis.example.com \
-  --token=agent-token \
-  --name=agent-wulumuqi-01 \
-  --region=wulumuqi \
-  --runtime=host
+Environment=ORIVIS_SERVER__URL=https://orivis.example.com
+Environment=ORIVIS_AGENT__TOKEN=agent-token
+Environment=ORIVIS_AGENT__NAME=agent-wulumuqi-01
+Environment=ORIVIS_AGENT__REGION=wulumuqi
+Environment=ORIVIS_RUNTIME=host
+ExecStart=/usr/local/bin/orivis-agent
 Restart=always
 RestartSec=5
+EnvironmentFile=-/etc/orivis/orivis-agent.env
+
+# Equivalent to config example keys:
+# ORIVIS_SERVER__URL -> server.url
+# ORIVIS_AGENT__TOKEN -> agent.token
+# ORIVIS_AGENT__NAME -> agent.name
+# ORIVIS_AGENT__REGION -> agent.region
+# ORIVIS_RUNTIME -> runtime
 
 [Install]
 WantedBy=multi-user.target
@@ -992,8 +1000,8 @@ services:
     ports:
       - "8080:8080"
     environment:
-      ORIVIS_DB_DRIVER: postgres
-      ORIVIS_DB_DSN: postgres://orivis:orivis@postgres:5432/orivis
+      ORIVIS_DB__DRIVER: postgres
+      ORIVIS_DB__DSN: postgres://orivis:orivis@postgres:5432/orivis
     depends_on:
       - postgres
 
@@ -1033,8 +1041,8 @@ services:
     deploy:
       mode: global
     environment:
-      ORIVIS_SERVER_URL: https://orivis.example.com
-      ORIVIS_AGENT_TOKEN: ${ORIVIS_AGENT_TOKEN}
+      ORIVIS_SERVER__URL: https://orivis.example.com
+      ORIVIS_AGENT__TOKEN: ${ORIVIS_AGENT__TOKEN}
       ORIVIS_RUNTIME: docker
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -1207,28 +1215,23 @@ server/web
 orivis
 ├── cmd
 │   ├── orivis-server
-│   ├── orivis-agent
-│   └── orivis-cli
+│   └── orivis-agent
 ├── internal
-│   ├── server
-│   │   ├── api
-│   │   ├── web
-│   │   ├── app
-│   │   ├── store
-│   │   ├── scheduler
-│   │   ├── aggregator
-│   │   ├── alert
-│   │   └── config
-│   ├── agent
-│   │   ├── checker
-│   │   ├── runtime
-│   │   ├── client
-│   │   ├── scheduler
-│   │   └── config
-│   └── shared
-│       ├── model
-│       ├── protocol
-│       └── errors
+│   ├── agentclient
+│   ├── agentconfig
+│   ├── collector
+│   ├── api
+│   ├── buildinfo
+│   ├── discovery
+│   ├── logging
+│   ├── model
+│   ├── observability
+│   ├── probe
+│   ├── protocol
+│   ├── security
+│   ├── serverconfig
+│   ├── serverobservability
+│   └── store
 ├── migrations
 │   ├── sqlite
 │   ├── postgres
@@ -1370,4 +1373,3 @@ V1 不应追求复杂大而全，而应该优先完成：
 7. 服务端模板 UI。
 
 这样第一版就能形成一个非常清晰、可落地、可长期演进的基础设施项目。
-
