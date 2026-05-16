@@ -9,10 +9,12 @@ This checklist defines the minimum bar for an alpha release.
 - `golangci-lint run ./...` passes.
 - `.goreleaser.yaml` passes `goreleaser check`.
 - `goreleaser release --snapshot --clean` produces local release artifacts.
+- GoReleaser produces `deb` and `rpm` packages for server and agent.
 - `docker build --build-arg APP=orivis-server` succeeds.
 - `docker build --build-arg APP=orivis-agent` succeeds.
 - Docker images compress the runtime binary with UPX by default.
 - `docker compose up --build` starts server and agent.
+- `.github/workflows/release.yml` publishes tagged releases through GoReleaser.
 - `deployments/docker-compose` examples are up to date.
 - `deployments/systemd` examples are up to date.
 - Dashboard responds on `http://127.0.0.1:8080`.
@@ -45,3 +47,4 @@ docker compose up --build
 - Confirm any unsupported planned probes are not advertised as supported.
 - Confirm `GITHUB_TOKEN` is available for GitHub release publishing.
 - Confirm `ghcr.io/lyonbrown4d/orivis-server` and `ghcr.io/lyonbrown4d/orivis-agent` are the intended image names.
+- Push a `v*` tag to trigger `.github/workflows/release.yml`.

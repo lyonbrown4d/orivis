@@ -81,7 +81,15 @@ The GoReleaser pipeline builds:
 
 - `orivis-server` and `orivis-agent` binaries for Linux, macOS, and Windows.
 - Per-binary archives and `checksums.txt`.
+- Linux `.deb` and `.rpm` packages for `orivis-server` and `orivis-agent`.
 - Optional multi-arch container images through `dockers_v2`. Release images also compress the runtime binary with UPX.
+
+Tagged releases are published by GitHub Actions:
+
+```powershell
+git tag v0.1.0-alpha.1
+git push origin v0.1.0-alpha.1
+```
 
 Deployment templates are available in:
 

@@ -62,6 +62,83 @@ snapshot:
 changelog:
   sort: asc
 
+nfpms:
+  - id: orivis-server
+    ids:
+      - orivis-server
+    package_name: orivis-server
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orivis
+    homepage: https://github.com/lyonbrown4d/orivis
+    maintainer: Orivis Maintainers
+    description: Lightweight uptime server for Orivis.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    section: utils
+    priority: optional
+    scripts:
+      preinstall: packaging/scripts/preinstall.sh
+      postinstall: packaging/scripts/postinstall.sh
+      postremove: packaging/scripts/postremove.sh
+    contents:
+      - dst: /etc/orivis
+        type: dir
+      - dst: /var/lib/orivis
+        type: dir
+        file_info:
+          mode: 0750
+          owner: orivis
+          group: orivis
+      - src: deployments/systemd/orivis-server.env.example
+        dst: /etc/orivis/server.env
+        type: config|noreplace
+        file_info:
+          mode: 0640
+          owner: root
+          group: orivis
+      - src: deployments/systemd/orivis-server.service
+        dst: /usr/lib/systemd/system/orivis-server.service
+        file_info:
+          mode: 0644
+
+  - id: orivis-agent
+    ids:
+      - orivis-agent
+    package_name: orivis-agent
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: Orivis
+    homepage: https://github.com/lyonbrown4d/orivis
+    maintainer: Orivis Maintainers
+    description: Lightweight uptime agent for Orivis.
+    license: MIT
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/local/bin
+    section: utils
+    priority: optional
+    scripts:
+      preinstall: packaging/scripts/preinstall.sh
+      postinstall: packaging/scripts/postinstall.sh
+      postremove: packaging/scripts/postremove.sh
+    contents:
+      - dst: /etc/orivis
+        type: dir
+      - src: deployments/systemd/orivis-agent.env.example
+        dst: /etc/orivis/agent.env
+        type: config|noreplace
+        file_info:
+          mode: 0640
+          owner: root
+          group: orivis
+      - src: deployments/systemd/orivis-agent.service
+        dst: /usr/lib/systemd/system/orivis-agent.service
+        file_info:
+          mode: 0644
+
 dockers_v2:
   - id: orivis-server
     ids:
