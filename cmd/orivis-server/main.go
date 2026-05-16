@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/arcgolabs/dix"
+	"github.com/arcgolabs/httpx"
 	"github.com/arcgolabs/logx"
 	"github.com/lyonbrown4d/orivis/internal/api"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
@@ -115,10 +116,12 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
+	endpointModule := newServerEndpointModule(configModule, storeModule)
+
 	httpModule := dix.NewModule("http",
-		dix.Imports(configModule, loggingModule, storeModule, securityModule, observabilityModule),
+		dix.Imports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
 		dix.Providers(
-			dix.Provider5(api.NewServer),
+			dix.Provider6(api.NewServer),
 		),
 		dix.Hooks(
 			dix.OnStart[*api.Server](func(ctx context.Context, server *api.Server) error {
@@ -136,5 +139,17 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.AppDescription("distributed availability observability platform"),
 		dix.RunStopTimeout(10*time.Second),
 		dix.Modules(httpModule),
+	)
+}
+
+func newServerEndpointModule(configModule, storeModule dix.Module) dix.Module {
+	return dix.NewModule("http-endpoints",
+		dix.Imports(configModule, storeModule),
+		dix.Providers(
+			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewDashboardEndpoint, dix.Order(10)),
+			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(20)),
+			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(30)),
+			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewAgentEndpoint, dix.Order(40)),
+		),
 	)
 }

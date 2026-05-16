@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/lyonbrown4d/orivis/internal/api"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
@@ -86,6 +87,10 @@ func newAPITestStore(t *testing.T) *store.Store {
 		}
 	})
 	return storage
+}
+
+func newAPITestServer(cfg config.Config, storage *store.Store) *api.Server {
+	return api.NewServer(cfg, testLogger(), storage, nil, nil, api.NewDefaultEndpoints(cfg, storage))
 }
 
 func testLogger() *slog.Logger {

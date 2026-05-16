@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lyonbrown4d/orivis/internal/api"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
@@ -116,7 +115,7 @@ func TestAgentMonitorSyncAPI(t *testing.T) {
 }
 
 func TestAgentRegisterRejectsInvalidBootstrapToken(t *testing.T) {
-	server := api.NewServer(agentAPITestConfig(), testLogger(), newAPITestStore(t), nil, nil)
+	server := newAPITestServer(agentAPITestConfig(), newAPITestStore(t))
 	handler := server.Runtime().HumaAPI().Adapter()
 
 	postJSON[map[string]any](t, handler, "/api/agent/register", protocol.AgentRegisterRequest{
@@ -128,7 +127,7 @@ func TestAgentRegisterRejectsInvalidBootstrapToken(t *testing.T) {
 }
 
 func newAgentAPIHandler(storage *store.Store) httpHandler {
-	server := api.NewServer(agentAPITestConfig(), testLogger(), storage, nil, nil)
+	server := newAPITestServer(agentAPITestConfig(), storage)
 	return server.Runtime().HumaAPI().Adapter()
 }
 

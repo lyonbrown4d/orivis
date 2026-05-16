@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lyonbrown4d/orivis/internal/api"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 )
 
@@ -16,7 +15,7 @@ func TestDashboardIndexRendersHTML(t *testing.T) {
 	cfg.App.Env = "test"
 	cfg.DB.Driver = "memory"
 
-	server := api.NewServer(cfg, testLogger(), newAPITestStore(t), nil, nil)
+	server := newAPITestServer(cfg, newAPITestStore(t))
 	handler := server.Runtime().HumaAPI().Adapter()
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody)

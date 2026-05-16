@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/lyonbrown4d/orivis/internal/api"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 )
 
@@ -12,7 +11,7 @@ func TestRoutesAreRegistered(t *testing.T) {
 	cfg := config.Config{}
 	cfg.App.Env = "test"
 	cfg.DB.Driver = "sqlite"
-	server := api.NewServer(cfg, testLogger(), nil, nil, nil)
+	server := newAPITestServer(cfg, nil)
 
 	tests := []struct {
 		method string

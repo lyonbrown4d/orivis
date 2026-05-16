@@ -15,8 +15,8 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
-func (s *Server) verifyDashboardAuth(authorization string) error {
-	cfg := s.cfg.Auth.Dashboard
+func (e *dashboardEndpoint) verifyDashboardAuth(authorization string) error {
+	cfg := e.cfg.Auth.Dashboard
 	if !cfg.Enabled {
 		return nil
 	}
@@ -56,34 +56,34 @@ func dashboardUnauthorized() error {
 	return fmt.Errorf("dashboard unauthorized: %w", err)
 }
 
-func (s *Server) renderDashboard(ctx context.Context, lang string) (*dashboardView, error) {
+func (e *dashboardEndpoint) renderDashboard(ctx context.Context, lang string) (*dashboardView, error) {
 	lang = dashboardLocale(lang)
 	view := dashboardView{
 		Lang:        lang,
 		Name:        "orivis-server",
-		Env:         s.cfg.App.Env,
+		Env:         e.cfg.App.Env,
 		Version:     buildinfo.Current(),
 		GeneratedAt: time.Now().UTC(),
 		LangOptions: dashboardLangOptions(lang),
 		T:           dashboardT(lang),
 		Database: dashboardDatabase{
-			Driver: s.cfg.DB.Driver,
+			Driver: e.cfg.DB.Driver,
 		},
 	}
-	if s.store != nil && s.store.DB != nil && s.store.DB.Dialect() != nil {
-		view.Database.Dialect = s.store.DB.Dialect().Name()
+	if e.store != nil && e.store.DB != nil && e.store.DB.Dialect() != nil {
+		view.Database.Dialect = e.store.DB.Dialect().Name()
 	}
-	if s.store == nil {
+	if e.store == nil {
 		return &view, nil
 	}
-	if err := s.applyDashboardSnapshot(ctx, &view); err != nil {
+	if err := e.applyDashboardSnapshot(ctx, &view); err != nil {
 		return nil, err
 	}
 	return &view, nil
 }
 
-func (s *Server) applyDashboardSnapshot(ctx context.Context, view *dashboardView) error {
-	snapshot, err := s.store.DashboardSnapshot(ctx, 50)
+func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *dashboardView) error {
+	snapshot, err := e.store.DashboardSnapshot(ctx, 50)
 	if err != nil {
 		return huma.Error500InternalServerError("load dashboard snapshot", err)
 	}
@@ -98,8 +98,8 @@ func (s *Server) applyDashboardSnapshot(ctx context.Context, view *dashboardView
 	return nil
 }
 
-func (s *Server) renderDashboardPage(ctx context.Context, lang string) ([]byte, error) {
-	view, err := s.renderDashboard(ctx, lang)
+func (e *dashboardEndpoint) renderDashboardPage(ctx context.Context, lang string) ([]byte, error) {
+	view, err := e.renderDashboard(ctx, lang)
 	if err != nil {
 		return nil, err
 	}

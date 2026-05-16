@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/arcgolabs/authx"
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/httpx"
 	"github.com/arcgolabs/httpx/adapter"
 	adapterfiber "github.com/arcgolabs/httpx/adapter/fiber"
@@ -34,6 +35,7 @@ func NewServer(
 	storage *store.Store,
 	auth *authx.Engine,
 	obs observabilityx.Observability,
+	endpoints *collectionlist.List[httpx.Endpoint],
 ) *Server {
 	app := fiber.New(fiber.Config{
 		Views: newDashboardViews(),
@@ -65,7 +67,7 @@ func NewServer(
 		runtime: runtime,
 		errCh:   make(chan error, 1),
 	}
-	server.registerRoutes()
+	server.registerEndpoints(endpoints)
 	return server
 }
 
@@ -94,9 +96,12 @@ func (s *Server) Stop(context.Context) error {
 	return nil
 }
 
-func (s *Server) registerRoutes() {
-	s.registerDashboardRoutes()
-	s.registerMetadataRoutes()
-	s.registerHealthRoutes()
-	s.registerAgentRoutes()
+func (s *Server) registerEndpoints(endpoints *collectionlist.List[httpx.Endpoint]) {
+	if endpoints == nil {
+		return
+	}
+	endpoints.Range(func(_ int, endpoint httpx.Endpoint) bool {
+		s.runtime.RegisterOnly(endpoint)
+		return true
+	})
 }

@@ -6,14 +6,18 @@ import (
 	"github.com/arcgolabs/httpx"
 )
 
-func (s *Server) registerHealthRoutes() {
-	httpx.MustGet(s.runtime, "/healthz", func(context.Context, *struct{}) (*statusOutput, error) {
-		return newStatusOutput("ok"), nil
-	})
+func (e *healthEndpoint) Register(registrar httpx.Registrar) {
+	scope := registrar.Scope()
+	httpx.MustGroupGet(scope, "healthz", e.health)
+	httpx.MustGroupGet(scope, "readyz", e.ready)
+}
 
-	httpx.MustGet(s.runtime, "/readyz", func(context.Context, *struct{}) (*statusOutput, error) {
-		return newStatusOutput("ready"), nil
-	})
+func (e *healthEndpoint) health(context.Context, *struct{}) (*statusOutput, error) {
+	return newStatusOutput("ok"), nil
+}
+
+func (e *healthEndpoint) ready(context.Context, *struct{}) (*statusOutput, error) {
+	return newStatusOutput("ready"), nil
 }
 
 type statusOutput struct {

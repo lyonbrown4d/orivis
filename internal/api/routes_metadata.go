@@ -7,18 +7,20 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 )
 
-func (s *Server) registerMetadataRoutes() {
-	httpx.MustGet(s.runtime, "/api/server/metadata", func(context.Context, *struct{}) (*metadataOutput, error) {
-		out := &metadataOutput{}
-		out.Body.Name = "orivis-server"
-		out.Body.Env = s.cfg.App.Env
-		out.Body.Version = buildinfo.Current()
-		out.Body.Database.Driver = s.cfg.DB.Driver
-		if s.store != nil && s.store.DB != nil && s.store.DB.Dialect() != nil {
-			out.Body.Database.Dialect = s.store.DB.Dialect().Name()
-		}
-		return out, nil
-	})
+func (e *metadataEndpoint) Register(registrar httpx.Registrar) {
+	httpx.MustGroupGet(registrar.Scope(), "api/server/metadata", e.metadata)
+}
+
+func (e *metadataEndpoint) metadata(context.Context, *struct{}) (*metadataOutput, error) {
+	out := &metadataOutput{}
+	out.Body.Name = "orivis-server"
+	out.Body.Env = e.cfg.App.Env
+	out.Body.Version = buildinfo.Current()
+	out.Body.Database.Driver = e.cfg.DB.Driver
+	if e.store != nil && e.store.DB != nil && e.store.DB.Dialect() != nil {
+		out.Body.Database.Dialect = e.store.DB.Dialect().Name()
+	}
+	return out, nil
 }
 
 type metadataOutput struct {

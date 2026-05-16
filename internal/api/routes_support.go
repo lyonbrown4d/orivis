@@ -48,8 +48,8 @@ type agentResultsInput struct {
 	Body protocol.AgentResultRequest `json:"body"`
 }
 
-func (s *Server) verifyBootstrapToken(token string) error {
-	expected := strings.TrimSpace(s.cfg.Auth.Agent.Token)
+func (e *agentEndpoint) verifyBootstrapToken(token string) error {
+	expected := strings.TrimSpace(e.cfg.Auth.Agent.Token)
 	if expected == "" {
 		return nil
 	}
