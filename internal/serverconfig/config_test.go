@@ -1,35 +1,35 @@
-package config
+package config_test
 
 import (
 	"os"
 	"testing"
+
+	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 )
 
 func TestLoadDefaults(t *testing.T) {
 	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected defaults to load: %v", err)
 	}
+	assertDefaultConfig(t, cfg)
+}
 
+func assertDefaultConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
 	if cfg.App.Env != "development" {
 		t.Fatalf("expected default environment, got %q", cfg.App.Env)
 	}
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("expected default HTTP address, got %q", cfg.HTTP.Addr)
 	}
-	if cfg.DB.Driver != "memory" {
-		t.Fatalf("expected default DB driver, got %q", cfg.DB.Driver)
+	if cfg.DB.Driver != "memory" || cfg.DB.DSN != "" {
+		t.Fatalf("unexpected default DB config: %#v", cfg.DB)
 	}
-	if cfg.DB.DSN != "" {
-		t.Fatalf("expected default DB DSN, got %q", cfg.DB.DSN)
-	}
-	if cfg.DB.ResultRetention != "24h" {
-		t.Fatalf("expected default memory result retention, got %q", cfg.DB.ResultRetention)
-	}
-	if cfg.DB.CleanupInterval != "1m" {
-		t.Fatalf("expected default memory cleanup interval, got %q", cfg.DB.CleanupInterval)
+	if cfg.DB.ResultRetention != "24h" || cfg.DB.CleanupInterval != "1m" {
+		t.Fatalf("unexpected default memory DB config: %#v", cfg.DB)
 	}
 }
 
@@ -51,30 +51,22 @@ func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_DB__RESULTRETENTION", "12h")
 	t.Setenv("ORIVIS_DB__CLEANUPINTERVAL", "30s")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected environment config to load: %v", err)
 	}
+	assertEnvironmentConfig(t, cfg)
+}
 
-	if cfg.App.Env != "test" {
-		t.Fatalf("expected environment from environment, got %q", cfg.App.Env)
+func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
+	if cfg.App.Env != "test" || cfg.HTTP.Addr != ":9090" || cfg.Log.Level != "debug" {
+		t.Fatalf("unexpected environment app config: %#v", cfg)
 	}
-	if cfg.HTTP.Addr != ":9090" {
-		t.Fatalf("expected HTTP address from environment, got %q", cfg.HTTP.Addr)
+	if cfg.DB.Driver != "postgres" || cfg.DB.DSN != "postgres://example" {
+		t.Fatalf("unexpected environment DB config: %#v", cfg.DB)
 	}
-	if cfg.Log.Level != "debug" {
-		t.Fatalf("expected log level from environment, got %q", cfg.Log.Level)
-	}
-	if cfg.DB.Driver != "postgres" {
-		t.Fatalf("expected DB driver from environment, got %q", cfg.DB.Driver)
-	}
-	if cfg.DB.DSN != "postgres://example" {
-		t.Fatalf("expected DB DSN from environment, got %q", cfg.DB.DSN)
-	}
-	if cfg.DB.ResultRetention != "12h" {
-		t.Fatalf("expected memory result retention from environment, got %q", cfg.DB.ResultRetention)
-	}
-	if cfg.DB.CleanupInterval != "30s" {
-		t.Fatalf("expected memory cleanup interval from environment, got %q", cfg.DB.CleanupInterval)
+	if cfg.DB.ResultRetention != "12h" || cfg.DB.CleanupInterval != "30s" {
+		t.Fatalf("unexpected environment memory DB config: %#v", cfg.DB)
 	}
 }

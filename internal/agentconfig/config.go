@@ -15,9 +15,9 @@ type Config struct {
 		URL string `mapstructure:"url" validate:"required,url"`
 	} `mapstructure:"server"`
 	Agent struct {
-		Name         string   `mapstructure:"name" validate:"required"`
+		Name         string   `mapstructure:"name"         validate:"required"`
 		Token        string   `mapstructure:"token"`
-		Region       string   `mapstructure:"region" validate:"required"`
+		Region       string   `mapstructure:"region"       validate:"required"`
 		Environments []string `mapstructure:"environments"`
 	} `mapstructure:"agent"`
 	Runtime string `mapstructure:"runtime" validate:"required"`

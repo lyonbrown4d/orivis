@@ -16,7 +16,7 @@ type Config struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
 	DB struct {
-		Driver          string `mapstructure:"driver" validate:"required"`
+		Driver          string `mapstructure:"driver"          validate:"required"`
 		DSN             string `mapstructure:"dsn"`
 		ResultRetention string `mapstructure:"resultretention"`
 		CleanupInterval string `mapstructure:"cleanupinterval"`

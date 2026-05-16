@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -36,8 +37,8 @@ func (d *StaticDiscoverer) Discover(context.Context) ([]protocol.AgentDiscovered
 	}
 
 	out := make([]protocol.AgentDiscoveredMonitor, 0, len(d.monitors))
-	for _, monitor := range d.monitors {
-		discovered, err := staticMonitor(monitor)
+	for index := range d.monitors {
+		discovered, err := staticMonitor(d.monitors[index])
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +58,7 @@ func staticMonitor(monitor StaticMonitor) (protocol.AgentDiscoveredMonitor, erro
 	sourceKey := strings.TrimSpace(monitor.SourceKey)
 
 	if name == "" {
-		return protocol.AgentDiscoveredMonitor{}, fmt.Errorf("static monitor name is required")
+		return protocol.AgentDiscoveredMonitor{}, errors.New("static monitor name is required")
 	}
 	if monitorType == "" {
 		return protocol.AgentDiscoveredMonitor{}, fmt.Errorf("static monitor %q type is required", name)

@@ -1,14 +1,16 @@
-package discovery
+package discovery_test
 
 import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/lyonbrown4d/orivis/internal/discovery"
 )
 
 func TestStaticDiscoverer(t *testing.T) {
 	enabled := true
-	discoverer := NewStaticDiscoverer([]StaticMonitor{
+	discoverer := discovery.NewStaticDiscoverer([]discovery.StaticMonitor{
 		{
 			Name:              "server health",
 			Type:              "http",
@@ -38,7 +40,7 @@ func TestStaticDiscoverer(t *testing.T) {
 }
 
 func TestStaticDiscovererRequiresName(t *testing.T) {
-	discoverer := NewStaticDiscoverer([]StaticMonitor{{Type: "http", Target: "http://127.0.0.1:8080/healthz"}})
+	discoverer := discovery.NewStaticDiscoverer([]discovery.StaticMonitor{{Type: "http", Target: "http://127.0.0.1:8080/healthz"}})
 	_, err := discoverer.Discover(context.Background())
 	if err == nil {
 		t.Fatal("expected static monitor name error")

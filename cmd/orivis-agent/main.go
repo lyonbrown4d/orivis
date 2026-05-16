@@ -34,7 +34,7 @@ func main() {
 
 			app := newAgentApp(cmd, configFile)
 			if err := app.RunContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				return err
+				return fmt.Errorf("run agent app: %w", err)
 			}
 			return nil
 		},
@@ -53,7 +53,9 @@ func main() {
 	cmd.Flags().String("log-level", "", "log level")
 
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if _, writeErr := fmt.Fprintln(os.Stderr, err); writeErr != nil {
+			os.Exit(1)
+		}
 		os.Exit(1)
 	}
 }

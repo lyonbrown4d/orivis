@@ -42,7 +42,7 @@ func New(cfg config.Config, logger *slog.Logger, obs observabilityx.Observabilit
 		),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create agent HTTP client: %w", err)
 	}
 
 	return &Client{HTTP: httpClient}, nil
@@ -52,7 +52,10 @@ func (c *Client) Close(context.Context) error {
 	if c == nil || c.HTTP == nil {
 		return nil
 	}
-	return c.HTTP.Close()
+	if err := c.HTTP.Close(); err != nil {
+		return fmt.Errorf("close agent HTTP client: %w", err)
+	}
+	return nil
 }
 
 func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest) (protocol.AgentRegisterResponse, error) {
@@ -64,7 +67,7 @@ func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest
 		"/api/agent/register",
 	)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("execute register agent request: %w", err)
 	}
 	if resp.IsError() {
 		return out, fmt.Errorf("register agent: server returned %s: %s", resp.Status(), resp.String())
@@ -81,7 +84,7 @@ func (c *Client) Heartbeat(ctx context.Context, req protocol.AgentHeartbeatReque
 		"/api/agent/heartbeat",
 	)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("execute heartbeat request: %w", err)
 	}
 	if resp.IsError() {
 		return out, fmt.Errorf("heartbeat agent: server returned %s: %s", resp.Status(), resp.String())
@@ -100,7 +103,7 @@ func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (pro
 
 	resp, err := c.HTTP.Execute(ctx, request, http.MethodGet, "/api/agent/tasks")
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("execute tasks request: %w", err)
 	}
 	if resp.IsError() {
 		return out, fmt.Errorf("pull agent tasks: server returned %s: %s", resp.Status(), resp.String())
@@ -117,7 +120,7 @@ func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSync
 		"/api/agent/monitors",
 	)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("execute monitor sync request: %w", err)
 	}
 	if resp.IsError() {
 		return out, fmt.Errorf("sync agent monitors: server returned %s: %s", resp.Status(), resp.String())
@@ -133,7 +136,7 @@ func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultReque
 		"/api/agent/results",
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("execute report result request: %w", err)
 	}
 	if resp.IsError() {
 		return fmt.Errorf("report agent result: server returned %s: %s", resp.Status(), resp.String())

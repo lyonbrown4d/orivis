@@ -1,4 +1,4 @@
-package config
+package config_test
 
 import (
 	"os"
@@ -7,24 +7,26 @@ import (
 	"time"
 
 	"github.com/arcgolabs/configx"
+	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 )
 
 func TestLoadDefaults(t *testing.T) {
 	unset(t, "ORIVIS_SERVER__URL", "ORIVIS_AGENT__NAME", "ORIVIS_AGENT__TOKEN", "ORIVIS_AGENT__REGION", "ORIVIS_AGENT__ENVIRONMENTS", "ORIVIS_RUNTIME", "ORIVIS_POLL__INTERVAL", "ORIVIS_LOG__LEVEL")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected defaults to load: %v", err)
 	}
+	assertDefaultConfig(t, cfg)
+}
 
+func assertDefaultConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
 	if cfg.Server.URL != "http://127.0.0.1:8080" {
 		t.Fatalf("expected default server URL, got %q", cfg.Server.URL)
 	}
-	if cfg.Agent.Name != "local-agent" {
-		t.Fatalf("expected default agent name, got %q", cfg.Agent.Name)
-	}
-	if cfg.Agent.Region != "local" {
-		t.Fatalf("expected default region, got %q", cfg.Agent.Region)
+	if cfg.Agent.Name != "local-agent" || cfg.Agent.Region != "local" {
+		t.Fatalf("unexpected default agent config: %#v", cfg.Agent)
 	}
 	if cfg.Runtime != "host" {
 		t.Fatalf("expected default runtime, got %q", cfg.Runtime)
@@ -32,17 +34,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Poll.Interval != 30*time.Second {
 		t.Fatalf("expected default poll interval, got %s", cfg.Poll.Interval)
 	}
-	if cfg.Discovery.Docker.Enabled {
-		t.Fatal("expected Docker discovery to be disabled by default")
+	if cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "container" {
+		t.Fatalf("unexpected Docker discovery defaults: %#v", cfg.Discovery.Docker)
 	}
-	if cfg.Discovery.Docker.Mode != "container" {
-		t.Fatalf("expected default Docker discovery mode, got %q", cfg.Discovery.Docker.Mode)
-	}
-	if !cfg.Discovery.Static.Enabled {
-		t.Fatal("expected static discovery to be enabled by default")
-	}
-	if len(cfg.Discovery.Static.Monitors) != 0 {
-		t.Fatalf("expected no default static monitors, got %#v", cfg.Discovery.Static.Monitors)
+	if !cfg.Discovery.Static.Enabled || len(cfg.Discovery.Static.Monitors) != 0 {
+		t.Fatalf("unexpected static discovery defaults: %#v", cfg.Discovery.Static)
 	}
 }
 
@@ -58,7 +54,7 @@ func unset(t *testing.T, keys ...string) {
 func TestLoadPollInterval(t *testing.T) {
 	t.Setenv("ORIVIS_POLL__INTERVAL", "5s")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected environment config to load: %v", err)
 	}
@@ -71,7 +67,7 @@ func TestLoadPollInterval(t *testing.T) {
 func TestLoadAgentEnvironments(t *testing.T) {
 	t.Setenv("ORIVIS_AGENT__ENVIRONMENTS", "prod,staging")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected environment config to load: %v", err)
 	}
@@ -88,7 +84,7 @@ func TestLoadDockerDiscovery(t *testing.T) {
 	t.Setenv("ORIVIS_DISCOVERY__DOCKER__ENABLED", "true")
 	t.Setenv("ORIVIS_DISCOVERY__DOCKER__MODE", "swarm")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected environment config to load: %v", err)
 	}
@@ -109,7 +105,7 @@ func TestLoadStaticDiscoveryMonitorFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_DISCOVERY__STATIC__MONITOR__INTERVAL", "15s")
 	t.Setenv("ORIVIS_DISCOVERY__STATIC__MONITOR__TIMEOUT", "3s")
 
-	cfg, err := Load()
+	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected environment static monitor to load: %v", err)
 	}
@@ -128,7 +124,31 @@ func TestLoadStaticDiscoveryMonitorFromEnvironment(t *testing.T) {
 
 func TestLoadStaticDiscoveryFromFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "agent.yaml")
-	if err := os.WriteFile(path, []byte(`
+	if err := os.WriteFile(path, []byte(staticDiscoveryConfigYAML), 0o600); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	cfg, err := config.Load(configx.WithFiles(path))
+	if err != nil {
+		t.Fatalf("load config file: %v", err)
+	}
+
+	if len(cfg.Discovery.Static.Monitors) != 1 {
+		t.Fatalf("expected one static monitor, got %#v", cfg.Discovery.Static.Monitors)
+	}
+	monitor := cfg.Discovery.Static.Monitors[0]
+	if monitor.Name != "server health" || monitor.Type != "http" {
+		t.Fatalf("unexpected static monitor identity: %#v", monitor)
+	}
+	if monitor.Interval != 10*time.Second || monitor.Timeout != 2*time.Second {
+		t.Fatalf("unexpected static monitor timing: %#v", monitor)
+	}
+	if monitor.Enabled == nil || !*monitor.Enabled {
+		t.Fatalf("expected static monitor enabled flag, got %#v", monitor.Enabled)
+	}
+}
+
+const staticDiscoveryConfigYAML = `
 server:
   url: http://127.0.0.1:8080
 agent:
@@ -154,26 +174,4 @@ discovery:
         timeout: 2s
         retry_count: 1
         aggregation: majority_down
-`), 0o600); err != nil {
-		t.Fatalf("write config file: %v", err)
-	}
-
-	cfg, err := Load(configx.WithFiles(path))
-	if err != nil {
-		t.Fatalf("load config file: %v", err)
-	}
-
-	if len(cfg.Discovery.Static.Monitors) != 1 {
-		t.Fatalf("expected one static monitor, got %#v", cfg.Discovery.Static.Monitors)
-	}
-	monitor := cfg.Discovery.Static.Monitors[0]
-	if monitor.Name != "server health" || monitor.Type != "http" {
-		t.Fatalf("unexpected static monitor identity: %#v", monitor)
-	}
-	if monitor.Interval != 10*time.Second || monitor.Timeout != 2*time.Second {
-		t.Fatalf("unexpected static monitor timing: %#v", monitor)
-	}
-	if monitor.Enabled == nil || !*monitor.Enabled {
-		t.Fatalf("expected static monitor enabled flag, got %#v", monitor.Enabled)
-	}
-}
+`

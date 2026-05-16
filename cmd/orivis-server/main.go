@@ -35,7 +35,7 @@ func main() {
 
 			app := newServerApp(cmd, configFile)
 			if err := app.RunContext(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				return err
+				return fmt.Errorf("run server app: %w", err)
 			}
 			return nil
 		},
@@ -55,7 +55,9 @@ func main() {
 	cmd.Flags().String("observability-prometheus-namespace", "", "Prometheus metric namespace")
 
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if _, writeErr := fmt.Fprintln(os.Stderr, err); writeErr != nil {
+			os.Exit(1)
+		}
 		os.Exit(1)
 	}
 }

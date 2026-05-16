@@ -6,14 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/arcgolabs/dbx"
 	"github.com/arcgolabs/dbx/dialect"
 	"github.com/arcgolabs/dbx/dialect/sqlite"
 	"github.com/lyonbrown4d/orivis/internal/model"
-	"github.com/lyonbrown4d/orivis/internal/serverconfig"
-	_ "modernc.org/sqlite"
+	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
+	_ "modernc.org/sqlite" // register sqlite database driver
 )
 
 type Store struct {
@@ -45,7 +46,7 @@ func openSQLiteStore(cfg config.Config, logger *slog.Logger) (*Store, error) {
 		return nil, err
 	}
 
-	db, err := dbx.Open(
+	database, err := dbx.Open(
 		dbx.WithDriver(driver),
 		dbx.WithDSN(cfg.DB.DSN),
 		dbx.WithDialect(d),
@@ -55,19 +56,21 @@ func openSQLiteStore(cfg config.Config, logger *slog.Logger) (*Store, error) {
 		),
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open sqlite store: %w", err)
 	}
 
-	store := &Store{DB: db}
-	store.agents = &agentStore{db: db}
-	store.monitors = &monitorStore{db: db}
-	store.results = &resultStore{db: db}
-	if err := store.Migrate(context.Background()); err != nil {
-		_ = db.Close()
-		return nil, err
+	storage := &Store{DB: database}
+	storage.agents = &agentStore{db: database}
+	storage.monitors = &monitorStore{db: database}
+	storage.results = &resultStore{db: database}
+	if err := storage.Migrate(context.Background()); err != nil {
+		if closeErr := database.Close(); closeErr != nil {
+			return nil, fmt.Errorf("migrate sqlite store: %w; close database: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("migrate sqlite store: %w", err)
 	}
 
-	return store, nil
+	return storage, nil
 }
 
 func (s *Store) Close(context.Context) error {
@@ -78,7 +81,9 @@ func (s *Store) Close(context.Context) error {
 		return s.memory.Close()
 	}
 	if s.DB != nil {
-		return s.DB.Close()
+		if err := s.DB.Close(); err != nil {
+			return fmt.Errorf("close sqlite store: %w", err)
+		}
 	}
 	return nil
 }
@@ -105,46 +110,62 @@ func (s *Store) ResultStore() ResultStore {
 }
 
 func (s *Store) EnvironmentIDForAgent(ctx context.Context, agent model.Agent, code string) (string, error) {
-	environmentIDs := agentEnvironmentIDValues(agent)
-	if len(environmentIDs) == 0 {
-		return "", fmt.Errorf("%w: agent has no environments", ErrInvalidInput)
+	environmentIDs, err := requiredAgentEnvironmentIDs(agent)
+	if err != nil {
+		return "", err
 	}
-
 	code = normalizeCode(code)
 	if code == "" {
-		if len(environmentIDs) == 1 {
-			return environmentIDs[0], nil
-		}
-		return "", fmt.Errorf("%w: environment code is required for multi-environment agent", ErrInvalidInput)
+		return defaultAgentEnvironmentID(environmentIDs)
 	}
 
-	var environmentID string
+	environmentID, err := s.findEnvironmentIDByCode(ctx, code)
+	if err != nil {
+		return "", err
+	}
+	if slices.Contains(environmentIDs, environmentID) {
+		return environmentID, nil
+	}
+	return "", fmt.Errorf("%w: agent is not assigned to environment %s", ErrUnauthorized, code)
+}
+
+func (s *Store) findEnvironmentIDByCode(ctx context.Context, code string) (string, error) {
 	switch {
 	case s == nil:
 		return "", fmt.Errorf("%w: store is not available", ErrInvalidInput)
 	case s.memory != nil:
-		id, err := s.memory.memoryEnvironmentIDByCode(code)
-		if err != nil {
-			return "", err
-		}
-		environmentID = id
+		return s.memory.memoryEnvironmentIDByCode(code)
 	case s.DB != nil:
-		if err := s.DB.QueryRowContext(ctx, "SELECT id FROM environments WHERE code = ?", code).Scan(&environmentID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return "", fmt.Errorf("%w: environment %s", ErrNotFound, code)
-			}
-			return "", fmt.Errorf("find environment by code: %w", err)
-		}
+		return findSQLiteEnvironmentIDByCode(ctx, s.DB, code)
 	default:
 		return "", fmt.Errorf("%w: store backend is not available", ErrInvalidInput)
 	}
+}
 
-	for _, id := range environmentIDs {
-		if id == environmentID {
-			return environmentID, nil
+func findSQLiteEnvironmentIDByCode(ctx context.Context, database *dbx.DB, code string) (string, error) {
+	var environmentID string
+	if err := database.QueryRowContext(ctx, "SELECT id FROM environments WHERE code = ?", code).Scan(&environmentID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", fmt.Errorf("%w: environment %s", ErrNotFound, code)
 		}
+		return "", fmt.Errorf("find environment by code: %w", err)
 	}
-	return "", fmt.Errorf("%w: agent is not assigned to environment %s", ErrUnauthorized, code)
+	return environmentID, nil
+}
+
+func requiredAgentEnvironmentIDs(agent model.Agent) ([]string, error) {
+	environmentIDs := agentEnvironmentIDValues(agent)
+	if len(environmentIDs) == 0 {
+		return nil, fmt.Errorf("%w: agent has no environments", ErrInvalidInput)
+	}
+	return environmentIDs, nil
+}
+
+func defaultAgentEnvironmentID(environmentIDs []string) (string, error) {
+	if len(environmentIDs) == 1 {
+		return environmentIDs[0], nil
+	}
+	return "", fmt.Errorf("%w: environment code is required for multi-environment agent", ErrInvalidInput)
 }
 
 func resolveDialect(driver string) (dialect.Dialect, string, error) {
@@ -165,4 +186,13 @@ func agentEnvironmentIDValues(agent model.Agent) []string {
 		return nil
 	}
 	return agent.EnvironmentIDs.Values()
+}
+
+func closeRows(rows *sql.Rows) {
+	if rows == nil {
+		return
+	}
+	if err := rows.Close(); err != nil {
+		return
+	}
 }

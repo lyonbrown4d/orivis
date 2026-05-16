@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 
 	agentdiscovery "github.com/lyonbrown4d/orivis/internal/discovery"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
@@ -20,7 +21,7 @@ func (r *Runner) configureDiscovery() error {
 			Mode: r.cfg.Discovery.Docker.Mode,
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("create Docker discoverer: %w", err)
 		}
 		discoverers = append(discoverers, discoverer)
 		r.logger.Info("Docker discovery enabled", "mode", r.cfg.Discovery.Docker.Mode)
@@ -46,7 +47,7 @@ func (d compositeDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDisc
 	for _, discoverer := range d.discoverers {
 		monitors, err := discoverer.Discover(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("discover monitors: %w", err)
 		}
 		out = append(out, monitors...)
 	}
@@ -56,7 +57,7 @@ func (d compositeDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDisc
 func (d compositeDiscoverer) Close(ctx context.Context) error {
 	for _, discoverer := range d.discoverers {
 		if err := discoverer.Close(ctx); err != nil {
-			return err
+			return fmt.Errorf("close discoverer: %w", err)
 		}
 	}
 	return nil

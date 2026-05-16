@@ -28,7 +28,10 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("load sqlite migrations: %w", err)
 	}
+	return s.applyPendingMigrations(ctx, files)
+}
 
+func (s *Store) applyPendingMigrations(ctx context.Context, files []migrations.File) error {
 	for _, file := range files {
 		applied, err := s.migrationApplied(ctx, file.Version)
 		if err != nil {
@@ -41,7 +44,6 @@ func (s *Store) Migrate(ctx context.Context) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -58,7 +60,15 @@ func (s *Store) applyMigration(ctx context.Context, file migrations.File) error 
 	if err != nil {
 		return fmt.Errorf("begin migration %s: %w", file.Version, err)
 	}
-	defer func() { _ = tx.RollbackContext(ctx) }()
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		if err := tx.RollbackContext(ctx); err != nil {
+			return
+		}
+	}()
 
 	for _, stmt := range splitSQLScript(file.SQL) {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
@@ -78,6 +88,7 @@ func (s *Store) applyMigration(ctx context.Context, file migrations.File) error 
 	if err := tx.CommitContext(ctx); err != nil {
 		return fmt.Errorf("commit migration %s: %w", file.Version, err)
 	}
+	committed = true
 	return nil
 }
 

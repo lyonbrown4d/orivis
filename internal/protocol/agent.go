@@ -3,11 +3,11 @@ package protocol
 import "time"
 
 type AgentRegisterRequest struct {
-	Name             string   `json:"name" validate:"required"`
+	Name             string   `json:"name"                        validate:"required"`
 	Token            string   `json:"token,omitempty"`
-	RegionCode       string   `json:"region_code" validate:"required"`
+	RegionCode       string   `json:"region_code"                 validate:"required"`
 	EnvironmentCodes []string `json:"environment_codes,omitempty"`
-	RuntimeType      string   `json:"runtime_type" validate:"required"`
+	RuntimeType      string   `json:"runtime_type"                validate:"required"`
 	Version          string   `json:"version,omitempty"`
 }
 
@@ -19,10 +19,10 @@ type AgentRegisterResponse struct {
 }
 
 type AgentHeartbeatRequest struct {
-	AgentID string    `json:"agent_id" validate:"required"`
+	AgentID string    `json:"agent_id"          validate:"required"`
 	Token   string    `json:"token,omitempty"`
 	Version string    `json:"version,omitempty"`
-	SentAt  time.Time `json:"sent_at,omitempty"`
+	SentAt  time.Time `json:"sent_at,omitzero"`
 }
 
 type AgentHeartbeatResponse struct {
@@ -50,16 +50,16 @@ type AgentTasksResponse struct {
 }
 
 type AgentMonitorSyncRequest struct {
-	AgentID  string                   `json:"agent_id" validate:"required"`
+	AgentID  string                   `json:"agent_id"        validate:"required"`
 	Token    string                   `json:"token,omitempty"`
 	Monitors []AgentDiscoveredMonitor `json:"monitors"`
 }
 
 type AgentDiscoveredMonitor struct {
-	SourceKey         string `json:"source_key" validate:"required"`
-	Name              string `json:"name" validate:"required"`
-	Type              string `json:"type" validate:"required"`
-	Target            string `json:"target" validate:"required"`
+	SourceKey         string `json:"source_key"                   validate:"required"`
+	Name              string `json:"name"                         validate:"required"`
+	Type              string `json:"type"                         validate:"required"`
+	Target            string `json:"target"                       validate:"required"`
 	EnvironmentCode   string `json:"environment_code,omitempty"`
 	Enabled           *bool  `json:"enabled,omitempty"`
 	IntervalSeconds   int    `json:"interval_seconds,omitempty"`
@@ -73,12 +73,12 @@ type AgentMonitorSyncResponse struct {
 }
 
 type AgentResultRequest struct {
-	AgentID      string    `json:"agent_id" validate:"required"`
+	AgentID      string    `json:"agent_id"                validate:"required"`
 	Token        string    `json:"token,omitempty"`
-	MonitorID    string    `json:"monitor_id" validate:"required"`
-	Status       string    `json:"status" validate:"required"`
+	MonitorID    string    `json:"monitor_id"              validate:"required"`
+	Status       string    `json:"status"                  validate:"required"`
 	LatencyMS    int64     `json:"latency_ms,omitempty"`
 	ErrorMessage string    `json:"error_message,omitempty"`
-	CheckedAt    time.Time `json:"checked_at,omitempty"`
+	CheckedAt    time.Time `json:"checked_at,omitzero"`
 	RawDetail    []byte    `json:"raw_detail,omitempty"`
 }

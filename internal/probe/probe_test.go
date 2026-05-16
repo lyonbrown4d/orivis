@@ -1,13 +1,15 @@
-package probe
+package probe_test
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/lyonbrown4d/orivis/internal/model"
+	"github.com/lyonbrown4d/orivis/internal/probe"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 )
 
@@ -17,7 +19,7 @@ func TestHTTPProbe(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := New().Check(context.Background(), protocol.AgentTask{
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
 		Type:            string(model.MonitorHTTP),
 		Target:          server.URL,
 		TimeoutSeconds:  2,
@@ -33,19 +35,21 @@ func TestHTTPProbe(t *testing.T) {
 }
 
 func TestTCPProbe(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer listener.Close()
+	t.Cleanup(func() {
+		closeTestResource(t, listener)
+	})
 	go func() {
 		conn, err := listener.Accept()
 		if err == nil {
-			_ = conn.Close()
+			closeTestResource(t, conn)
 		}
 	}()
 
-	result := New().Check(context.Background(), protocol.AgentTask{
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
 		Type:           string(model.MonitorTCP),
 		Target:         listener.Addr().String(),
 		TimeoutSeconds: 2,
@@ -57,7 +61,7 @@ func TestTCPProbe(t *testing.T) {
 }
 
 func TestDNSProbe(t *testing.T) {
-	result := New().Check(context.Background(), protocol.AgentTask{
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
 		Type:           string(model.MonitorDNS),
 		Target:         "localhost",
 		TimeoutSeconds: 2,
@@ -69,7 +73,7 @@ func TestDNSProbe(t *testing.T) {
 }
 
 func TestUnsupportedProbe(t *testing.T) {
-	result := New().Check(context.Background(), protocol.AgentTask{
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
 		Type:   "redis",
 		Target: "localhost:6379",
 	})
@@ -79,5 +83,12 @@ func TestUnsupportedProbe(t *testing.T) {
 	}
 	if result.ErrorMessage == "" {
 		t.Fatal("expected unsupported probe error message")
+	}
+}
+
+func closeTestResource(t *testing.T, closer io.Closer) {
+	t.Helper()
+	if err := closer.Close(); err != nil {
+		t.Errorf("close test resource: %v", err)
 	}
 }

@@ -1,9 +1,14 @@
-package discovery
+package discovery_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/lyonbrown4d/orivis/internal/discovery"
+	"github.com/lyonbrown4d/orivis/internal/protocol"
+)
 
 func TestParseLabels(t *testing.T) {
-	monitors, err := ParseLabels(LabelSource{
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
 		SourceKey: "docker:container:web",
 		Labels: map[string]string{
 			"orivis.enable":                    "true",
@@ -28,6 +33,11 @@ func TestParseLabels(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse labels: %v", err)
 	}
+	assertParsedLabelMonitors(t, monitors)
+}
+
+func assertParsedLabelMonitors(t *testing.T, monitors []protocol.AgentDiscoveredMonitor) {
+	t.Helper()
 	if len(monitors) != 3 {
 		t.Fatalf("expected three monitors, got %#v", monitors)
 	}
@@ -46,7 +56,7 @@ func TestParseLabels(t *testing.T) {
 }
 
 func TestParseLabelsDisabledSource(t *testing.T) {
-	monitors, err := ParseLabels(LabelSource{
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
 		SourceKey: "docker:container:web",
 		Labels: map[string]string{
 			"orivis.enable":              "false",
@@ -63,7 +73,7 @@ func TestParseLabelsDisabledSource(t *testing.T) {
 }
 
 func TestParseLabelsRequiresTypeAndTarget(t *testing.T) {
-	_, err := ParseLabels(LabelSource{
+	_, err := discovery.ParseLabels(discovery.LabelSource{
 		SourceKey: "docker:container:web",
 		Labels: map[string]string{
 			"orivis.monitor.http.type": "http",

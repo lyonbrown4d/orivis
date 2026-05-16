@@ -50,7 +50,10 @@ func memoryDashboardAgents(txn *memdb.Txn) ([]DashboardAgent, error) {
 
 	agents := make([]DashboardAgent, 0)
 	for raw := it.Next(); raw != nil; raw = it.Next() {
-		agent := raw.(*model.Agent)
+		agent, err := memoryValue[model.Agent](raw, "agent")
+		if err != nil {
+			return nil, err
+		}
 		environmentIDs, err := memoryAgentEnvironmentIDs(txn, agent.ID)
 		if err != nil {
 			return nil, err
@@ -84,7 +87,10 @@ func memoryDashboardMonitors(txn *memdb.Txn) ([]DashboardMonitor, error) {
 
 	monitors := make([]DashboardMonitor, 0)
 	for raw := it.Next(); raw != nil; raw = it.Next() {
-		monitor := raw.(*model.Monitor)
+		monitor, err := memoryValue[model.Monitor](raw, "monitor")
+		if err != nil {
+			return nil, err
+		}
 		monitors = append(monitors, DashboardMonitor{
 			ID:                monitor.ID,
 			Name:              monitor.Name,
@@ -129,7 +135,10 @@ func memoryDashboardResults(txn *memdb.Txn, limit int) ([]DashboardResult, error
 
 	results := make([]DashboardResult, 0)
 	for raw := it.Next(); raw != nil; raw = it.Next() {
-		result := raw.(*model.ProbeResult)
+		result, err := memoryValue[model.ProbeResult](raw, "probe result")
+		if err != nil {
+			return nil, err
+		}
 		results = append(results, DashboardResult{
 			ID:              result.ID,
 			MonitorID:       result.MonitorID,
@@ -160,7 +169,10 @@ func memoryRegionCodes(txn *memdb.Txn) (map[string]string, error) {
 	}
 	codes := map[string]string{}
 	for raw := it.Next(); raw != nil; raw = it.Next() {
-		region := raw.(*model.Region)
+		region, err := memoryValue[model.Region](raw, "region")
+		if err != nil {
+			return nil, err
+		}
 		codes[region.ID] = region.Code
 	}
 	return codes, nil
@@ -173,7 +185,10 @@ func memoryEnvironmentCodes(txn *memdb.Txn) (map[string]string, error) {
 	}
 	codes := map[string]string{}
 	for raw := it.Next(); raw != nil; raw = it.Next() {
-		environment := raw.(*model.Environment)
+		environment, err := memoryValue[model.Environment](raw, "environment")
+		if err != nil {
+			return nil, err
+		}
 		codes[environment.ID] = environment.Code
 	}
 	return codes, nil
@@ -186,7 +201,10 @@ func memoryAgentNames(txn *memdb.Txn) (map[string]string, error) {
 	}
 	names := map[string]string{}
 	for raw := it.Next(); raw != nil; raw = it.Next() {
-		agent := raw.(*model.Agent)
+		agent, err := memoryValue[model.Agent](raw, "agent")
+		if err != nil {
+			return nil, err
+		}
 		names[agent.ID] = agent.Name
 	}
 	return names, nil

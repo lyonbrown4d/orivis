@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"path"
 	"sort"
@@ -24,7 +25,7 @@ func SQLite() ([]File, error) {
 func readDir(dir string) ([]File, error) {
 	entries, err := fs.ReadDir(files, dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read migration dir %s: %w", dir, err)
 	}
 
 	out := make([]File, 0, len(entries))
@@ -36,7 +37,7 @@ func readDir(dir string) ([]File, error) {
 		name := entry.Name()
 		content, err := files.ReadFile(path.Join(dir, name))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read migration file %s: %w", name, err)
 		}
 
 		version := strings.TrimSuffix(name, ".sql")

@@ -58,7 +58,10 @@ func (d *DockerDiscoverer) Close(context.Context) error {
 	if d == nil || d.client == nil {
 		return nil
 	}
-	return d.client.Close()
+	if err := d.client.Close(); err != nil {
+		return fmt.Errorf("close Docker client: %w", err)
+	}
+	return nil
 }
 
 func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
@@ -68,9 +71,10 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 	}
 
 	out := make([]protocol.AgentDiscoveredMonitor, 0)
-	for _, item := range result.Items {
+	for index := range result.Items {
+		item := result.Items[index]
 		monitors, err := ParseLabels(LabelSource{
-			SourceKey: containerSourceKey(item),
+			SourceKey: ContainerSourceKey(item),
 			Labels:    item.Labels,
 		})
 		if err != nil {
@@ -88,9 +92,10 @@ func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.Age
 	}
 
 	out := make([]protocol.AgentDiscoveredMonitor, 0)
-	for _, item := range result.Items {
+	for index := range result.Items {
+		item := result.Items[index]
 		monitors, err := ParseLabels(LabelSource{
-			SourceKey: serviceSourceKey(item),
+			SourceKey: ServiceSourceKey(item),
 			Labels:    item.Spec.Labels,
 		})
 		if err != nil {
@@ -112,7 +117,8 @@ func normalizeDockerMode(mode string) string {
 	}
 }
 
-func containerSourceKey(item container.Summary) string {
+// ContainerSourceKey returns the stable discovery source key for a Docker container.
+func ContainerSourceKey(item container.Summary) string {
 	if project := strings.TrimSpace(item.Labels["com.docker.compose.project"]); project != "" {
 		if service := strings.TrimSpace(item.Labels["com.docker.compose.service"]); service != "" {
 			return "docker:compose:" + project + ":" + service
@@ -133,7 +139,8 @@ func containerSourceKey(item container.Summary) string {
 	return "docker:container:" + id
 }
 
-func serviceSourceKey(item swarm.Service) string {
+// ServiceSourceKey returns the stable discovery source key for a Docker Swarm service.
+func ServiceSourceKey(item swarm.Service) string {
 	if namespace := strings.TrimSpace(item.Spec.Labels["com.docker.stack.namespace"]); namespace != "" {
 		if item.Spec.Name != "" {
 			return "docker:swarm:" + namespace + ":" + item.Spec.Name

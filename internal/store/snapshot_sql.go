@@ -38,7 +38,7 @@ func (s *Store) sqlDashboardAgents(ctx context.Context) ([]DashboardAgent, error
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard agents: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	agents := make([]DashboardAgent, 0)
 	for rows.Next() {
@@ -85,7 +85,7 @@ func (s *Store) sqlAgentEnvironmentCodes(ctx context.Context, agentID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard agent environments: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	codes := make([]string, 0)
 	for rows.Next() {
@@ -114,7 +114,7 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, e
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard monitors: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	monitors := make([]DashboardMonitor, 0)
 	for rows.Next() {
@@ -163,7 +163,7 @@ func (s *Store) sqlDashboardResults(ctx context.Context, limit int) ([]Dashboard
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard results: %w", err)
 	}
-	defer rows.Close()
+	defer closeRows(rows)
 
 	results := make([]DashboardResult, 0)
 	for rows.Next() {

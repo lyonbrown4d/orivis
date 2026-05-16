@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
@@ -65,13 +66,13 @@ func (r *Runner) Start(ctx context.Context) error {
 		Version:          buildinfo.Version,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("register agent: %w", err)
 	}
 	r.agentID = registration.AgentID
 	r.logger.Info("agent registered", "agent_id", r.agentID, "status", registration.Status)
 
 	if err := r.configureDiscovery(); err != nil {
-		return err
+		return fmt.Errorf("configure monitor discovery: %w", err)
 	}
 
 	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
@@ -82,14 +83,14 @@ func (r *Runner) Start(ctx context.Context) error {
 		r.syncTasks(runCtx)
 	}); err != nil {
 		stop()
-		return err
+		return fmt.Errorf("schedule agent sync: %w", err)
 	}
 	r.sched = scheduler
 	scheduler.StartAsync()
 	return nil
 }
 
-func (r *Runner) Stop(context.Context) error {
+func (r *Runner) Stop(ctx context.Context) error {
 	if r.stop != nil {
 		r.stop()
 	}
@@ -97,7 +98,7 @@ func (r *Runner) Stop(context.Context) error {
 		r.sched.Stop()
 	}
 	if r.discovery != nil {
-		if err := r.discovery.Close(context.Background()); err != nil {
+		if err := r.discovery.Close(ctx); err != nil {
 			r.logger.Warn("close monitor discovery failed", "error", err)
 		}
 	}
@@ -133,17 +134,21 @@ func (r *Runner) heartbeat(ctx context.Context) error {
 		SentAt:  time.Now().UTC(),
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("send agent heartbeat: %w", err)
 	}
 	r.logger.Debug("agent heartbeat accepted", "agent_id", response.AgentID, "status", response.Status)
 	return nil
 }
 
 func (r *Runner) pullTasks(ctx context.Context) (protocol.AgentTasksResponse, error) {
-	return r.client.Tasks(ctx, protocol.AgentTasksRequest{
+	response, err := r.client.Tasks(ctx, protocol.AgentTasksRequest{
 		AgentID: r.agentID,
 		Token:   r.cfg.Agent.Token,
 	})
+	if err != nil {
+		return protocol.AgentTasksResponse{}, fmt.Errorf("pull agent tasks: %w", err)
+	}
+	return response, nil
 }
 
 func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
@@ -152,7 +157,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 	}
 	monitors, err := r.discovery.Discover(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("discover monitors: %w", err)
 	}
 	if len(monitors) == 0 {
 		return nil
@@ -163,7 +168,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 		Monitors: monitors,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("sync discovered monitors: %w", err)
 	}
 	r.logger.Debug("agent discovered monitors synced", "count", response.Synced)
 	return nil
@@ -176,21 +181,31 @@ func (r *Runner) reconcileTasks(ctx context.Context, tasks []protocol.AgentTask)
 			continue
 		}
 		seen.Add(task.MonitorID)
-		signature := taskSignature(task)
-		current, ok := r.tasks[task.MonitorID]
-		if ok && current.signature == signature {
-			continue
-		}
-		if ok {
-			r.removeTask(task.MonitorID)
-		}
-		if err := r.scheduleTask(ctx, task, signature); err != nil {
-			r.logger.Warn("schedule agent task failed", "monitor_id", task.MonitorID, "error", err)
-		}
+		r.reconcileTask(ctx, task)
 	}
 
+	r.removeMissingTasks(func(monitorID string) bool {
+		return seen.Contains(monitorID)
+	})
+}
+
+func (r *Runner) reconcileTask(ctx context.Context, task protocol.AgentTask) {
+	signature := taskSignature(task)
+	current, ok := r.tasks[task.MonitorID]
+	if ok && current.signature == signature {
+		return
+	}
+	if ok {
+		r.removeTask(task.MonitorID)
+	}
+	if err := r.scheduleTask(ctx, task, signature); err != nil {
+		r.logger.Warn("schedule agent task failed", "monitor_id", task.MonitorID, "error", err)
+	}
+}
+
+func (r *Runner) removeMissingTasks(contains func(string) bool) {
 	for monitorID := range r.tasks {
-		if !seen.Contains(monitorID) {
+		if !contains(monitorID) {
 			r.removeTask(monitorID)
 		}
 	}
@@ -203,7 +218,7 @@ func (r *Runner) scheduleTask(ctx context.Context, task protocol.AgentTask, sign
 		r.runTask(ctx, taskCopy)
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("schedule probe task: %w", err)
 	}
 	job.Tag(taskTag(task.MonitorID))
 	r.tasks[task.MonitorID] = scheduledTask{signature: signature}
