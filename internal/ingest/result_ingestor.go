@@ -209,18 +209,18 @@ func (i *ResultIngestor) flushNextBatch(ctx context.Context) (bool, error) {
 	}
 
 	batch := i.queue.popBatch(i.batchSize)
-	if len(batch) == 0 {
+	if batch.Len() == 0 {
 		return true, nil
 	}
 	if err := i.recordBatch(ctx, batch); err != nil {
-		return len(batch) < i.batchSize, err
+		return batch.Len() < i.batchSize, err
 	}
-	return len(batch) < i.batchSize, nil
+	return batch.Len() < i.batchSize, nil
 }
 
-func (i *ResultIngestor) recordBatch(ctx context.Context, batch []store.RecordProbeResultParams) error {
-	if _, err := i.store.ResultStore().RecordBatch(ctx, batch); err != nil {
-		if len(batch) == 1 {
+func (i *ResultIngestor) recordBatch(ctx context.Context, batch *collectionlist.List[store.RecordProbeResultParams]) error {
+	if _, err := i.store.ResultStore().RecordBatch(ctx, batch.Values()); err != nil {
+		if batch.Len() == 1 {
 			return wrapError(err, "record probe result batch")
 		}
 		i.logFlushError(wrapError(err, "record probe result batch"))
@@ -229,10 +229,10 @@ func (i *ResultIngestor) recordBatch(ctx context.Context, batch []store.RecordPr
 	return nil
 }
 
-func (i *ResultIngestor) recordIndividually(ctx context.Context, batch []store.RecordProbeResultParams) error {
+func (i *ResultIngestor) recordIndividually(ctx context.Context, batch *collectionlist.List[store.RecordProbeResultParams]) error {
 	var batchErr error
-	collectionlist.NewList(batch...).Range(func(index int, _ store.RecordProbeResultParams) bool {
-		if _, err := i.store.ResultStore().Record(ctx, batch[index]); err != nil {
+	batch.Range(func(_ int, params store.RecordProbeResultParams) bool {
+		if _, err := i.store.ResultStore().Record(ctx, params); err != nil {
 			batchErr = joinErrors(batchErr, err)
 		}
 		return true

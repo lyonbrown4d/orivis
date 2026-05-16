@@ -51,9 +51,9 @@ func (q *resultQueue) push(params store.RecordProbeResultParams) (int, error) {
 	return q.items.Len(), nil
 }
 
-func (q *resultQueue) popBatch(limit int) []store.RecordProbeResultParams {
+func (q *resultQueue) popBatch(limit int) *collectionlist.List[store.RecordProbeResultParams] {
 	if limit <= 0 {
-		return nil
+		return collectionlist.NewList[store.RecordProbeResultParams]()
 	}
 
 	q.mu.Lock()
@@ -63,11 +63,11 @@ func (q *resultQueue) popBatch(limit int) []store.RecordProbeResultParams {
 	for out.Len() < limit {
 		item, ok := q.items.Pop()
 		if !ok {
-			return out.Values()
+			return out
 		}
 		out.Add(item.params)
 	}
-	return out.Values()
+	return out
 }
 
 func (q *resultQueue) close() {

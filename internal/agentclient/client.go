@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -42,7 +41,7 @@ func New(cfg config.Config, logger *slog.Logger, obs observabilityx.Observabilit
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create agent HTTP client: %w", err)
+		return nil, wrapError(err, "create agent HTTP client")
 	}
 
 	return &Client{HTTP: httpClient}, nil
@@ -53,7 +52,7 @@ func (c *Client) Close(context.Context) error {
 		return nil
 	}
 	if err := c.HTTP.Close(); err != nil {
-		return fmt.Errorf("close agent HTTP client: %w", err)
+		return wrapError(err, "close agent HTTP client")
 	}
 	return nil
 }
@@ -67,10 +66,10 @@ func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest
 		"/api/agent/register",
 	)
 	if err != nil {
-		return out, fmt.Errorf("execute register agent request: %w", err)
+		return out, wrapError(err, "execute register agent request")
 	}
 	if resp.IsError() {
-		return out, fmt.Errorf("register agent: server returned %s: %s", resp.Status(), resp.String())
+		return out, errorf("register agent: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
 }
@@ -84,10 +83,10 @@ func (c *Client) Heartbeat(ctx context.Context, req protocol.AgentHeartbeatReque
 		"/api/agent/heartbeat",
 	)
 	if err != nil {
-		return out, fmt.Errorf("execute heartbeat request: %w", err)
+		return out, wrapError(err, "execute heartbeat request")
 	}
 	if resp.IsError() {
-		return out, fmt.Errorf("heartbeat agent: server returned %s: %s", resp.Status(), resp.String())
+		return out, errorf("heartbeat agent: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
 }
@@ -103,10 +102,10 @@ func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (pro
 
 	resp, err := c.HTTP.Execute(ctx, request, http.MethodGet, "/api/agent/tasks")
 	if err != nil {
-		return out, fmt.Errorf("execute tasks request: %w", err)
+		return out, wrapError(err, "execute tasks request")
 	}
 	if resp.IsError() {
-		return out, fmt.Errorf("pull agent tasks: server returned %s: %s", resp.Status(), resp.String())
+		return out, errorf("pull agent tasks: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
 }
@@ -120,10 +119,10 @@ func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSync
 		"/api/agent/monitors",
 	)
 	if err != nil {
-		return out, fmt.Errorf("execute monitor sync request: %w", err)
+		return out, wrapError(err, "execute monitor sync request")
 	}
 	if resp.IsError() {
-		return out, fmt.Errorf("sync agent monitors: server returned %s: %s", resp.Status(), resp.String())
+		return out, errorf("sync agent monitors: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
 }
@@ -136,10 +135,10 @@ func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultReque
 		"/api/agent/results",
 	)
 	if err != nil {
-		return fmt.Errorf("execute report result request: %w", err)
+		return wrapError(err, "execute report result request")
 	}
 	if resp.IsError() {
-		return fmt.Errorf("report agent result: server returned %s: %s", resp.Status(), resp.String())
+		return errorf("report agent result: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return nil
 }
