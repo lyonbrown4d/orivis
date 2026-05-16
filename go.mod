@@ -10,7 +10,7 @@ require (
 	github.com/arcgolabs/collectionx/set v0.8.0
 	github.com/arcgolabs/configx v0.3.2
 	github.com/arcgolabs/dbx v0.1.8
-	github.com/arcgolabs/dix v0.10.0
+	github.com/arcgolabs/dix v0.11.0
 	github.com/arcgolabs/httpx v0.1.6
 	github.com/arcgolabs/httpx/adapter/fiber v0.1.6
 	github.com/arcgolabs/logx v0.1.2

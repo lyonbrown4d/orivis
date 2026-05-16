@@ -70,7 +70,7 @@ func main() {
 
 func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	configModule := dix.NewModule("config",
-		dix.Providers(
+		dix.WithModuleProviders(
 			dix.ProviderErr0(func() (serverconfig.Config, error) {
 				return serverconfig.LoadFromFlags(cmd.Flags(), configFile)
 			}),
@@ -78,8 +78,8 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	)
 
 	loggingModule := dix.NewModule("logging",
-		dix.Imports(configModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule),
+		dix.WithModuleProviders(
 			dix.ProviderErr1(func(cfg serverconfig.Config) (*slog.Logger, error) {
 				return logx.New(
 					logx.WithConsole(true),
@@ -88,22 +88,22 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 				)
 			}),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStop[*slog.Logger](func(_ context.Context, logger *slog.Logger) error {
 				return logx.Close(logger)
-			}),
+			}, dix.LifecycleName("close-server-logger")),
 		),
 	)
 
 	storeModule := dix.NewModule("store",
-		dix.Imports(configModule, loggingModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule),
+		dix.WithModuleProviders(
 			dix.ProviderErr2(store.Open),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStop[*store.Store](func(ctx context.Context, storage *store.Store) error {
 				return storage.Close(ctx)
-			}),
+			}, dix.LifecycleName("close-store"), dix.LifecycleAfter("stop-http-server", "stop-result-ingestor")),
 		),
 	)
 
@@ -111,15 +111,15 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule)
 
 	observabilityModule := dix.NewModule("observability",
-		dix.Imports(configModule, loggingModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule),
+		dix.WithModuleProviders(
 			dix.Provider2(serverobs.New),
 		),
 	)
 
 	securityModule := dix.NewModule("security",
-		dix.Imports(configModule, loggingModule, observabilityModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule, observabilityModule),
+		dix.WithModuleProviders(
 			dix.Provider3(security.NewEngine),
 		),
 	)
@@ -127,33 +127,34 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule)
 
 	httpModule := dix.NewModule("http",
-		dix.Imports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
+		dix.WithModuleProviders(
 			dix.Provider6(api.NewServer),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStart[*api.Server](func(ctx context.Context, server *api.Server) error {
 				return server.Start(ctx)
-			}),
+			}, dix.LifecycleName("start-http-server")),
 			dix.OnStop[*api.Server](func(ctx context.Context, server *api.Server) error {
 				return server.Stop(ctx)
-			}),
+			}, dix.LifecycleName("stop-http-server")),
 		),
 	)
 
 	return dix.New("orivis-server",
-		dix.UseProfile(dix.ProfileDev),
-		dix.Version(buildinfo.Version),
-		dix.AppDescription("distributed availability observability platform"),
-		dix.RunStopTimeout(10*time.Second),
-		dix.Modules(httpModule),
+		dix.WithProfile(dix.ProfileDev),
+		dix.WithVersion(buildinfo.Version),
+		dix.WithAppDescription("distributed availability observability platform"),
+		dix.WithRunStopTimeout(10*time.Second),
+		dix.WithLifecycleConcurrency(4),
+		dix.WithModules(httpModule),
 	)
 }
 
 func newServerEventModule(loggingModule dix.Module) dix.Module {
 	return dix.NewModule("event",
-		dix.Imports(loggingModule),
-		dix.Providers(
+		dix.WithModuleImports(loggingModule),
+		dix.WithModuleProviders(
 			dix.Provider1(func(logger *slog.Logger) eventx.BusRuntime {
 				return eventx.New(
 					eventx.WithParallelDispatch(true),
@@ -163,35 +164,35 @@ func newServerEventModule(loggingModule dix.Module) dix.Module {
 				)
 			}),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStop[eventx.BusRuntime](func(_ context.Context, bus eventx.BusRuntime) error {
 				return bus.Close()
-			}),
+			}, dix.LifecycleName("close-event-bus"), dix.LifecycleAfter("stop-result-ingestor")),
 		),
 	)
 }
 
 func newServerIngestModule(configModule, loggingModule, storeModule, eventModule dix.Module) dix.Module {
 	return dix.NewModule("ingest",
-		dix.Imports(configModule, loggingModule, storeModule, eventModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule, storeModule, eventModule),
+		dix.WithModuleProviders(
 			dix.ProviderErr4(ingest.NewResultIngestor),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStart[*ingest.ResultIngestor](func(ctx context.Context, resultIngestor *ingest.ResultIngestor) error {
 				return resultIngestor.Start(ctx)
-			}),
+			}, dix.LifecycleName("start-result-ingestor")),
 			dix.OnStop[*ingest.ResultIngestor](func(ctx context.Context, resultIngestor *ingest.ResultIngestor) error {
 				return resultIngestor.Stop(ctx)
-			}),
+			}, dix.LifecycleName("stop-result-ingestor"), dix.LifecycleBefore("close-store", "close-event-bus")),
 		),
 	)
 }
 
 func newServerEndpointModule(configModule, storeModule, ingestModule dix.Module) dix.Module {
 	return dix.NewModule("http-endpoints",
-		dix.Imports(configModule, storeModule, ingestModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, storeModule, ingestModule),
+		dix.WithModuleProviders(
 			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewDashboardEndpoint, dix.Order(10)),
 			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(20)),
 			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(30)),

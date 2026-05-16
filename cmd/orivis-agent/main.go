@@ -62,7 +62,7 @@ func main() {
 
 func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 	configModule := dix.NewModule("config",
-		dix.Providers(
+		dix.WithModuleProviders(
 			dix.ProviderErr0(func() (agentconfig.Config, error) {
 				return agentconfig.LoadFromFlags(cmd.Flags(), configFile)
 			}),
@@ -70,8 +70,8 @@ func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 	)
 
 	loggingModule := dix.NewModule("logging",
-		dix.Imports(configModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule),
+		dix.WithModuleProviders(
 			dix.ProviderErr1(func(cfg agentconfig.Config) (*slog.Logger, error) {
 				return logx.New(
 					logx.WithConsole(true),
@@ -80,51 +80,53 @@ func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 				)
 			}),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStop[*slog.Logger](func(_ context.Context, logger *slog.Logger) error {
 				return logx.Close(logger)
-			}),
+			}, dix.LifecycleName("close-agent-logger")),
 		),
 	)
 
 	observabilityModule := dix.NewModule("observability",
-		dix.Imports(loggingModule),
-		dix.Providers(
+		dix.WithModuleImports(loggingModule),
+		dix.WithModuleProviders(
 			dix.Provider1(observability.NewNop),
 		),
 	)
 
 	clientModule := dix.NewModule("agent-client",
-		dix.Imports(configModule, loggingModule, observabilityModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule, observabilityModule),
+		dix.WithModuleProviders(
 			dix.ProviderErr3(agentclient.New),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStop[*agentclient.Client](func(ctx context.Context, client *agentclient.Client) error {
 				return client.Close(ctx)
-			}),
+			}, dix.LifecycleName("close-agent-client"), dix.LifecycleAfter("stop-agent-collector")),
 		),
 	)
 
 	collectorModule := dix.NewModule("collector",
-		dix.Imports(configModule, loggingModule, clientModule),
-		dix.Providers(
+		dix.WithModuleImports(configModule, loggingModule, clientModule),
+		dix.WithModuleProviders(
 			dix.Provider3(collector.NewRunner),
 		),
-		dix.Hooks(
+		dix.WithModuleHooks(
 			dix.OnStart[*collector.Runner](func(ctx context.Context, runner *collector.Runner) error {
 				return runner.Start(ctx)
-			}),
+			}, dix.LifecycleName("start-agent-collector")),
 			dix.OnStop[*collector.Runner](func(ctx context.Context, runner *collector.Runner) error {
 				return runner.Stop(ctx)
-			}),
+			}, dix.LifecycleName("stop-agent-collector")),
 		),
 	)
 
 	return dix.New("orivis-agent",
-		dix.UseProfile(dix.ProfileDev),
-		dix.Version(buildinfo.Version),
-		dix.RunStopTimeout(10*time.Second),
-		dix.Modules(collectorModule),
+		dix.WithProfile(dix.ProfileDev),
+		dix.WithVersion(buildinfo.Version),
+		dix.WithRunStopTimeout(10*time.Second),
+		dix.WithLifecycleConcurrency(4),
+		dix.WithRecentEvents(256),
+		dix.WithModules(collectorModule),
 	)
 }
