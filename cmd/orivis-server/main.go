@@ -103,7 +103,10 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	storeModule := dix.NewModule("store",
 		dix.WithModuleImports(configModule, loggingModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr2(store.Open),
+			dix.ProviderErr2(store.OpenDB),
+			dix.Provider1(store.NewRepositories),
+			dix.Provider1(store.NewIDGenerator),
+			dix.ProviderErr3(store.New),
 		),
 		dix.WithModuleHooks(
 			dix.OnStop[*store.Store](func(ctx context.Context, storage *store.Store) error {

@@ -1,6 +1,9 @@
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { Badge } from '@/components/ui/badge';
 import type { Status } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+const maxStatusLights = 90;
 
 export function statusTone(status: Status) {
   switch (status) {
@@ -36,27 +39,51 @@ export function StatusBadge({ status, label }: { status: Status; label: string }
 }
 
 export function StatusLights({
-  lights,
-  empty,
-  formatTime
+	lights,
+	empty,
+	formatTime
 }: {
   lights: Array<{ monitor_name: string; status: Status; latency_ms: number; checked_at: string }>;
-  empty: string;
-  formatTime: (value?: string) => string;
+	empty: string;
+	formatTime: (value?: string) => string;
 }) {
-  if (lights.length === 0) {
-    return <p className="text-sm text-slate-500 dark:text-slate-400">{empty}</p>;
-  }
+	if (lights.length === 0) {
+		return <p className="text-sm text-slate-500 dark:text-slate-400">{empty}</p>;
+	}
 
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {lights.map((light, index) => (
-        <span
-          key={`${light.monitor_name}-${light.checked_at}-${index}`}
-          title={`${light.monitor_name} · ${light.status} · ${formatTime(light.checked_at)} · ${light.latency_ms}ms`}
-          className={cn('h-4 w-8 rounded-full shadow-sm transition hover:scale-110 hover:shadow-md', statusTone(light.status).light)}
-        />
-      ))}
-    </div>
-  );
+	const visibleLights = lights.slice(-maxStatusLights);
+
+	return (
+		<Tooltip.Provider delayDuration={80} skipDelayDuration={0}>
+			<div className="max-w-full overflow-hidden py-2">
+				<div className="grid w-full grid-flow-col grid-cols-[repeat(90,minmax(0,1fr))] grid-rows-1 justify-start gap-1 rounded-2xl bg-slate-100/60 p-1 dark:bg-slate-900/60">
+					{visibleLights.map((light, index) => (
+						<Tooltip.Root key={`${light.monitor_name}-${light.checked_at}-${index}`}>
+							<Tooltip.Trigger asChild>
+								<button
+									type="button"
+									aria-label={`${light.monitor_name} · ${light.status} · ${formatTime(light.checked_at)} · ${light.latency_ms}ms`}
+									className={cn('h-9 w-full min-w-1 rounded-full shadow-sm transition hover:scale-110 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring', statusTone(light.status).light)}
+								/>
+							</Tooltip.Trigger>
+							<Tooltip.Portal>
+								<Tooltip.Content
+									side="top"
+									align="center"
+									sideOffset={8}
+									className="z-50 max-w-80 rounded-2xl bg-slate-950 px-3 py-2 text-left text-xs font-semibold text-white shadow-2xl shadow-slate-900/20 dark:bg-white dark:text-slate-950"
+								>
+									<span className="block max-w-72 truncate">{light.monitor_name}</span>
+									<span className="mt-1 block whitespace-nowrap font-medium opacity-75">
+										{formatTime(light.checked_at)} · {light.status} · {light.latency_ms}ms
+									</span>
+									<Tooltip.Arrow className="fill-slate-950 dark:fill-white" />
+								</Tooltip.Content>
+							</Tooltip.Portal>
+						</Tooltip.Root>
+					))}
+				</div>
+			</div>
+		</Tooltip.Provider>
+	);
 }

@@ -58,20 +58,6 @@ func (r *Runner) Start(ctx context.Context) error {
 		"server_url", r.cfg.Server.URL,
 	)
 
-	registration, err := r.client.Register(ctx, protocol.AgentRegisterRequest{
-		Name:             r.cfg.Agent.Name,
-		Token:            r.cfg.Agent.Token,
-		RegionCode:       r.cfg.Agent.Region,
-		EnvironmentCodes: r.cfg.Agent.Environments,
-		RuntimeType:      r.cfg.Runtime,
-		Version:          buildinfo.Version,
-	})
-	if err != nil {
-		return oops.Wrapf(err, "register agent")
-	}
-	r.agentID = registration.AgentID
-	r.logger.Info("agent registered", "agent_id", r.agentID, "status", registration.Status)
-
 	if err := r.configureDiscovery(); err != nil {
 		return oops.Wrapf(err, "configure monitor discovery")
 	}
@@ -88,6 +74,7 @@ func (r *Runner) Start(ctx context.Context) error {
 	}
 	r.sched = scheduler
 	scheduler.StartAsync()
+	go r.syncTasks(runCtx)
 	return nil
 }
 
@@ -111,6 +98,9 @@ func (r *Runner) syncTasks(ctx context.Context) {
 	if err := ctx.Err(); err != nil {
 		return
 	}
+	if !r.ensureRegistered(ctx) {
+		return
+	}
 	if err := r.heartbeat(ctx); err != nil {
 		r.logger.Warn("agent heartbeat failed", "error", err)
 		return
@@ -125,6 +115,28 @@ func (r *Runner) syncTasks(ctx context.Context) {
 	}
 	r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
 	r.reconcileTasks(ctx, tasks.Tasks)
+}
+
+func (r *Runner) ensureRegistered(ctx context.Context) bool {
+	if r.agentID != "" {
+		return true
+	}
+
+	registration, err := r.client.Register(ctx, protocol.AgentRegisterRequest{
+		Name:             r.cfg.Agent.Name,
+		Token:            r.cfg.Agent.Token,
+		RegionCode:       r.cfg.Agent.Region,
+		EnvironmentCodes: r.cfg.Agent.Environments,
+		RuntimeType:      r.cfg.Runtime,
+		Version:          buildinfo.Version,
+	})
+	if err != nil {
+		r.logger.Warn("agent registration failed; will retry", "error", err)
+		return false
+	}
+	r.agentID = registration.AgentID
+	r.logger.Info("agent registered", "agent_id", r.agentID, "status", registration.Status)
+	return true
 }
 
 func (r *Runner) heartbeat(ctx context.Context) error {

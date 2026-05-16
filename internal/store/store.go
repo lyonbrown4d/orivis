@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,19 +11,30 @@ import (
 	"github.com/arcgolabs/dbx"
 	"github.com/arcgolabs/dbx/dialect"
 	"github.com/arcgolabs/dbx/dialect/sqlite"
+	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	_ "modernc.org/sqlite" // register sqlite database driver
 )
 
 type Store struct {
-	DB       *dbx.DB
-	agents   AgentStore
-	monitors MonitorStore
-	results  ResultStore
+	DB           *dbx.DB
+	repositories *Repositories
+	ids          IDGenerator
+	agents       AgentStore
+	monitors     MonitorStore
+	results      ResultStore
 }
 
 func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
+	database, err := OpenDB(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
+	return New(database, NewRepositories(database), NewIDGenerator(database))
+}
+
+func OpenDB(cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
 	switch normalizeDBDriver(cfg.DB.Driver) {
 	case "", "sqlite", "sqlite3":
 		if strings.TrimSpace(cfg.DB.Driver) == "" {
@@ -33,13 +43,42 @@ func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
 		if strings.TrimSpace(cfg.DB.DSN) == "" {
 			cfg.DB.DSN = config.DefaultSQLiteDSN
 		}
-		return openSQLiteStore(cfg, logger)
+		return openSQLiteDB(cfg, logger)
 	default:
 		return nil, fmt.Errorf("unsupported database driver %q: supported driver is sqlite", cfg.DB.Driver)
 	}
 }
 
-func openSQLiteStore(cfg config.Config, logger *slog.Logger) (*Store, error) {
+func New(database *dbx.DB, repositories *Repositories, ids IDGenerator) (*Store, error) {
+	if database == nil {
+		return nil, fmt.Errorf("%w: db is required", ErrInvalidInput)
+	}
+	if repositories == nil {
+		repositories = NewRepositories(database)
+	}
+	if ids == nil {
+		ids = NewIDGenerator(database)
+	}
+
+	storage := &Store{
+		DB:           database,
+		repositories: repositories,
+		ids:          ids,
+	}
+	storage.agents = &agentStore{repositories: repositories, ids: ids}
+	storage.monitors = &monitorStore{repositories: repositories, ids: ids}
+	storage.results = &resultStore{db: database, repositories: repositories, ids: ids}
+	if err := storage.Migrate(context.Background()); err != nil {
+		if closeErr := database.Close(); closeErr != nil {
+			return nil, fmt.Errorf("migrate sqlite store: %w; close database: %w", err, closeErr)
+		}
+		return nil, fmt.Errorf("migrate sqlite store: %w", err)
+	}
+
+	return storage, nil
+}
+
+func openSQLiteDB(cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
 	if strings.TrimSpace(cfg.DB.DSN) == "" {
 		return nil, fmt.Errorf("%w: sqlite db.dsn is required", ErrInvalidInput)
 	}
@@ -63,18 +102,7 @@ func openSQLiteStore(cfg config.Config, logger *slog.Logger) (*Store, error) {
 	}
 	configureSQLiteConnection(database, cfg.DB.DSN)
 
-	storage := &Store{DB: database}
-	storage.agents = &agentStore{db: database}
-	storage.monitors = &monitorStore{db: database}
-	storage.results = &resultStore{db: database}
-	if err := storage.Migrate(context.Background()); err != nil {
-		if closeErr := database.Close(); closeErr != nil {
-			return nil, fmt.Errorf("migrate sqlite store: %w; close database: %w", err, closeErr)
-		}
-		return nil, fmt.Errorf("migrate sqlite store: %w", err)
-	}
-
-	return storage, nil
+	return database, nil
 }
 
 func (s *Store) Close(context.Context) error {
@@ -134,22 +162,22 @@ func (s *Store) findEnvironmentIDByCode(ctx context.Context, code string) (strin
 	switch {
 	case s == nil:
 		return "", fmt.Errorf("%w: store is not available", ErrInvalidInput)
-	case s.DB != nil:
-		return findSQLiteEnvironmentIDByCode(ctx, s.DB, code)
+	case s.repositories != nil:
+		return findEnvironmentIDByCode(ctx, s.repositories, code)
 	default:
 		return "", fmt.Errorf("%w: store backend is not available", ErrInvalidInput)
 	}
 }
 
-func findSQLiteEnvironmentIDByCode(ctx context.Context, database *dbx.DB, code string) (string, error) {
-	var environmentID string
-	if err := database.QueryRowContext(ctx, "SELECT id FROM environments WHERE code = ?", code).Scan(&environmentID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+func findEnvironmentIDByCode(ctx context.Context, repositories *Repositories, code string) (string, error) {
+	environment, err := repositories.environments.FirstSpec(ctx, repository.Where(environmentsSchema.Code.Eq(code)))
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
 			return "", fmt.Errorf("%w: environment %s", ErrNotFound, code)
 		}
 		return "", fmt.Errorf("find environment by code: %w", err)
 	}
-	return environmentID, nil
+	return environment.ID, nil
 }
 
 func requiredAgentEnvironmentIDs(agent model.Agent) ([]string, error) {
@@ -195,13 +223,4 @@ func agentEnvironmentIDValues(agent model.Agent) []string {
 		return nil
 	}
 	return agent.EnvironmentIDs.Values()
-}
-
-func closeRows(rows *sql.Rows) {
-	if rows == nil {
-		return
-	}
-	if err := rows.Close(); err != nil {
-		return
-	}
 }

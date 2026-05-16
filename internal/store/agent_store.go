@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/arcgolabs/dbx"
 	"github.com/arcgolabs/dbx/querydsl"
 	"github.com/lyonbrown4d/orivis/internal/model"
 )
@@ -19,7 +18,8 @@ type AgentStore interface {
 }
 
 type agentStore struct {
-	db *dbx.DB
+	repositories *Repositories
+	ids          IDGenerator
 }
 
 func (s *agentStore) Register(ctx context.Context, params RegisterAgentParams) (model.Agent, error) {
@@ -64,7 +64,7 @@ func (s *agentStore) RecordHeartbeat(ctx context.Context, params AgentHeartbeatP
 	}
 
 	schema := agentsSchema
-	if _, err := newAgentRepository(s.db).Update(
+	if _, err := s.repositories.agents.Update(
 		ctx,
 		querydsl.Update(schema).
 			Set(

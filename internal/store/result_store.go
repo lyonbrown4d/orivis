@@ -31,7 +31,9 @@ type RecordProbeResultParams struct {
 }
 
 type resultStore struct {
-	db *dbx.DB
+	db           *dbx.DB
+	repositories *Repositories
+	ids          IDGenerator
 }
 
 type resultQueryer interface {
@@ -55,7 +57,7 @@ func (s *resultStore) RecordBatch(ctx context.Context, params []RecordProbeResul
 	}
 
 	var results []model.ProbeResult
-	err := newProbeResultRepository(s.db).InTx(ctx, nil, func(tx *dbx.Tx, repo *repository.Base[probeResultRow, probeResultSchema]) error {
+	err := s.repositories.probeResults.InTx(ctx, nil, func(tx *dbx.Tx, repo *repository.Base[probeResultRow, probeResultSchema]) error {
 		nextResults, rows, err := s.prepareProbeResultRows(ctx, tx, params)
 		if err != nil {
 			return err
@@ -121,9 +123,9 @@ func (s *resultStore) prepareProbeResultRow(
 		return model.ProbeResult{}, nil, err
 	}
 
-	id, err := newID("res")
+	id, err := s.ids.NewID(ctx, "res")
 	if err != nil {
-		return model.ProbeResult{}, nil, err
+		return model.ProbeResult{}, nil, fmt.Errorf("generate probe result id: %w", err)
 	}
 	now := time.Now().UTC()
 	row := newProbeResultRow(id, normalized, monitor, now)

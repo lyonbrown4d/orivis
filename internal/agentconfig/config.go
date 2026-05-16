@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ type Config struct {
 		Static struct {
 			Monitor  discovery.StaticMonitor   `mapstructure:"monitor"`
 			Enabled  bool                      `mapstructure:"enabled"`
+			HCLFiles []string                  `mapstructure:"hcl_files"`
 			Monitors []discovery.StaticMonitor `mapstructure:"monitors"`
 		} `mapstructure:"static"`
 		Docker struct {
@@ -46,7 +48,12 @@ func Load(opts ...configx.Option) (Config, error) {
 		return Config{}, err
 	}
 	cfg.Agent.Environments = normalizeStringSlice(cfg.Agent.Environments)
-	cfg.Discovery.Static.Monitors = normalizeStaticMonitors(cfg.Discovery.Static.Monitor, cfg.Discovery.Static.Monitors)
+	cfg.Discovery.Static.HCLFiles = normalizeStringSlice(cfg.Discovery.Static.HCLFiles)
+	hclMonitors, err := discovery.LoadStaticMonitorsHCL(cfg.Discovery.Static.HCLFiles)
+	if err != nil {
+		return Config{}, fmt.Errorf("load static monitors HCL: %w", err)
+	}
+	cfg.Discovery.Static.Monitors = normalizeStaticMonitors(cfg.Discovery.Static.Monitor, cfg.Discovery.Static.Monitors, hclMonitors)
 	return cfg, nil
 }
 
@@ -61,19 +68,20 @@ func LoadFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
 func defaultOptions() []configx.Option {
 	return []configx.Option{
 		configx.WithDefaults(map[string]any{
-			"server.url":                "http://127.0.0.1:8080",
-			"agent.name":                "local-agent",
-			"agent.token":               "",
-			"agent.region":              "local",
-			"agent.environments":        []string{},
-			"runtime":                   "host",
-			"poll.interval":             30 * time.Second,
-			"discovery.static.enabled":  true,
-			"discovery.static.monitor":  discovery.StaticMonitor{},
-			"discovery.static.monitors": []discovery.StaticMonitor{},
-			"discovery.docker.enabled":  false,
-			"discovery.docker.mode":     "container",
-			"log.level":                 "info",
+			"server.url":                 "http://127.0.0.1:8080",
+			"agent.name":                 "local-agent",
+			"agent.token":                "",
+			"agent.region":               "local",
+			"agent.environments":         []string{},
+			"runtime":                    "host",
+			"poll.interval":              30 * time.Second,
+			"discovery.static.enabled":   true,
+			"discovery.static.hcl_files": []string{},
+			"discovery.static.monitor":   discovery.StaticMonitor{},
+			"discovery.static.monitors":  []discovery.StaticMonitor{},
+			"discovery.docker.enabled":   false,
+			"discovery.docker.mode":      "container",
+			"log.level":                  "info",
 		}),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithEnvSeparator("__"),
@@ -81,12 +89,13 @@ func defaultOptions() []configx.Option {
 	}
 }
 
-func normalizeStaticMonitors(single discovery.StaticMonitor, monitors []discovery.StaticMonitor) []discovery.StaticMonitor {
-	out := collectionlist.NewListWithCapacity[discovery.StaticMonitor](len(monitors) + 1)
+func normalizeStaticMonitors(single discovery.StaticMonitor, monitors, hclMonitors []discovery.StaticMonitor) []discovery.StaticMonitor {
+	out := collectionlist.NewListWithCapacity[discovery.StaticMonitor](len(monitors) + len(hclMonitors) + 1)
 	if hasStaticMonitor(single) {
 		out.Add(single)
 	}
 	out.Add(monitors...)
+	out.Add(hclMonitors...)
 	return out.Values()
 }
 

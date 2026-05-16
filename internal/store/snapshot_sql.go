@@ -3,19 +3,35 @@ package store
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
+
+	"github.com/arcgolabs/dbx/querydsl"
+	"github.com/lyonbrown4d/orivis/internal/model"
 )
 
 func (s *Store) sqlDashboardSnapshot(ctx context.Context, resultLimit int) (DashboardSnapshot, error) {
-	agents, err := s.sqlDashboardAgents(ctx)
+	regions, err := s.sqlDashboardRegions(ctx)
 	if err != nil {
 		return DashboardSnapshot{}, err
 	}
-	monitors, err := s.sqlDashboardMonitors(ctx)
+	environments, err := s.sqlDashboardEnvironments(ctx)
 	if err != nil {
 		return DashboardSnapshot{}, err
 	}
-	results, err := s.sqlDashboardResults(ctx, resultLimit)
+	agentEnvironments, err := s.sqlDashboardAgentEnvironments(ctx, environments)
+	if err != nil {
+		return DashboardSnapshot{}, err
+	}
+	agents, err := s.sqlDashboardAgents(ctx, regions, agentEnvironments)
+	if err != nil {
+		return DashboardSnapshot{}, err
+	}
+	monitors, err := s.sqlDashboardMonitors(ctx, environments)
+	if err != nil {
+		return DashboardSnapshot{}, err
+	}
+	results, err := s.sqlDashboardResults(ctx, resultLimit, agents, regions, environments, monitors)
 	if err != nil {
 		return DashboardSnapshot{}, err
 	}
@@ -27,193 +43,209 @@ func (s *Store) sqlDashboardSnapshot(ctx context.Context, resultLimit int) (Dash
 	}, nil
 }
 
-func (s *Store) sqlDashboardAgents(ctx context.Context) ([]DashboardAgent, error) {
-	rows, err := s.DB.QueryContext(
+func (s *Store) sqlDashboardRegions(ctx context.Context) (map[string]string, error) {
+	rows, err := s.repositories.regions.List(
 		ctx,
-		`SELECT a.id, a.name, r.code, a.runtime_type, a.version, a.last_seen_at, a.status
-         FROM agents a
-         JOIN regions r ON r.id = a.region_id
-         ORDER BY a.name`,
+		querydsl.Select(querydsl.AllColumns(regionsSchema).Values()...).
+			From(regionsSchema),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard agents: %w", err)
+		return nil, fmt.Errorf("list dashboard regions: %w", err)
 	}
-	defer closeRows(rows)
-
-	agents := make([]DashboardAgent, 0)
-	for rows.Next() {
-		var agent DashboardAgent
-		var lastSeenAt string
-		if err := rows.Scan(
-			&agent.ID,
-			&agent.Name,
-			&agent.RegionCode,
-			&agent.RuntimeType,
-			&agent.Version,
-			&lastSeenAt,
-			&agent.Status,
-		); err != nil {
-			return nil, fmt.Errorf("scan dashboard agent: %w", err)
-		}
-		parsedLastSeenAt, err := parseTime(lastSeenAt)
-		if err != nil {
-			return nil, err
-		}
-		agent.LastSeenAt = parsedLastSeenAt
-		agent.EnvironmentCodes, err = s.sqlAgentEnvironmentCodes(ctx, agent.ID)
-		if err != nil {
-			return nil, err
-		}
-		agents = append(agents, agent)
+	out := make(map[string]string, rows.Len())
+	regionRows := rows.Values()
+	for index := range regionRows {
+		out[regionRows[index].ID] = regionRows[index].Code
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate dashboard agents: %w", err)
-	}
-	return agents, nil
+	return out, nil
 }
 
-func (s *Store) sqlAgentEnvironmentCodes(ctx context.Context, agentID string) ([]string, error) {
-	rows, err := s.DB.QueryContext(
+func (s *Store) sqlDashboardEnvironments(ctx context.Context) (map[string]string, error) {
+	rows, err := s.repositories.environments.List(
 		ctx,
-		`SELECT e.code
-         FROM agent_environments ae
-         JOIN environments e ON e.id = ae.environment_id
-         WHERE ae.agent_id = ?
-         ORDER BY e.code`,
-		agentID,
+		querydsl.Select(querydsl.AllColumns(environmentsSchema).Values()...).
+			From(environmentsSchema),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list dashboard environments: %w", err)
+	}
+	out := make(map[string]string, rows.Len())
+	environmentRows := rows.Values()
+	for index := range environmentRows {
+		out[environmentRows[index].ID] = environmentRows[index].Code
+	}
+	return out, nil
+}
+
+func (s *Store) sqlDashboardAgentEnvironments(ctx context.Context, environments map[string]string) (map[string][]string, error) {
+	rows, err := s.repositories.agentEnvironments.List(
+		ctx,
+		querydsl.Select(querydsl.AllColumns(agentEnvironmentsSchema).Values()...).
+			From(agentEnvironmentsSchema).
+			OrderBy(agentEnvironmentsSchema.AgentID.Asc(), agentEnvironmentsSchema.EnvironmentID.Asc()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard agent environments: %w", err)
 	}
-	defer closeRows(rows)
-
-	codes := make([]string, 0)
-	for rows.Next() {
-		var code string
-		if err := rows.Scan(&code); err != nil {
-			return nil, fmt.Errorf("scan dashboard agent environment: %w", err)
+	out := make(map[string][]string)
+	agentEnvironmentRows := rows.Values()
+	for index := range agentEnvironmentRows {
+		code := environments[agentEnvironmentRows[index].EnvironmentID]
+		if code == "" {
+			continue
 		}
-		codes = append(codes, code)
+		out[agentEnvironmentRows[index].AgentID] = append(out[agentEnvironmentRows[index].AgentID], code)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate dashboard agent environments: %w", err)
+	for agentID := range out {
+		slices.Sort(out[agentID])
 	}
-	return codes, nil
+	return out, nil
 }
 
-func (s *Store) sqlDashboardMonitors(ctx context.Context) ([]DashboardMonitor, error) {
-	rows, err := s.DB.QueryContext(
+func (s *Store) sqlDashboardAgents(
+	ctx context.Context,
+	regions map[string]string,
+	agentEnvironments map[string][]string,
+) ([]DashboardAgent, error) {
+	rows, err := s.repositories.agents.List(
 		ctx,
-		`SELECT m.id, m.source_key, m.name, m.type, m.target, m.group_name, e.code, m.enabled,
-                m.interval_seconds, m.timeout_seconds, m.retry_count,
-                m.aggregation_policy, m.source
-         FROM monitors m
-         JOIN environments e ON e.id = m.environment_id
-         ORDER BY e.code, m.name`,
+		querydsl.Select(querydsl.AllColumns(agentsSchema).Values()...).
+			From(agentsSchema).
+			OrderBy(agentsSchema.Name.Asc()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list dashboard agents: %w", err)
+	}
+	agents := make([]DashboardAgent, 0, rows.Len())
+	agentRows := rows.Values()
+	for index := range agentRows {
+		lastSeenAt, err := parseTime(agentRows[index].LastSeenAt)
+		if err != nil {
+			return nil, err
+		}
+		agents = append(agents, DashboardAgent{
+			ID:               agentRows[index].ID,
+			Name:             agentRows[index].Name,
+			RegionCode:       regions[agentRows[index].RegionID],
+			EnvironmentCodes: append([]string(nil), agentEnvironments[agentRows[index].ID]...),
+			RuntimeType:      agentRows[index].RuntimeType,
+			Version:          agentRows[index].Version,
+			LastSeenAt:       lastSeenAt,
+			Status:           model.AgentStatus(agentRows[index].Status),
+		})
+	}
+	return agents, nil
+}
+
+func (s *Store) sqlDashboardMonitors(ctx context.Context, environments map[string]string) ([]DashboardMonitor, error) {
+	rows, err := s.repositories.monitors.List(
+		ctx,
+		querydsl.Select(querydsl.AllColumns(monitorsSchema).Values()...).
+			From(monitorsSchema),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard monitors: %w", err)
 	}
-	defer closeRows(rows)
-
-	monitors := make([]DashboardMonitor, 0)
-	for rows.Next() {
-		var monitor DashboardMonitor
-		var enabled int
-		var intervalSeconds, timeoutSeconds int
-		if err := rows.Scan(
-			&monitor.ID,
-			&monitor.SourceKey,
-			&monitor.Name,
-			&monitor.Type,
-			&monitor.Target,
-			&monitor.GroupName,
-			&monitor.EnvironmentCode,
-			&enabled,
-			&intervalSeconds,
-			&timeoutSeconds,
-			&monitor.RetryCount,
-			&monitor.AggregationPolicy,
-			&monitor.Source,
-		); err != nil {
-			return nil, fmt.Errorf("scan dashboard monitor: %w", err)
+	monitors := make([]DashboardMonitor, 0, rows.Len())
+	monitorRows := rows.Values()
+	for index := range monitorRows {
+		monitors = append(monitors, DashboardMonitor{
+			ID:                monitorRows[index].ID,
+			SourceKey:         monitorRows[index].SourceKey,
+			Name:              monitorRows[index].Name,
+			Type:              model.MonitorType(monitorRows[index].Type),
+			Target:            monitorRows[index].Target,
+			GroupName:         monitorRows[index].GroupName,
+			EnvironmentCode:   environments[monitorRows[index].EnvironmentID],
+			Enabled:           monitorRows[index].Enabled == 1,
+			Interval:          time.Duration(monitorRows[index].IntervalSeconds) * time.Second,
+			Timeout:           time.Duration(monitorRows[index].TimeoutSeconds) * time.Second,
+			RetryCount:        monitorRows[index].RetryCount,
+			AggregationPolicy: model.AggregationPolicy(monitorRows[index].AggregationPolicy),
+			Source:            model.ConfigSource(monitorRows[index].Source),
+		})
+	}
+	slices.SortFunc(monitors, func(left, right DashboardMonitor) int {
+		if left.EnvironmentCode != right.EnvironmentCode {
+			return cmpString(left.EnvironmentCode, right.EnvironmentCode)
 		}
-		monitor.Enabled = enabled == 1
-		monitor.Interval = time.Duration(intervalSeconds) * time.Second
-		monitor.Timeout = time.Duration(timeoutSeconds) * time.Second
-		monitors = append(monitors, monitor)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate dashboard monitors: %w", err)
-	}
+		return cmpString(left.Name, right.Name)
+	})
 	return monitors, nil
 }
 
-func (s *Store) sqlDashboardResults(ctx context.Context, limit int) ([]DashboardResult, error) {
-	rows, err := s.DB.QueryContext(
+func (s *Store) sqlDashboardResults(
+	ctx context.Context,
+	limit int,
+	agents []DashboardAgent,
+	regions map[string]string,
+	environments map[string]string,
+	monitors []DashboardMonitor,
+) ([]DashboardResult, error) {
+	rows, err := s.repositories.probeResults.List(
 		ctx,
-		`SELECT pr.id, pr.monitor_id, pr.agent_id, a.name, r.code, e.code, m.group_name,
-                pr.status, pr.latency_ms, pr.error_message, pr.checked_at, pr.created_at
-         FROM probe_results pr
-         JOIN monitors m ON m.id = pr.monitor_id
-         JOIN agents a ON a.id = pr.agent_id
-         JOIN regions r ON r.id = pr.region_id
-         JOIN environments e ON e.id = pr.environment_id
-         ORDER BY pr.checked_at DESC
-         LIMIT ?`,
-		limit,
+		querydsl.Select(querydsl.AllColumns(probeResultSchemaResource()).Values()...).
+			From(probeResultSchemaResource()).
+			OrderBy(probeResultSchemaResource().CheckedAt.Desc()).
+			Limit(limit),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard results: %w", err)
 	}
-	defer closeRows(rows)
-
-	results := make([]DashboardResult, 0)
-	for rows.Next() {
-		result, err := scanDashboardResult(rows)
+	agentNames := dashboardAgentNames(agents)
+	monitorGroups := dashboardMonitorGroups(monitors)
+	results := make([]DashboardResult, 0, rows.Len())
+	resultRows := rows.Values()
+	for index := range resultRows {
+		checkedAt, err := parseTime(resultRows[index].CheckedAt)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, result)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate dashboard results: %w", err)
+		createdAt, err := parseTime(resultRows[index].CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, DashboardResult{
+			ID:              resultRows[index].ID,
+			MonitorID:       resultRows[index].MonitorID,
+			AgentID:         resultRows[index].AgentID,
+			AgentName:       agentNames[resultRows[index].AgentID],
+			RegionCode:      regions[resultRows[index].RegionID],
+			EnvironmentCode: environments[resultRows[index].EnvironmentID],
+			GroupName:       monitorGroups[resultRows[index].MonitorID],
+			Status:          model.Status(resultRows[index].Status),
+			Latency:         time.Duration(resultRows[index].LatencyMS) * time.Millisecond,
+			ErrorMessage:    resultRows[index].ErrorMessage,
+			CheckedAt:       checkedAt,
+			CreatedAt:       createdAt,
+		})
 	}
 	return results, nil
 }
 
-func scanDashboardResult(rows interface {
-	Scan(dest ...any) error
-}) (DashboardResult, error) {
-	var result DashboardResult
-	var latencyMS int64
-	var checkedAt, createdAt string
-	if err := rows.Scan(
-		&result.ID,
-		&result.MonitorID,
-		&result.AgentID,
-		&result.AgentName,
-		&result.RegionCode,
-		&result.EnvironmentCode,
-		&result.GroupName,
-		&result.Status,
-		&latencyMS,
-		&result.ErrorMessage,
-		&checkedAt,
-		&createdAt,
-	); err != nil {
-		return DashboardResult{}, fmt.Errorf("scan dashboard result: %w", err)
+func dashboardAgentNames(agents []DashboardAgent) map[string]string {
+	out := make(map[string]string, len(agents))
+	for index := range agents {
+		out[agents[index].ID] = agents[index].Name
 	}
-	parsedCheckedAt, err := parseTime(checkedAt)
-	if err != nil {
-		return DashboardResult{}, err
+	return out
+}
+
+func dashboardMonitorGroups(monitors []DashboardMonitor) map[string]string {
+	out := make(map[string]string, len(monitors))
+	for index := range monitors {
+		out[monitors[index].ID] = monitors[index].GroupName
 	}
-	parsedCreatedAt, err := parseTime(createdAt)
-	if err != nil {
-		return DashboardResult{}, err
+	return out
+}
+
+func cmpString(left, right string) int {
+	switch {
+	case left < right:
+		return -1
+	case left > right:
+		return 1
+	default:
+		return 0
 	}
-	result.Latency = time.Duration(latencyMS) * time.Millisecond
-	result.CheckedAt = parsedCheckedAt
-	result.CreatedAt = parsedCreatedAt
-	return result, nil
 }
