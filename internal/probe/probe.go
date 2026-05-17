@@ -60,23 +60,62 @@ func (c *Checker) Check(ctx context.Context, task protocol.AgentTask) Result {
 }
 
 func (c *Checker) check(ctx context.Context, task protocol.AgentTask) (model.Status, map[string]any, error) {
-	switch strings.ToLower(strings.TrimSpace(task.Type)) {
-	case string(model.MonitorHTTP):
-		return c.checkHTTP(ctx, task)
-	case string(model.MonitorTCP):
-		return c.checkTCP(ctx, task)
-	case string(model.MonitorDNS):
-		return c.checkDNS(ctx, task)
-	case string(model.MonitorTLS):
-		return c.checkTLS(ctx, task)
-	case string(model.MonitorRedis):
-		return c.checkRedis(ctx, task)
-	case string(model.MonitorDatabase), string(model.MonitorSQLite), string(model.MonitorMySQL), string(model.MonitorPostgres), "db", "pg", "postgresql":
-		return c.checkDatabase(ctx, task)
-	case string(model.MonitorPing):
-		return c.checkPing(ctx, task)
-	default:
+	probeType := strings.ToLower(strings.TrimSpace(task.Type))
+	checker := c.probeChecker(probeType)
+	if checker == nil {
 		return model.StatusUnknown, map[string]any{"type": task.Type}, errorf("unsupported monitor type %q", task.Type)
+	}
+	return checker(ctx, task)
+}
+
+type probeChecker func(context.Context, protocol.AgentTask) (model.Status, map[string]any, error)
+
+func (c *Checker) probeChecker(probeType string) probeChecker {
+	if isDatabaseProbeType(probeType) {
+		return c.checkDatabase
+	}
+	if checker := c.networkProbeChecker(probeType); checker != nil {
+		return checker
+	}
+	return c.serviceProbeChecker(probeType)
+}
+
+func (c *Checker) networkProbeChecker(probeType string) probeChecker {
+	switch probeType {
+	case string(model.MonitorHTTP):
+		return c.checkHTTP
+	case string(model.MonitorTCP):
+		return c.checkTCP
+	case string(model.MonitorUDP):
+		return c.checkUDP
+	case string(model.MonitorPing):
+		return c.checkPing
+	default:
+		return nil
+	}
+}
+
+func (c *Checker) serviceProbeChecker(probeType string) probeChecker {
+	switch probeType {
+	case string(model.MonitorDNS):
+		return c.checkDNS
+	case string(model.MonitorTLS):
+		return c.checkTLS
+	case string(model.MonitorSMTP):
+		return c.checkSMTP
+	case string(model.MonitorRedis):
+		return c.checkRedis
+	default:
+		return nil
+	}
+}
+
+func isDatabaseProbeType(probeType string) bool {
+	switch probeType {
+	case string(model.MonitorDatabase), string(model.MonitorSQLite), string(model.MonitorMySQL), string(model.MonitorPostgres), "db", "pg", "postgresql":
+		return true
+	default:
+		return false
 	}
 }
 

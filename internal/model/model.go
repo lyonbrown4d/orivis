@@ -31,6 +31,8 @@ const (
 	MonitorPing     MonitorType = "ping"
 	MonitorDNS      MonitorType = "dns"
 	MonitorTLS      MonitorType = "tls"
+	MonitorUDP      MonitorType = "udp"
+	MonitorSMTP     MonitorType = "smtp"
 	MonitorRedis    MonitorType = "redis"
 	MonitorDatabase MonitorType = "database"
 	MonitorSQLite   MonitorType = "sqlite"

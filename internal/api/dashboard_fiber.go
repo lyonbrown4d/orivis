@@ -3,27 +3,39 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/arcgolabs/authx"
 	"github.com/gofiber/fiber/v2"
+	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
-func newDashboardEndpoint(cfg config.Config, storage *store.Store, auth *authx.Engine) *dashboardEndpoint {
+func newDashboardEndpoint(cfg config.Config, storage *store.Store, auth *authx.Engine, cacheStore cachex.Store) *dashboardEndpoint {
 	return &dashboardEndpoint{
-		cfg:   cfg,
-		store: storage,
-		auth:  auth,
+		cfg:         cfg,
+		store:       storage,
+		auth:        auth,
+		cache:       cacheStore,
+		snapshotTTL: dashboardSnapshotCacheTTL(cfg),
 	}
 }
 
 func (s *Server) registerDashboardRoutes() {
-	endpoint := newDashboardEndpoint(s.cfg, s.store, s.auth)
+	endpoint := newDashboardEndpoint(s.cfg, s.store, s.auth, s.cache)
 	s.app.Post("/api/auth/login", endpoint.fiberLogin)
 	s.app.Post("/api/auth/logout", endpoint.fiberLogout)
 	s.app.Get("/api/auth/me", endpoint.fiberAuthMe)
 	s.app.Get("/api/dashboard/snapshot", endpoint.fiberDashboardSnapshot)
+}
+
+func dashboardSnapshotCacheTTL(cfg config.Config) time.Duration {
+	ttl, err := time.ParseDuration(cfg.Dashboard.SnapshotTTL)
+	if err != nil || ttl < 0 {
+		return time.Second
+	}
+	return ttl
 }
 
 func (e *dashboardEndpoint) fiberLogin(ctx *fiber.Ctx) error {

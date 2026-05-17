@@ -82,6 +82,8 @@ github.com/arcgolabs/httpx/adapter/fiber v0.1.6 h1:2LtDD+nEphTttDbzeOfzzIP12Ka0x
 github.com/arcgolabs/httpx/adapter/fiber v0.1.6/go.mod h1:tWQyTJRM1C6c5yjWWnycf7kdzLYA/ZxY6Izex5jiYr4=
 github.com/arcgolabs/httpx/adapter/std v0.1.6 h1:gyLAYl83S9v2o4vgyF3CbChGWY3U2VBieNDxumBkJ7s=
 github.com/arcgolabs/httpx/adapter/std v0.1.6/go.mod h1:aluFzezJTu14J3sUxWChTUsckny/l4cKXYBxEtf+rWc=
+github.com/arcgolabs/kvx v0.3.0 h1:yCNagD9f5WUl0yZaGvIf4rbPBbEons0SxHb1m81gLo0=
+github.com/arcgolabs/kvx v0.3.0/go.mod h1:x+flhcZdS7X9d6ivdmVlnyFUnoDbEdycNT+EUwYgu/0=
 github.com/arcgolabs/logx v0.1.2 h1:+VJF7T/mfI482CpbIQ4tSBXbxTVcOkmBaTOj+DaCom0=
 github.com/arcgolabs/logx v0.1.2/go.mod h1:GgVdUPfBZ3Hao7h5ahdGwqHDXY9q5mhMmnS7t3NNqzU=
 github.com/arcgolabs/observabilityx v0.4.0 h1:7ihfQev5KSV8xcO+6DcbMcUYSDVsYhnENH2ZbHB5IxY=

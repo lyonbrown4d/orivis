@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -40,7 +42,7 @@ func (e *dashboardEndpoint) dashboardView(ctx context.Context, group string) (*d
 }
 
 func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *dashboardView, groupSlug string) error {
-	snapshot, err := e.store.DashboardSnapshot(ctx, 80)
+	snapshot, err := e.loadDashboardSnapshot(ctx, 80)
 	if err != nil {
 		return huma.Error500InternalServerError("load dashboard snapshot", err)
 	}
@@ -59,6 +61,51 @@ func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *da
 	view.StatusLights = dashboardStatusLights(snapshot, 120)
 	view.Summary.Up, view.Summary.Down, view.Summary.Unknown = dashboardMonitorStatusTotals(view.Monitors)
 	return nil
+}
+
+func (e *dashboardEndpoint) loadDashboardSnapshot(ctx context.Context, resultLimit int) (store.DashboardSnapshot, error) {
+	if e.cache == nil || e.snapshotTTL <= 0 {
+		snapshot, err := e.store.DashboardSnapshot(ctx, resultLimit)
+		if err != nil {
+			return store.DashboardSnapshot{}, fmt.Errorf("load dashboard snapshot: %w", err)
+		}
+		return snapshot, nil
+	}
+	key := fmt.Sprintf("dashboard:snapshot:%d", resultLimit)
+	if snapshot, ok := e.cachedDashboardSnapshot(ctx, key); ok {
+		return snapshot, nil
+	}
+	snapshot, err := e.store.DashboardSnapshot(ctx, resultLimit)
+	if err != nil {
+		return store.DashboardSnapshot{}, fmt.Errorf("load dashboard snapshot: %w", err)
+	}
+	e.storeDashboardSnapshot(ctx, key, snapshot)
+	return snapshot, nil
+}
+
+func (e *dashboardEndpoint) cachedDashboardSnapshot(ctx context.Context, key string) (store.DashboardSnapshot, bool) {
+	raw, ok, err := e.cache.Get(ctx, key)
+	if err != nil || !ok {
+		return store.DashboardSnapshot{}, false
+	}
+	var snapshot store.DashboardSnapshot
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		if deleteErr := e.cache.Delete(context.WithoutCancel(ctx), key); deleteErr != nil {
+			return store.DashboardSnapshot{}, false
+		}
+		return store.DashboardSnapshot{}, false
+	}
+	return snapshot, true
+}
+
+func (e *dashboardEndpoint) storeDashboardSnapshot(ctx context.Context, key string, snapshot store.DashboardSnapshot) {
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		return
+	}
+	if err := e.cache.Set(context.WithoutCancel(ctx), key, raw, e.snapshotTTL); err != nil {
+		return
+	}
 }
 
 func (e *dashboardEndpoint) dashboardSnapshotResponse(ctx context.Context, group string) (dashboardSnapshotResponse, error) {

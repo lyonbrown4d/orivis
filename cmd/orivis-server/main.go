@@ -17,7 +17,9 @@ import (
 	"github.com/arcgolabs/logx"
 	"github.com/lyonbrown4d/orivis/internal/api"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
+	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
+	"github.com/lyonbrown4d/orivis/internal/notification"
 	baseobs "github.com/lyonbrown4d/orivis/internal/observability"
 	"github.com/lyonbrown4d/orivis/internal/retention"
 	"github.com/lyonbrown4d/orivis/internal/security"
@@ -47,7 +49,18 @@ func main() {
 		},
 	}
 
-	cmd.Flags().StringVar(&configFile, "config", "", "config file path")
+	registerServerFlags(cmd, &configFile)
+
+	if err := cmd.Execute(); err != nil {
+		if _, writeErr := fmt.Fprintln(os.Stderr, err); writeErr != nil {
+			os.Exit(1)
+		}
+		os.Exit(1)
+	}
+}
+
+func registerServerFlags(cmd *cobra.Command, configFile *string) {
+	cmd.Flags().StringVar(configFile, "config", "", "config file path")
 	cmd.Flags().String("app-env", "", "runtime environment")
 	cmd.Flags().String("http-addr", "", "HTTP listen address")
 	cmd.Flags().Bool("web-enabled", false, "serve built web SPA from the server")
@@ -55,6 +68,15 @@ func main() {
 	cmd.Flags().String("log-level", "", "log level")
 	cmd.Flags().String("db-driver", "", "database driver")
 	cmd.Flags().String("db-dsn", "", "database DSN")
+	cmd.Flags().Int("db-max-open-conns", 0, "maximum open sqlite connections")
+	cmd.Flags().String("db-busy-timeout", "", "sqlite busy timeout")
+	cmd.Flags().String("cache-driver", "", "cache driver: memory or redis")
+	cmd.Flags().String("cache-prefix", "", "cache key prefix")
+	cmd.Flags().String("cache-redis-addr", "", "redis cache address")
+	cmd.Flags().String("cache-redis-password", "", "redis cache password")
+	cmd.Flags().Int("cache-redis-db", 0, "redis cache database")
+	cmd.Flags().Bool("cache-redis-tls", false, "enable TLS for redis cache")
+	cmd.Flags().String("dashboard-snapshot-ttl", "", "dashboard snapshot cache TTL")
 	cmd.Flags().Int("ingest-queue-size", 0, "probe result ingest queue size")
 	cmd.Flags().Int("ingest-batch-size", 0, "probe result ingest batch size")
 	cmd.Flags().String("ingest-flush-interval", "", "probe result ingest flush interval")
@@ -68,13 +90,12 @@ func main() {
 	cmd.Flags().String("auth-dashboard-jwt-secret", "", "dashboard JWT signing secret")
 	cmd.Flags().Bool("observability-prometheus-enabled", false, "enable Prometheus observability adapter")
 	cmd.Flags().String("observability-prometheus-namespace", "", "Prometheus metric namespace")
-
-	if err := cmd.Execute(); err != nil {
-		if _, writeErr := fmt.Fprintln(os.Stderr, err); writeErr != nil {
-			os.Exit(1)
-		}
-		os.Exit(1)
-	}
+	cmd.Flags().Bool("notification-webhook-enabled", false, "enable webhook notifications")
+	cmd.Flags().String("notification-webhook-url", "", "webhook notification URL")
+	cmd.Flags().String("notification-webhook-method", "", "webhook notification HTTP method")
+	cmd.Flags().String("notification-webhook-timeout", "", "webhook notification timeout")
+	cmd.Flags().String("notification-webhook-cooldown", "", "webhook notification cooldown")
+	cmd.Flags().Bool("notification-webhook-recovery-enabled", false, "send webhook recovery notifications")
 }
 
 func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
@@ -120,24 +141,21 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	)
 
 	eventModule := newServerEventModule(loggingModule)
+	cacheModule := newServerCacheModule(configModule, loggingModule)
 	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule)
+	notificationModule := newServerNotificationModule(configModule, loggingModule, eventModule)
 	retentionModule := newServerRetentionModule(configModule, loggingModule, storeModule)
 
-	observabilityModule := dix.NewModule("observability",
-		dix.WithModuleImports(configModule, loggingModule),
-		dix.WithModuleProviders(
-			dix.Provider2(serverobs.New),
-		),
-	)
+	observabilityModule := newServerObservabilityModule(configModule, loggingModule)
 
 	securityModule := newServerSecurityModule(configModule, loggingModule, observabilityModule)
 
 	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule)
 
 	httpModule := dix.NewModule("http",
-		dix.WithModuleImports(configModule, loggingModule, storeModule, securityModule, observabilityModule, endpointModule),
+		dix.WithModuleImports(configModule, loggingModule, storeModule, cacheModule, securityModule, observabilityModule, endpointModule),
 		dix.WithModuleProviders(
-			dix.Provider2(api.NewServerRuntimeDeps),
+			dix.Provider3(api.NewServerRuntimeDeps),
 			dix.Provider5(api.NewServer),
 		),
 		dix.WithModuleHooks(
@@ -155,7 +173,30 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.WithVersion(buildinfo.Version),
 		dix.WithAppDescription("distributed availability observability platform"),
 		dix.WithRunStopTimeout(10*time.Second),
-		dix.WithModules(httpModule, retentionModule),
+		dix.WithModules(httpModule, retentionModule, notificationModule),
+	)
+}
+
+func newServerObservabilityModule(configModule, loggingModule dix.Module) dix.Module {
+	return dix.NewModule("observability",
+		dix.WithModuleImports(configModule, loggingModule),
+		dix.WithModuleProviders(
+			dix.Provider2(serverobs.New),
+		),
+	)
+}
+
+func newServerCacheModule(configModule, loggingModule dix.Module) dix.Module {
+	return dix.NewModule("cache",
+		dix.WithModuleImports(configModule, loggingModule),
+		dix.WithModuleProviders(
+			dix.ProviderErr2(cachex.NewStore),
+		),
+		dix.WithModuleHooks(
+			dix.OnStop[cachex.Store](func(ctx context.Context, cacheStore cachex.Store) error {
+				return cacheStore.Close(ctx)
+			}, dix.LifecycleName("close-cache")),
+		),
 	)
 }
 
@@ -201,7 +242,24 @@ func newServerEventModule(loggingModule dix.Module) dix.Module {
 		dix.WithModuleHooks(
 			dix.OnStop[eventx.BusRuntime](func(_ context.Context, bus eventx.BusRuntime) error {
 				return bus.Close()
-			}, dix.LifecycleName("close-event-bus"), dix.LifecycleAfter("stop-result-ingestor")),
+			}, dix.LifecycleName("close-event-bus"), dix.LifecycleAfter("stop-result-ingestor", "stop-notification")),
+		),
+	)
+}
+
+func newServerNotificationModule(configModule, loggingModule, eventModule dix.Module) dix.Module {
+	return dix.NewModule("notification",
+		dix.WithModuleImports(configModule, loggingModule, eventModule),
+		dix.WithModuleProviders(
+			dix.ProviderErr3(notification.NewManager),
+		),
+		dix.WithModuleHooks(
+			dix.OnStart[*notification.Manager](func(ctx context.Context, manager *notification.Manager) error {
+				return manager.Start(ctx)
+			}, dix.LifecycleName("start-notification"), dix.LifecycleBefore("start-result-ingestor")),
+			dix.OnStop[*notification.Manager](func(ctx context.Context, manager *notification.Manager) error {
+				return manager.Stop(ctx)
+			}, dix.LifecycleName("stop-notification"), dix.LifecycleBefore("close-event-bus")),
 		),
 	)
 }

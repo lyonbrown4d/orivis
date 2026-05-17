@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	miniredis "github.com/alicebob/miniredis/v2"
@@ -71,6 +72,82 @@ func TestDNSProbe(t *testing.T) {
 
 	if result.Status != model.StatusUp {
 		t.Fatalf("expected DNS probe up, got %#v", result)
+	}
+}
+
+func TestUDPProbe(t *testing.T) {
+	conn, err := new(net.ListenConfig).ListenPacket(context.Background(), "udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen udp: %v", err)
+	}
+	t.Cleanup(func() {
+		closeTestResource(t, conn)
+	})
+	go func() {
+		buffer := make([]byte, 32)
+		n, addr, err := conn.ReadFrom(buffer)
+		if err != nil {
+			return
+		}
+		if strings.Contains(string(buffer[:n]), "ping") {
+			if _, writeErr := conn.WriteTo([]byte("pong"), addr); writeErr != nil {
+				return
+			}
+		}
+	}()
+
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorUDP),
+		Target:         "udp://" + conn.LocalAddr().String() + "?payload=ping&expect=pong",
+		TimeoutSeconds: 2,
+	})
+
+	if result.Status != model.StatusUp {
+		t.Fatalf("expected UDP probe up, got %#v", result)
+	}
+}
+
+func TestSMTPProbe(t *testing.T) {
+	listener, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen smtp: %v", err)
+	}
+	t.Cleanup(func() {
+		closeTestResource(t, listener)
+	})
+	go serveSMTPProbeTestConnection(t, listener)
+
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorSMTP),
+		Target:         listener.Addr().String(),
+		TimeoutSeconds: 2,
+	})
+
+	if result.Status != model.StatusUp {
+		t.Fatalf("expected SMTP probe up, got %#v", result)
+	}
+}
+
+func serveSMTPProbeTestConnection(t *testing.T, listener net.Listener) {
+	t.Helper()
+	conn, err := listener.Accept()
+	if err != nil {
+		return
+	}
+	defer closeTestResource(t, conn)
+	if _, writeErr := io.WriteString(conn, "220 test ESMTP\r\n"); writeErr != nil {
+		return
+	}
+	buffer := make([]byte, 128)
+	n, err := conn.Read(buffer)
+	if err != nil || !strings.HasPrefix(string(buffer[:n]), "NOOP") {
+		return
+	}
+	if _, writeErr := io.WriteString(conn, "250 OK\r\n"); writeErr != nil {
+		return
+	}
+	if _, readErr := conn.Read(buffer); readErr != nil {
+		return
 	}
 }
 

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/arcgolabs/dbx"
 	"github.com/arcgolabs/dbx/dialect"
@@ -101,6 +103,13 @@ func openSQLiteDB(cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
 		return nil, fmt.Errorf("open sqlite store: %w", err)
 	}
 	configureSQLiteConnection(database, cfg.DB.DSN)
+	configureSQLitePool(database, cfg)
+	if err := configureSQLitePragmas(context.Background(), database, cfg); err != nil {
+		if closeErr := database.Close(); closeErr != nil {
+			return nil, fmt.Errorf("%w; close sqlite store: %w", err, closeErr)
+		}
+		return nil, err
+	}
 
 	return database, nil
 }
@@ -212,10 +221,61 @@ func configureSQLiteConnection(database *dbx.DB, dsn string) {
 	if database == nil || database.SQLDB() == nil {
 		return
 	}
-	normalizedDSN := strings.ToLower(dsn)
-	if strings.Contains(normalizedDSN, "mode=memory") || strings.Contains(normalizedDSN, ":memory:") {
+	database.SQLDB().SetConnMaxIdleTime(5 * time.Minute)
+	if isSQLiteMemoryDSN(dsn) {
 		database.SQLDB().SetMaxOpenConns(1)
+		database.SQLDB().SetMaxIdleConns(1)
+		return
 	}
+	database.SQLDB().SetMaxOpenConns(4)
+	database.SQLDB().SetMaxIdleConns(4)
+}
+
+func configureSQLitePool(database *dbx.DB, cfg config.Config) {
+	if database == nil || database.SQLDB() == nil || isSQLiteMemoryDSN(cfg.DB.DSN) || cfg.DB.MaxOpenConns <= 0 {
+		return
+	}
+	database.SQLDB().SetMaxOpenConns(cfg.DB.MaxOpenConns)
+	database.SQLDB().SetMaxIdleConns(cfg.DB.MaxOpenConns)
+}
+
+func configureSQLitePragmas(ctx context.Context, database *dbx.DB, cfg config.Config) error {
+	if database == nil {
+		return nil
+	}
+	if err := execSQLitePragma(ctx, database, "PRAGMA foreign_keys = ON"); err != nil {
+		return err
+	}
+	if err := execSQLitePragma(ctx, database, "PRAGMA busy_timeout = "+sqliteBusyTimeoutMillis(cfg.DB.BusyTimeout)); err != nil {
+		return err
+	}
+	if isSQLiteMemoryDSN(cfg.DB.DSN) {
+		return nil
+	}
+	if err := execSQLitePragma(ctx, database, "PRAGMA journal_mode = WAL"); err != nil {
+		return err
+	}
+	return execSQLitePragma(ctx, database, "PRAGMA synchronous = NORMAL")
+}
+
+func execSQLitePragma(ctx context.Context, database *dbx.DB, query string) error {
+	if _, err := database.ExecContext(ctx, query); err != nil {
+		return fmt.Errorf("configure sqlite pragma %q: %w", query, err)
+	}
+	return nil
+}
+
+func sqliteBusyTimeoutMillis(value string) string {
+	duration, err := time.ParseDuration(strings.TrimSpace(value))
+	if err != nil || duration <= 0 {
+		duration = 5 * time.Second
+	}
+	return strconv.FormatInt(duration.Milliseconds(), 10)
+}
+
+func isSQLiteMemoryDSN(dsn string) bool {
+	normalizedDSN := strings.ToLower(dsn)
+	return strings.Contains(normalizedDSN, "mode=memory") || strings.Contains(normalizedDSN, ":memory:")
 }
 
 func agentEnvironmentIDValues(agent model.Agent) []string {

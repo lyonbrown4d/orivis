@@ -16,6 +16,7 @@ require (
 	github.com/arcgolabs/eventx v0.1.2
 	github.com/arcgolabs/httpx v0.1.6
 	github.com/arcgolabs/httpx/adapter/fiber v0.1.6
+	github.com/arcgolabs/kvx v0.3.0
 	github.com/arcgolabs/logx v0.1.2
 	github.com/arcgolabs/observabilityx v0.4.0
 	github.com/danielgtaylor/huma/v2 v2.37.3

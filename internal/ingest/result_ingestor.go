@@ -10,6 +10,7 @@ import (
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/eventx"
+	"github.com/lyonbrown4d/orivis/internal/model"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
@@ -34,8 +35,16 @@ type probeResultReceivedEvent struct {
 	params store.RecordProbeResultParams
 }
 
+type ProbeResultsRecordedEvent struct {
+	Results []model.ProbeResult
+}
+
 func (e probeResultReceivedEvent) Name() string {
 	return "orivis.probe.result.received"
+}
+
+func (e ProbeResultsRecordedEvent) Name() string {
+	return "orivis.probe.results.recorded"
 }
 
 func NewResultIngestor(
@@ -219,25 +228,50 @@ func (i *ResultIngestor) flushNextBatch(ctx context.Context) (bool, error) {
 }
 
 func (i *ResultIngestor) recordBatch(ctx context.Context, batch *collectionlist.List[store.RecordProbeResultParams]) error {
-	if _, err := i.store.ResultStore().RecordBatch(ctx, batch.Values()); err != nil {
+	results, err := i.store.ResultStore().RecordBatch(ctx, batch.Values())
+	if err != nil {
 		if batch.Len() == 1 {
 			return wrapError(err, "record probe result batch")
 		}
 		i.logFlushError(wrapError(err, "record probe result batch"))
 		return i.recordIndividually(ctx, batch)
 	}
+	i.publishRecordedResults(ctx, results)
 	return nil
 }
 
 func (i *ResultIngestor) recordIndividually(ctx context.Context, batch *collectionlist.List[store.RecordProbeResultParams]) error {
 	var batchErr error
+	results := collectionlist.NewListWithCapacity[model.ProbeResult](batch.Len())
 	batch.Range(func(_ int, params store.RecordProbeResultParams) bool {
-		if _, err := i.store.ResultStore().Record(ctx, params); err != nil {
+		result, err := i.store.ResultStore().Record(ctx, params)
+		if err != nil {
 			batchErr = joinErrors(batchErr, err)
+			return true
 		}
+		results.Add(result)
 		return true
 	})
+	i.publishRecordedResults(ctx, results.Values())
 	return batchErr
+}
+
+func (i *ResultIngestor) publishRecordedResults(ctx context.Context, results []model.ProbeResult) {
+	if i == nil || i.bus == nil || len(results) == 0 {
+		return
+	}
+	if err := i.bus.PublishAsync(context.WithoutCancel(ctx), ProbeResultsRecordedEvent{Results: cloneProbeResults(results)}); err != nil {
+		i.logFlushError(wrapError(err, "publish probe results recorded event"))
+	}
+}
+
+func cloneProbeResults(results []model.ProbeResult) []model.ProbeResult {
+	out := make([]model.ProbeResult, len(results))
+	copy(out, results)
+	for index := range out {
+		out[index].RawDetail = append([]byte(nil), out[index].RawDetail...)
+	}
+	return out
 }
 
 func (i *ResultIngestor) flushOnStop(ctx context.Context) {

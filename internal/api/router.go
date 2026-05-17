@@ -14,6 +14,7 @@ import (
 	"github.com/arcgolabs/observabilityx"
 	"github.com/gofiber/fiber/v2"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
+	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
@@ -23,6 +24,7 @@ type Server struct {
 	logger  *slog.Logger
 	store   *store.Store
 	auth    *authx.Engine
+	cache   cachex.Store
 	obs     observabilityx.Observability
 	app     *fiber.App
 	runtime httpx.ServerRuntime
@@ -30,17 +32,20 @@ type Server struct {
 }
 
 type ServerRuntimeDeps struct {
-	Auth *authx.Engine
-	Obs  observabilityx.Observability
+	Auth  *authx.Engine
+	Obs   observabilityx.Observability
+	Cache cachex.Store
 }
 
 func NewServerRuntimeDeps(
 	auth *authx.Engine,
 	obs observabilityx.Observability,
+	cacheStore cachex.Store,
 ) ServerRuntimeDeps {
 	return ServerRuntimeDeps{
-		Auth: auth,
-		Obs:  obs,
+		Auth:  auth,
+		Obs:   obs,
+		Cache: cacheStore,
 	}
 }
 
@@ -74,6 +79,7 @@ func NewServer(
 		logger:  logger,
 		store:   storage,
 		auth:    deps.Auth,
+		cache:   deps.Cache,
 		obs:     observabilityx.Normalize(deps.Obs, logger),
 		app:     app,
 		runtime: runtime,

@@ -1,18 +1,23 @@
 package api
 
 import (
+	"time"
+
 	"github.com/arcgolabs/authx"
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/httpx"
+	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
 type dashboardEndpoint struct {
-	cfg   config.Config
-	store *store.Store
-	auth  *authx.Engine
+	cfg         config.Config
+	store       *store.Store
+	auth        *authx.Engine
+	cache       cachex.Store
+	snapshotTTL time.Duration
 }
 
 type metadataEndpoint struct {

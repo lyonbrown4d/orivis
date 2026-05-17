@@ -25,9 +25,24 @@ type Config struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
 	DB struct {
-		Driver string `mapstructure:"driver" validate:"required"`
-		DSN    string `mapstructure:"dsn"`
+		Driver       string `mapstructure:"driver"       validate:"required"`
+		DSN          string `mapstructure:"dsn"`
+		MaxOpenConns int    `mapstructure:"maxopenconns"`
+		BusyTimeout  string `mapstructure:"busytimeout"  validate:"required"`
 	} `mapstructure:"db"`
+	Cache struct {
+		Driver string `mapstructure:"driver" validate:"required"`
+		Prefix string `mapstructure:"prefix" validate:"required"`
+		Redis  struct {
+			Addr     string `mapstructure:"addr"`
+			Password string `mapstructure:"password"`
+			DB       int    `mapstructure:"db"`
+			TLS      bool   `mapstructure:"tls"`
+		} `mapstructure:"redis"`
+	} `mapstructure:"cache"`
+	Dashboard struct {
+		SnapshotTTL string `mapstructure:"snapshotttl" validate:"required"`
+	} `mapstructure:"dashboard"`
 	Ingest struct {
 		QueueSize     int    `mapstructure:"queuesize"`
 		BatchSize     int    `mapstructure:"batchsize"`
@@ -56,6 +71,16 @@ type Config struct {
 			Namespace string `mapstructure:"namespace"`
 		} `mapstructure:"prometheus"`
 	} `mapstructure:"observability"`
+	Notification struct {
+		Webhook struct {
+			Enabled         bool   `mapstructure:"enabled"`
+			URL             string `mapstructure:"url"`
+			Method          string `mapstructure:"method"          validate:"required"`
+			Timeout         string `mapstructure:"timeout"         validate:"required"`
+			Cooldown        string `mapstructure:"cooldown"        validate:"required"`
+			RecoveryEnabled bool   `mapstructure:"recoveryenabled"`
+		} `mapstructure:"webhook"`
+	} `mapstructure:"notification"`
 }
 
 func Load(opts ...configx.Option) (Config, error) {
@@ -89,9 +114,18 @@ type defaultConfigValues struct {
 		Level string `json:"level"`
 	} `json:"log"`
 	DB struct {
-		Driver string `json:"driver"`
-		DSN    string `json:"dsn"`
+		Driver       string `json:"driver"`
+		DSN          string `json:"dsn"`
+		MaxOpenConns int    `json:"maxopenconns"`
+		BusyTimeout  string `json:"busytimeout"`
 	} `json:"db"`
+	Cache struct {
+		Driver string `json:"driver"`
+		Prefix string `json:"prefix"`
+	} `json:"cache"`
+	Dashboard struct {
+		SnapshotTTL string `json:"snapshotttl"`
+	} `json:"dashboard"`
 	Ingest struct {
 		QueueSize     int    `json:"queuesize"`
 		BatchSize     int    `json:"batchsize"`
@@ -112,6 +146,14 @@ type defaultConfigValues struct {
 			Namespace string `json:"namespace"`
 		} `json:"prometheus"`
 	} `json:"observability"`
+	Notification struct {
+		Webhook struct {
+			Method          string `json:"method"`
+			Timeout         string `json:"timeout"`
+			Cooldown        string `json:"cooldown"`
+			RecoveryEnabled bool   `json:"recoveryenabled"`
+		} `json:"webhook"`
+	} `json:"notification"`
 }
 
 func defaultOptions() []configx.Option {
@@ -143,6 +185,11 @@ func defaultConfig() defaultConfigValues {
 	cfg.Log.Level = "info"
 	cfg.DB.Driver = "sqlite"
 	cfg.DB.DSN = DefaultSQLiteDSN
+	cfg.DB.MaxOpenConns = 4
+	cfg.DB.BusyTimeout = "5s"
+	cfg.Cache.Driver = "memory"
+	cfg.Cache.Prefix = "orivis"
+	cfg.Dashboard.SnapshotTTL = "1s"
 	cfg.Ingest.QueueSize = 4096
 	cfg.Ingest.BatchSize = 100
 	cfg.Ingest.FlushInterval = "1s"
@@ -151,5 +198,9 @@ func defaultConfig() defaultConfigValues {
 	cfg.Retention.CleanupInterval = "1h"
 	cfg.Auth.Dashboard.Username = "admin"
 	cfg.Observability.Prometheus.Namespace = "orivis"
+	cfg.Notification.Webhook.Method = "POST"
+	cfg.Notification.Webhook.Timeout = "5s"
+	cfg.Notification.Webhook.Cooldown = "5m"
+	cfg.Notification.Webhook.RecoveryEnabled = true
 	return cfg
 }
