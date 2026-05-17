@@ -40,7 +40,7 @@ func main() {
 		},
 	}
 
-	cmd.Flags().StringVar(&configFile, "config", "", "config file path")
+	cmd.Flags().StringVar(&configFile, "config", "", "config file path (YAML, JSON, TOML, or HCL)")
 	cmd.Flags().String("server-url", "", "server base URL")
 	cmd.Flags().String("agent-name", "", "agent name")
 	cmd.Flags().String("agent-token", "", "agent token")

@@ -54,6 +54,33 @@ func TestAgentRegisterAndHeartbeat(t *testing.T) {
 	}
 }
 
+func TestAgentRegisterIsIdempotentByName(t *testing.T) {
+	storage := newTestStore(t)
+	first := registerTestAgent(t, storage, "agent-idempotent-01", []string{"dev"})
+
+	second, err := storage.AgentStore().Register(context.Background(), store.RegisterAgentParams{
+		Name:             "agent-idempotent-01",
+		Token:            "secret-token",
+		RegionCode:       "local",
+		EnvironmentCodes: []string{"prod", "staging"},
+		RuntimeType:      "docker-compose",
+		Version:          "next-version",
+	})
+	if err != nil {
+		t.Fatalf("register existing agent: %v", err)
+	}
+
+	if second.ID != first.ID {
+		t.Fatalf("expected existing agent id %q, got %q", first.ID, second.ID)
+	}
+	if second.RuntimeType != "docker-compose" || second.Version != "next-version" {
+		t.Fatalf("expected existing agent to be updated, got %#v", second)
+	}
+	if second.EnvironmentIDs == nil || second.EnvironmentIDs.Len() != 2 {
+		t.Fatalf("expected replaced environments, got %#v", second.EnvironmentIDs)
+	}
+}
+
 func TestAgentHeartbeatRejectsWrongToken(t *testing.T) {
 	storage := newTestStore(t)
 	agent := registerTestAgent(t, storage, "agent-test-01", nil)

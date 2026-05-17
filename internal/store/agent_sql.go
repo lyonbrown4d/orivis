@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
@@ -64,12 +63,32 @@ func (s *agentStore) createRegisteredAgent(
 		return model.Agent{}, err
 	}
 	if err := s.insertAgent(ctx, id, tokenHash, regionID, normalized, now); err != nil {
+		if isCodeEntityConflict(err) {
+			return s.updateAgentAfterCreateConflict(ctx, normalized, regionID, environmentIDs, now)
+		}
 		return model.Agent{}, err
 	}
 	if err := s.replaceAgentEnvironments(ctx, id, environmentIDs); err != nil {
 		return model.Agent{}, err
 	}
 	return s.Get(ctx, id)
+}
+
+func (s *agentStore) updateAgentAfterCreateConflict(
+	ctx context.Context,
+	normalized normalizedRegisterParams,
+	regionID string,
+	environmentIDs []string,
+	now time.Time,
+) (model.Agent, error) {
+	credential, err := s.findAgentCredentialByName(ctx, normalized.Name)
+	if err != nil {
+		return model.Agent{}, fmt.Errorf("resolve agent create conflict: %w", err)
+	}
+	if !credential.Found {
+		return model.Agent{}, fmt.Errorf("resolve agent create conflict: %w", repository.ErrNotFound)
+	}
+	return s.updateRegisteredAgent(ctx, credential, normalized, regionID, environmentIDs, now)
 }
 
 func (s *agentStore) insertAgent(
@@ -141,19 +160,26 @@ func (s *agentStore) insertRegion(ctx context.Context, id, code string, now time
 }
 
 func (s *agentStore) ensureEnvironments(ctx context.Context, codes []string, now time.Time) ([]string, error) {
-	out := make([]string, 0, len(codes))
-	for _, code := range codes {
-		code = normalizeCode(code)
-		if code == "" {
-			continue
-		}
-		id, err := s.ensureEnvironment(ctx, code, now)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, id)
+	ids, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(codes...),
+		collectionlist.NewListWithCapacity[string](len(codes)),
+		func(out *collectionlist.List[string], _ int, code string) (*collectionlist.List[string], error) {
+			code = normalizeCode(code)
+			if code == "" {
+				return out, nil
+			}
+			id, err := s.ensureEnvironment(ctx, code, now)
+			if err != nil {
+				return nil, err
+			}
+			out.Add(id)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("ensure agent environments: %w", err)
 	}
-	return out, nil
+	return ids.Values(), nil
 }
 
 func (s *agentStore) ensureEnvironment(ctx context.Context, code string, now time.Time) (string, error) {
@@ -186,52 +212,6 @@ func (s *agentStore) insertEnvironment(ctx context.Context, id, code string, now
 	return nil
 }
 
-func ensureCodeEntity(
-	ctx context.Context,
-	code,
-	idPrefix,
-	entityName string,
-	ids IDGenerator,
-	find func(context.Context, string) (string, error),
-	insert func(context.Context, string, string) error,
-) (string, error) {
-	id, err := find(ctx, code)
-	if err == nil {
-		return id, nil
-	}
-	if !errors.Is(err, repository.ErrNotFound) {
-		return "", fmt.Errorf("find %s: %w", entityName, err)
-	}
-
-	id, err = ids.NewID(ctx, idPrefix)
-	if err != nil {
-		return "", fmt.Errorf("generate %s id: %w", entityName, err)
-	}
-	if err := insert(ctx, id, code); err != nil {
-		if !isCodeEntityConflict(err) {
-			return "", err
-		}
-		existingID, findErr := find(ctx, code)
-		if findErr == nil {
-			return existingID, nil
-		}
-		if errors.Is(findErr, repository.ErrNotFound) {
-			return "", err
-		}
-		return "", fmt.Errorf("resolve %s conflict: %w", entityName, findErr)
-	}
-	return id, nil
-}
-
-func isCodeEntityConflict(err error) bool {
-	if errors.Is(err, repository.ErrConflict) {
-		return true
-	}
-	message := err.Error()
-	return strings.Contains(message, "UNIQUE constraint failed") ||
-		strings.Contains(message, "duplicate key")
-}
-
 func (s *agentStore) updateExistingAgent(ctx context.Context, id, regionID, runtimeType, version string, now time.Time) error {
 	schema := agentsSchema
 	_, err := s.repositories.agents.Update(
@@ -262,13 +242,15 @@ func (s *agentStore) replaceAgentEnvironments(ctx context.Context, agentID strin
 	if len(environmentIDs) == 0 {
 		return nil
 	}
-	rows := make([]*agentEnvironmentRow, 0, len(environmentIDs))
-	for _, environmentID := range environmentIDs {
-		rows = append(rows, &agentEnvironmentRow{
-			AgentID:       agentID,
-			EnvironmentID: environmentID,
-		})
-	}
+	rows := collectionlist.MapList(
+		collectionlist.NewList(environmentIDs...),
+		func(_ int, environmentID string) *agentEnvironmentRow {
+			return &agentEnvironmentRow{
+				AgentID:       agentID,
+				EnvironmentID: environmentID,
+			}
+		},
+	).Values()
 	if err := repo.CreateMany(ctx, rows...); err != nil {
 		return fmt.Errorf("insert agent environments: %w", err)
 	}
@@ -287,9 +269,7 @@ func (s *agentStore) agentEnvironmentIDs(ctx context.Context, agentID string) (*
 	if err != nil {
 		return nil, fmt.Errorf("query agent environments: %w", err)
 	}
-	ids := make([]string, 0, links.Len())
-	for _, link := range links.Values() {
-		ids = append(ids, link.EnvironmentID)
-	}
-	return collectionlist.NewList[string](ids...), nil
+	return collectionlist.MapList(links, func(_ int, link agentEnvironmentRow) string {
+		return link.EnvironmentID
+	}), nil
 }

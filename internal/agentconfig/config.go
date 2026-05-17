@@ -2,12 +2,14 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/configx"
 	"github.com/lyonbrown4d/orivis/internal/discovery"
+	"github.com/samber/lo"
 	"github.com/spf13/pflag"
 )
 
@@ -47,6 +49,10 @@ func Load(opts ...configx.Option) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	return finalizeConfig(cfg)
+}
+
+func finalizeConfig(cfg Config) (Config, error) {
 	cfg.Agent.Environments = normalizeStringSlice(cfg.Agent.Environments)
 	cfg.Discovery.Static.HCLFiles = normalizeStringSlice(cfg.Discovery.Static.HCLFiles)
 	hclMonitors, err := discovery.LoadStaticMonitorsHCL(cfg.Discovery.Static.HCLFiles)
@@ -60,9 +66,52 @@ func Load(opts ...configx.Option) (Config, error) {
 func LoadFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
 	opts := []configx.Option{configx.WithFlagSet(flags)}
 	if configFile != "" {
+		if isHCLConfigFile(configFile) {
+			return LoadHCLFromFlags(flags, configFile)
+		}
 		opts = append(opts, configx.WithFiles(configFile))
 	}
 	return Load(opts...)
+}
+
+func LoadHCLFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
+	base, err := loadBaseDotenvValues()
+	if err != nil {
+		return Config{}, err
+	}
+	hclValues, err := loadAgentHCLDefaults(configFile)
+	if err != nil {
+		return Config{}, err
+	}
+
+	cfg, err := configx.LoadTErr[Config](
+		configx.WithDefaults(mergeConfigValues(base, hclValues)),
+		configx.WithEnvPrefix("ORIVIS"),
+		configx.WithEnvSeparator("__"),
+		configx.WithPriority(configx.SourceEnv, configx.SourceArgs),
+		configx.WithFlagSet(flags),
+		configx.WithValidateLevel(configx.ValidateLevelStruct),
+	)
+	if err != nil {
+		return Config{}, err
+	}
+	return finalizeConfig(cfg)
+}
+
+func loadBaseDotenvValues() (map[string]any, error) {
+	cfg, err := configx.LoadConfig(append(defaultOptions(), configx.WithPriority(configx.SourceDotenv))...)
+	if err != nil {
+		return nil, fmt.Errorf("load base dotenv config: %w", err)
+	}
+	return cfg.All().All(), nil
+}
+
+func mergeConfigValues(base, override map[string]any) map[string]any {
+	return lo.Assign(base, override)
+}
+
+func isHCLConfigFile(path string) bool {
+	return strings.EqualFold(filepath.Ext(strings.TrimSpace(path)), ".hcl")
 }
 
 func defaultOptions() []configx.Option {

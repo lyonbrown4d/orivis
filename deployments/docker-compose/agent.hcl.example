@@ -1,0 +1,43 @@
+server {
+  url = "http://server:8080"
+}
+
+agent {
+  name = "compose-agent"
+  token = "change-me"
+  region = "local"
+  environments = ["dev"]
+}
+
+runtime = "docker-compose"
+
+poll {
+  interval = "30s"
+}
+
+log {
+  level = "info"
+}
+
+discovery {
+  static {
+    enabled = true
+  }
+
+  docker {
+    enabled = true
+    mode = "container"
+  }
+
+  probe "http" "server-health" {
+    source_key = "static:server-health"
+    target = "http://server:8080/healthz"
+    group = "default"
+    environment = "dev"
+    enabled = true
+    interval = "30s"
+    timeout = "3s"
+    retry_count = 0
+    aggregation = "majority_down"
+  }
+}

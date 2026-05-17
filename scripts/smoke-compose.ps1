@@ -5,6 +5,7 @@ param(
     [int]$DurationSeconds = 45,
     [switch]$SkipBuild,
     [switch]$DisableDashboardAuth,
+    [switch]$UseAgentHCL,
     [switch]$KeepRunning
 )
 
@@ -12,6 +13,7 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $composeFile = Join-Path $root "deployments\docker-compose\compose.yml"
+$composeHCLFile = Join-Path $root "deployments\docker-compose\compose.hcl.yml"
 $serverEnvExample = Join-Path $root "deployments\docker-compose\server.env.example"
 $agentEnvExample = Join-Path $root "deployments\docker-compose\agent.env.example"
 $serverEnv = Join-Path $root "deployments\docker-compose\server.env"
@@ -36,6 +38,9 @@ if ($DisableDashboardAuth) {
     $serverEnvContent = $serverEnvContent.Replace("ORIVIS_AUTH__DASHBOARD__ENABLED=true", "ORIVIS_AUTH__DASHBOARD__ENABLED=false")
     Set-Content -NoNewline -Path $serverEnv -Value $serverEnvContent
 }
+if ($UseAgentHCL) {
+    Set-Content -NoNewline -Path $agentEnv -Value ""
+}
 
 $previousTag = $env:ORIVIS_IMAGE_TAG
 $previousPort = $env:ORIVIS_HTTP_PORT
@@ -55,8 +60,13 @@ try {
     $env:ORIVIS_HTTP_PORT = "$HostPort"
     $baseURL = "http://127.0.0.1:$HostPort"
 
-    Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "down", "--remove-orphans", "-v")
-    Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "up", "-d", "--remove-orphans")
+    $composeArgs = @("compose", "-p", $ProjectName, "-f", $composeFile)
+    if ($UseAgentHCL) {
+        $composeArgs += @("-f", $composeHCLFile)
+    }
+
+    Invoke-CheckedCommand docker ($composeArgs + @("down", "--remove-orphans", "-v"))
+    Invoke-CheckedCommand docker ($composeArgs + @("up", "-d", "--remove-orphans"))
 
     $deadline = (Get-Date).AddSeconds($DurationSeconds)
     do {
@@ -74,21 +84,26 @@ try {
 
     Start-Sleep -Seconds $DurationSeconds
 
-    if ($DisableDashboardAuth) {
-        $dashboard = Invoke-WebRequest -UseBasicParsing "$baseURL/"
-    }
-    else {
+    if (-not $DisableDashboardAuth) {
         $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
         Invoke-WebRequest -UseBasicParsing "$baseURL/login" `
             -Method Post `
             -WebSession $session `
             -ContentType "application/json" `
             -Body '{"username":"admin","password":"change-me"}' | Out-Null
-        $dashboard = Invoke-WebRequest -UseBasicParsing "$baseURL/" -WebSession $session
+    }
+
+    $snapshot = Invoke-RestMethod -Uri "$baseURL/api/dashboard/snapshot"
+    if ($DisableDashboardAuth -and $snapshot.auth_enabled) {
+        throw "Expected dashboard auth to be disabled."
     }
     foreach ($expected in @("server-health", "redis", "postgres")) {
-        if ($dashboard.Content -notmatch [regex]::Escape($expected)) {
-            throw "Expected monitor '$expected' was not found on the dashboard."
+        $monitor = $snapshot.monitors | Where-Object { $_.name -eq $expected } | Select-Object -First 1
+        if ($null -eq $monitor) {
+            throw "Expected monitor '$expected' was not found in dashboard snapshot."
+        }
+        if ($null -eq $monitor.latest -or $monitor.latest.status -ne "up") {
+            throw "Expected monitor '$expected' to be up in dashboard snapshot."
         }
     }
 
@@ -96,7 +111,7 @@ try {
     Write-Host "Dashboard: $baseURL/"
 
     if (-not $KeepRunning) {
-        Invoke-CheckedCommand docker @("compose", "-p", $ProjectName, "-f", $composeFile, "down", "-v")
+        Invoke-CheckedCommand docker ($composeArgs + @("down", "-v"))
     }
 }
 finally {

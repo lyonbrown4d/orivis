@@ -38,6 +38,12 @@ go run ./cmd/orivis-server --config config.example.yaml
 go run ./cmd/orivis-agent --config config.example.yaml
 ```
 
+Agent HCL config is also supported:
+
+```powershell
+go run ./cmd/orivis-agent --config config.example.hcl
+```
+
 Or use dotenv:
 
 ```powershell
@@ -52,6 +58,7 @@ go run ./cmd/orivis-agent
 ./scripts/smoke-local.ps1
 ./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080 -KeepRunning
 ./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080 -SkipBuild -KeepRunning
+./scripts/smoke-compose.ps1 -Tag local-smoke -HostPort 18080 -UseAgentHCL -KeepRunning
 ```
 
 The script starts a temporary server and agent, waits for a full probe loop, and checks that the dashboard responds.
@@ -106,7 +113,7 @@ Deployment templates are available in:
 
 ## Configuration
 
-Orivis uses `configx`, so config can come from YAML, dotenv, or environment variables.
+Orivis uses `configx`, so config can come from YAML, JSON, TOML, dotenv, or environment variables. The agent also supports HCL config files by parsing HCL into a configx source before env and flag overrides are applied.
 
 Environment variables use `__` for nested keys:
 
@@ -222,6 +229,37 @@ Enable Docker Swarm service labels:
 ```env
 ORIVIS_DISCOVERY__DOCKER__ENABLED=true
 ORIVIS_DISCOVERY__DOCKER__MODE=swarm
+```
+
+Agent HCL example:
+
+```hcl
+server {
+  url = "http://127.0.0.1:8080"
+}
+
+agent {
+  name = "local-agent"
+  region = "local"
+  environments = ["dev"]
+}
+
+runtime = "host"
+
+poll {
+  interval = "30s"
+}
+
+discovery {
+  probe "http" "server-health" {
+    target = "http://127.0.0.1:8080/healthz"
+    group = "core"
+    environment = "dev"
+    enabled = true
+    interval = "15s"
+    timeout = "3s"
+  }
+}
 ```
 
 ## HTTP endpoints

@@ -1,0 +1,8 @@
+services:
+  agent:
+    command:
+      - --config
+      - /etc/orivis/agent.hcl
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./agent.hcl.example:/etc/orivis/agent.hcl:ro
