@@ -7,8 +7,8 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
-func dashboardStatusLights(snapshot store.DashboardSnapshot, limit int) []dashboardStatusLight {
-	monitorNames := dashboardMonitorNameMap(snapshot.Monitors)
+func dashboardStatusLights(snapshot store.DashboardSnapshot, limit int) *collectionlist.List[dashboardStatusLight] {
+	monitorNames := dashboardMonitorNameMap(collectionlist.NewList(snapshot.Monitors...))
 	results := snapshot.Results
 	if limit > 0 && len(results) > limit {
 		results = results[:limit]
@@ -28,14 +28,16 @@ func dashboardStatusLights(snapshot store.DashboardSnapshot, limit int) []dashbo
 				CheckedAt:   result.CheckedAt,
 			}
 		},
-	).Values()
+	)
 }
 
-func dashboardMonitorNameMap(monitors []store.DashboardMonitor) map[string]string {
-	out := make(map[string]string, len(monitors))
-	for index := range monitors {
-		monitor := monitors[index]
-		out[monitor.ID] = monitor.Name
-	}
-	return out
+func dashboardMonitorNameMap(monitors *collectionlist.List[store.DashboardMonitor]) map[string]string {
+	return collectionlist.ReduceList(
+		monitors,
+		make(map[string]string, monitors.Len()),
+		func(out map[string]string, _ int, monitor store.DashboardMonitor) map[string]string {
+			out[monitor.ID] = monitor.Name
+			return out
+		},
+	)
 }

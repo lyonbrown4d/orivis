@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/configx"
 	"github.com/lyonbrown4d/orivis/internal/discovery"
-	"github.com/samber/lo"
 	"github.com/spf13/pflag"
 )
 
@@ -63,79 +63,92 @@ func finalizeConfig(cfg Config) (Config, error) {
 	return cfg, nil
 }
 
-func LoadFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
-	opts := []configx.Option{configx.WithFlagSet(flags)}
+func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
+	loadOptions := []configx.Option{configx.WithFlagSet(flags)}
 	if configFile != "" {
 		if isHCLConfigFile(configFile) {
-			return LoadHCLFromFlags(flags, configFile)
+			return LoadHCLFromFlags(flags, configFile, opts...)
 		}
-		opts = append(opts, configx.WithFiles(configFile))
+		loadOptions = append(loadOptions, configx.WithFiles(configFile))
 	}
-	return Load(opts...)
+	loadOptions = append(loadOptions, opts...)
+	return Load(loadOptions...)
 }
 
-func LoadHCLFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
-	base, err := loadBaseDotenvValues()
-	if err != nil {
-		return Config{}, err
-	}
+func LoadHCLFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
 	hclValues, err := loadAgentHCLDefaults(configFile)
 	if err != nil {
 		return Config{}, err
 	}
 
-	cfg, err := configx.LoadTErr[Config](
-		configx.WithDefaults(mergeConfigValues(base, hclValues)),
-		configx.WithEnvPrefix("ORIVIS"),
-		configx.WithEnvSeparator("__"),
-		configx.WithPriority(configx.SourceEnv, configx.SourceArgs),
+	loadOptions := append(defaultOptions(),
+		configx.WithSource("agent-hcl", func(context.Context) (map[string]any, error) {
+			return hclValues, nil
+		}),
+		configx.WithPriority(configx.SourceDotenv, configx.SourceCustom, configx.SourceEnv, configx.SourceArgs),
 		configx.WithFlagSet(flags),
-		configx.WithValidateLevel(configx.ValidateLevelStruct),
 	)
+	loadOptions = append(loadOptions, opts...)
+	cfg, err := configx.LoadTErr[Config](loadOptions...)
 	if err != nil {
 		return Config{}, err
 	}
 	return finalizeConfig(cfg)
 }
 
-func loadBaseDotenvValues() (map[string]any, error) {
-	cfg, err := configx.LoadConfig(append(defaultOptions(), configx.WithPriority(configx.SourceDotenv))...)
-	if err != nil {
-		return nil, fmt.Errorf("load base dotenv config: %w", err)
-	}
-	return cfg.All().All(), nil
-}
-
-func mergeConfigValues(base, override map[string]any) map[string]any {
-	return lo.Assign(base, override)
-}
-
 func isHCLConfigFile(path string) bool {
 	return strings.EqualFold(filepath.Ext(strings.TrimSpace(path)), ".hcl")
 }
 
+type defaultConfigValues struct {
+	Server struct {
+		URL string `json:"url"`
+	} `json:"server"`
+	Agent struct {
+		Name         string   `json:"name"`
+		Region       string   `json:"region"`
+		Environments []string `json:"environments"`
+	} `json:"agent"`
+	Runtime string `json:"runtime"`
+	Poll    struct {
+		Interval time.Duration `json:"interval"`
+	} `json:"poll"`
+	Discovery struct {
+		Static struct {
+			Enabled  bool     `json:"enabled"`
+			HCLFiles []string `json:"hcl_files"`
+		} `json:"static"`
+		Docker struct {
+			Mode string `json:"mode"`
+		} `json:"docker"`
+	} `json:"discovery"`
+	Log struct {
+		Level string `json:"level"`
+	} `json:"log"`
+}
+
 func defaultOptions() []configx.Option {
 	return []configx.Option{
-		configx.WithDefaults(map[string]any{
-			"server.url":                 "http://127.0.0.1:8080",
-			"agent.name":                 "local-agent",
-			"agent.token":                "",
-			"agent.region":               "local",
-			"agent.environments":         []string{},
-			"runtime":                    "host",
-			"poll.interval":              30 * time.Second,
-			"discovery.static.enabled":   true,
-			"discovery.static.hcl_files": []string{},
-			"discovery.static.monitor":   discovery.StaticMonitor{},
-			"discovery.static.monitors":  []discovery.StaticMonitor{},
-			"discovery.docker.enabled":   false,
-			"discovery.docker.mode":      "container",
-			"log.level":                  "info",
-		}),
+		configx.WithTypedDefaults(defaultConfig()),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithEnvSeparator("__"),
 		configx.WithValidateLevel(configx.ValidateLevelStruct),
 	}
+}
+
+func defaultConfig() defaultConfigValues {
+	var cfg defaultConfigValues
+	cfg.Server.URL = "http://127.0.0.1:8080"
+	cfg.Agent.Name = "local-agent"
+	cfg.Agent.Region = "local"
+	cfg.Agent.Environments = []string{}
+	cfg.Runtime = "host"
+	cfg.Poll.Interval = 30 * time.Second
+	cfg.Discovery.Static.Enabled = true
+	cfg.Discovery.Static.HCLFiles = []string{}
+	cfg.Discovery.Docker.Mode = "container"
+	cfg.Log.Level = "info"
+	return cfg
 }
 
 func normalizeStaticMonitors(single discovery.StaticMonitor, monitors, hclMonitors []discovery.StaticMonitor) []discovery.StaticMonitor {

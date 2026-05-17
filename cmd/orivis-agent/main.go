@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/arcgolabs/configx"
 	"github.com/arcgolabs/dix"
 	"github.com/arcgolabs/logx"
-	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
 	agentconfig "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/collector"
@@ -64,8 +64,11 @@ func main() {
 func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 	configModule := dix.NewModule("config",
 		dix.WithModuleProviders(
-			dix.ProviderErr0(func() (agentconfig.Config, error) {
-				return agentconfig.LoadFromFlags(cmd.Flags(), configFile)
+			dix.ProviderErr0(func() (*agentconfig.Watcher, error) {
+				return agentconfig.NewWatcherFromFlags(cmd.Flags(), configFile, configx.WithObservability(observability.NewBootstrap()))
+			}),
+			dix.Provider1(func(watcher *agentconfig.Watcher) agentconfig.Config {
+				return watcher.Config()
 			}),
 		),
 	)
@@ -95,29 +98,17 @@ func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 		),
 	)
 
-	clientModule := dix.NewModule("agent-client",
+	collectorModule := dix.NewModule("collector",
 		dix.WithModuleImports(configModule, loggingModule, observabilityModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr3(agentclient.New),
+			dix.ProviderErr3(collector.NewRuntimeController),
 		),
 		dix.WithModuleHooks(
-			dix.OnStop[*agentclient.Client](func(ctx context.Context, client *agentclient.Client) error {
-				return client.Close(ctx)
-			}, dix.LifecycleName("close-agent-client"), dix.LifecycleAfter("stop-agent-collector")),
-		),
-	)
-
-	collectorModule := dix.NewModule("collector",
-		dix.WithModuleImports(configModule, loggingModule, clientModule),
-		dix.WithModuleProviders(
-			dix.Provider3(collector.NewRunner),
-		),
-		dix.WithModuleHooks(
-			dix.OnStart[*collector.Runner](func(ctx context.Context, runner *collector.Runner) error {
-				return runner.Start(ctx)
+			dix.OnStart[*collector.RuntimeController](func(ctx context.Context, controller *collector.RuntimeController) error {
+				return controller.Start(ctx)
 			}, dix.LifecycleName("start-agent-collector")),
-			dix.OnStop[*collector.Runner](func(ctx context.Context, runner *collector.Runner) error {
-				return runner.Stop(ctx)
+			dix.OnStop[*collector.RuntimeController](func(ctx context.Context, controller *collector.RuntimeController) error {
+				return controller.Stop(ctx)
 			}, dix.LifecycleName("stop-agent-collector")),
 		),
 	)

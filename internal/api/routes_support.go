@@ -10,6 +10,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/lyonbrown4d/orivis/internal/store"
+	"github.com/samber/mo"
 )
 
 type agentRegisterInput struct {
@@ -86,8 +87,5 @@ func normalizeProtocolString(value string) string {
 }
 
 func protocolEnabled(value *bool) bool {
-	if value == nil {
-		return true
-	}
-	return *value
+	return mo.PointerToOption(value).OrElse(true)
 }

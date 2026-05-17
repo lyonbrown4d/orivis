@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/hashicorp/hcl/v2/hclsimple"
 	"github.com/samber/oops"
 )
@@ -28,19 +29,26 @@ type staticHCLProbe struct {
 }
 
 func LoadStaticMonitorsHCL(files []string) ([]StaticMonitor, error) {
-	monitors := make([]StaticMonitor, 0)
-	for _, file := range files {
+	paths := collectionlist.FilterMapList(collectionlist.NewList(files...), func(_ int, file string) (string, bool) {
 		path := strings.TrimSpace(file)
-		if path == "" {
-			continue
-		}
-		loaded, err := loadStaticMonitorsHCLFile(path)
-		if err != nil {
-			return nil, err
-		}
-		monitors = append(monitors, loaded...)
+		return path, path != ""
+	})
+	monitors, err := collectionlist.ReduceErrList(
+		paths,
+		collectionlist.NewList[StaticMonitor](),
+		func(out *collectionlist.List[StaticMonitor], _ int, path string) (*collectionlist.List[StaticMonitor], error) {
+			loaded, err := loadStaticMonitorsHCLFile(path)
+			if err != nil {
+				return nil, err
+			}
+			out.Add(loaded...)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load static monitor HCL files: %w", err)
 	}
-	return monitors, nil
+	return monitors.Values(), nil
 }
 
 func loadStaticMonitorsHCLFile(path string) ([]StaticMonitor, error) {
@@ -49,15 +57,22 @@ func loadStaticMonitorsHCLFile(path string) ([]StaticMonitor, error) {
 		return nil, fmt.Errorf("%w", oops.Wrapf(err, "load static monitor HCL file %s", path))
 	}
 
-	monitors := make([]StaticMonitor, 0, len(file.Probes))
-	for index := range file.Probes {
-		monitor, err := file.Probes[index].staticMonitor()
-		if err != nil {
-			return nil, fmt.Errorf("%w", oops.Wrapf(err, "decode static monitor HCL probe %q", file.Probes[index].Name))
-		}
-		monitors = append(monitors, monitor)
+	monitors, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(file.Probes...),
+		collectionlist.NewListWithCapacity[StaticMonitor](len(file.Probes)),
+		func(out *collectionlist.List[StaticMonitor], _ int, probe staticHCLProbe) (*collectionlist.List[StaticMonitor], error) {
+			monitor, err := probe.staticMonitor()
+			if err != nil {
+				return nil, fmt.Errorf("%w", oops.Wrapf(err, "decode static monitor HCL probe %q", probe.Name))
+			}
+			out.Add(monitor)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("decode static monitor HCL file %s: %w", path, err)
 	}
-	return monitors, nil
+	return monitors.Values(), nil
 }
 
 func (probe staticHCLProbe) staticMonitor() (StaticMonitor, error) {

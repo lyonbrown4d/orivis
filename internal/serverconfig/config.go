@@ -63,41 +63,78 @@ func Load(opts ...configx.Option) (Config, error) {
 	return cfg, nil
 }
 
-func LoadFromFlags(flags *pflag.FlagSet, configFile string) (Config, error) {
-	opts := []configx.Option{configx.WithFlagSet(flags)}
+func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
+	loadOptions := []configx.Option{configx.WithFlagSet(flags)}
 	if configFile != "" {
-		opts = append(opts, configx.WithFiles(configFile))
+		loadOptions = append(loadOptions, configx.WithFiles(configFile))
 	}
-	return Load(opts...)
+	loadOptions = append(loadOptions, opts...)
+	return Load(loadOptions...)
+}
+
+type defaultConfigValues struct {
+	App struct {
+		Env string `json:"env"`
+	} `json:"app"`
+	HTTP struct {
+		Addr string `json:"addr"`
+	} `json:"http"`
+	Web struct {
+		Root string `json:"root"`
+	} `json:"web"`
+	Log struct {
+		Level string `json:"level"`
+	} `json:"log"`
+	DB struct {
+		Driver string `json:"driver"`
+		DSN    string `json:"dsn"`
+	} `json:"db"`
+	Ingest struct {
+		QueueSize     int    `json:"queuesize"`
+		BatchSize     int    `json:"batchsize"`
+		FlushInterval string `json:"flushinterval"`
+	} `json:"ingest"`
+	Retention struct {
+		Enabled         bool   `json:"enabled"`
+		ResultTTL       string `json:"resultttl"`
+		CleanupInterval string `json:"cleanupinterval"`
+	} `json:"retention"`
+	Auth struct {
+		Dashboard struct {
+			Username string `json:"username"`
+		} `json:"dashboard"`
+	} `json:"auth"`
+	Observability struct {
+		Prometheus struct {
+			Namespace string `json:"namespace"`
+		} `json:"prometheus"`
+	} `json:"observability"`
 }
 
 func defaultOptions() []configx.Option {
 	return []configx.Option{
-		configx.WithDefaults(map[string]any{
-			"app.env":                            "development",
-			"http.addr":                          ":8080",
-			"web.enabled":                        false,
-			"web.root":                           "web/dist",
-			"log.level":                          "info",
-			"db.driver":                          "sqlite",
-			"db.dsn":                             DefaultSQLiteDSN,
-			"ingest.queuesize":                   4096,
-			"ingest.batchsize":                   100,
-			"ingest.flushinterval":               "1s",
-			"retention.enabled":                  true,
-			"retention.resultttl":                "168h",
-			"retention.cleanupinterval":          "1h",
-			"auth.agent.token":                   "",
-			"auth.dashboard.enabled":             false,
-			"auth.dashboard.username":            "admin",
-			"auth.dashboard.password":            "",
-			"auth.dashboard.jwt_secret":          "",
-			"auth.dashboard.secure_cookie":       false,
-			"observability.prometheus.enabled":   false,
-			"observability.prometheus.namespace": "orivis",
-		}),
+		configx.WithTypedDefaults(defaultConfig()),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithEnvSeparator("__"),
 		configx.WithValidateLevel(configx.ValidateLevelStruct),
 	}
+}
+
+func defaultConfig() defaultConfigValues {
+	var cfg defaultConfigValues
+	cfg.App.Env = "development"
+	cfg.HTTP.Addr = ":8080"
+	cfg.Web.Root = "web/dist"
+	cfg.Log.Level = "info"
+	cfg.DB.Driver = "sqlite"
+	cfg.DB.DSN = DefaultSQLiteDSN
+	cfg.Ingest.QueueSize = 4096
+	cfg.Ingest.BatchSize = 100
+	cfg.Ingest.FlushInterval = "1s"
+	cfg.Retention.Enabled = true
+	cfg.Retention.ResultTTL = "168h"
+	cfg.Retention.CleanupInterval = "1h"
+	cfg.Auth.Dashboard.Username = "admin"
+	cfg.Observability.Prometheus.Namespace = "orivis"
+	return cfg
 }

@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/arcgolabs/configx"
 	"github.com/arcgolabs/dix"
 	"github.com/arcgolabs/eventx"
 	"github.com/arcgolabs/httpx"
@@ -17,6 +18,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/api"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
+	baseobs "github.com/lyonbrown4d/orivis/internal/observability"
 	"github.com/lyonbrown4d/orivis/internal/retention"
 	"github.com/lyonbrown4d/orivis/internal/security"
 	serverconfig "github.com/lyonbrown4d/orivis/internal/serverconfig"
@@ -79,7 +81,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	configModule := dix.NewModule("config",
 		dix.WithModuleProviders(
 			dix.ProviderErr0(func() (serverconfig.Config, error) {
-				return serverconfig.LoadFromFlags(cmd.Flags(), configFile)
+				return serverconfig.LoadFromFlags(cmd.Flags(), configFile, configx.WithObservability(baseobs.NewBootstrap()))
 			}),
 		),
 	)

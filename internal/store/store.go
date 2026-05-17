@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strings"
 
 	"github.com/arcgolabs/dbx"
@@ -14,6 +13,7 @@ import (
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
+	"github.com/samber/lo"
 	_ "modernc.org/sqlite" // register sqlite database driver
 )
 
@@ -152,7 +152,7 @@ func (s *Store) EnvironmentIDForAgent(ctx context.Context, agent model.Agent, co
 	if err != nil {
 		return "", err
 	}
-	if slices.Contains(environmentIDs, environmentID) {
+	if lo.Contains(environmentIDs, environmentID) {
 		return environmentID, nil
 	}
 	return "", fmt.Errorf("%w: agent is not assigned to environment %s", ErrUnauthorized, code)

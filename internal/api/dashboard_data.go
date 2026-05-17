@@ -7,15 +7,16 @@ import (
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
+	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
 const dashboardDefaultGroup = "default"
 
-func dashboardLatestResults(results []store.DashboardResult) map[string]dashboardResultView {
-	latestByMonitor := make(map[string]dashboardResultView, len(results))
-	collectionlist.NewList(results...).Range(func(_ int, result store.DashboardResult) bool {
+func dashboardLatestResults(results *collectionlist.List[store.DashboardResult]) map[string]dashboardResultView {
+	latestByMonitor := make(map[string]dashboardResultView, results.Len())
+	results.Range(func(_ int, result store.DashboardResult) bool {
 		if _, ok := latestByMonitor[result.MonitorID]; !ok {
 			latestByMonitor[result.MonitorID] = dashboardResultView{DashboardResult: result}
 		}
@@ -25,11 +26,11 @@ func dashboardLatestResults(results []store.DashboardResult) map[string]dashboar
 }
 
 func dashboardMonitorViews(
-	monitors []store.DashboardMonitor,
+	monitors *collectionlist.List[store.DashboardMonitor],
 	latestByMonitor map[string]dashboardResultView,
-) []dashboardMonitorView {
+) *collectionlist.List[dashboardMonitorView] {
 	return collectionlist.MapList(
-		collectionlist.NewList(monitors...),
+		monitors,
 		func(_ int, monitor store.DashboardMonitor) dashboardMonitorView {
 			item := dashboardMonitorView{
 				DashboardMonitor: monitor,
@@ -42,56 +43,7 @@ func dashboardMonitorViews(
 			}
 			return item
 		},
-	).Values()
-}
-
-func dashboardEnvironmentGroups(monitors []dashboardMonitorView) []dashboardEnvironmentGroup {
-	indexByName := make(map[string]int, len(monitors))
-	groups := make([]dashboardEnvironmentGroup, 0)
-	for index := range monitors {
-		monitor := monitors[index]
-		group := dashboardEnvironmentGroupForMonitor(&monitor, indexByName, &groups)
-		group.Monitors = append(group.Monitors, monitor)
-		addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
-	}
-	return groups
-}
-
-func dashboardServiceGroups(monitors []dashboardMonitorView, activeSlug string) []dashboardServiceGroup {
-	indexBySlug := make(map[string]int, len(monitors))
-	groups := make([]dashboardServiceGroup, 0)
-	for index := range monitors {
-		monitor := monitors[index]
-		name := dashboardGroupName(monitor.GroupName)
-		slug := dashboardGroupSlug(name)
-		groupIndex, ok := indexBySlug[slug]
-		if !ok {
-			groupIndex = len(groups)
-			indexBySlug[slug] = groupIndex
-			groups = append(groups, dashboardServiceGroup{
-				Name:   name,
-				Slug:   slug,
-				Active: slug == activeSlug,
-			})
-		}
-		group := &groups[groupIndex]
-		group.Count++
-		addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
-	}
-	return groups
-}
-
-func dashboardSelectedGroupName(groups []dashboardServiceGroup, activeSlug string) string {
-	activeSlug = strings.TrimSpace(activeSlug)
-	if activeSlug == "" {
-		return ""
-	}
-	for index := range groups {
-		if groups[index].Slug == activeSlug {
-			return groups[index].Name
-		}
-	}
-	return activeSlug
+	)
 }
 
 func dashboardFilteredSnapshot(snapshot store.DashboardSnapshot, groupSlug string) store.DashboardSnapshot {
@@ -101,24 +53,23 @@ func dashboardFilteredSnapshot(snapshot store.DashboardSnapshot, groupSlug strin
 	}
 
 	out := snapshot
-	out.Monitors = make([]store.DashboardMonitor, 0, len(snapshot.Monitors))
-	monitorIDs := make(map[string]struct{}, len(snapshot.Monitors))
-	for index := range snapshot.Monitors {
-		monitor := snapshot.Monitors[index]
-		if dashboardGroupSlug(monitor.GroupName) != groupSlug {
-			continue
-		}
-		out.Monitors = append(out.Monitors, monitor)
-		monitorIDs[monitor.ID] = struct{}{}
-	}
-
-	out.Results = make([]store.DashboardResult, 0, len(snapshot.Results))
-	for index := range snapshot.Results {
-		result := snapshot.Results[index]
-		if _, ok := monitorIDs[result.MonitorID]; ok {
-			out.Results = append(out.Results, result)
-		}
-	}
+	monitorIDs := collectionset.NewSetWithCapacity[string](len(snapshot.Monitors))
+	out.Monitors = collectionlist.FilterMapList(
+		collectionlist.NewList(snapshot.Monitors...),
+		func(_ int, monitor store.DashboardMonitor) (store.DashboardMonitor, bool) {
+			if dashboardGroupSlug(monitor.GroupName) != groupSlug {
+				return store.DashboardMonitor{}, false
+			}
+			monitorIDs.Add(monitor.ID)
+			return monitor, true
+		},
+	).Values()
+	out.Results = collectionlist.FilterMapList(
+		collectionlist.NewList(snapshot.Results...),
+		func(_ int, result store.DashboardResult) (store.DashboardResult, bool) {
+			return result, monitorIDs.Contains(result.MonitorID)
+		},
+	).Values()
 	return out
 }
 
@@ -172,25 +123,7 @@ func writeDashboardGroupSlugRune(builder *strings.Builder, item rune, lastDash b
 	}
 }
 
-func dashboardEnvironmentGroupForMonitor(
-	monitor *dashboardMonitorView,
-	indexByName map[string]int,
-	groups *[]dashboardEnvironmentGroup,
-) *dashboardEnvironmentGroup {
-	name := strings.TrimSpace(monitor.EnvironmentCode)
-	if name == "" {
-		name = "default"
-	}
-	index, ok := indexByName[name]
-	if !ok {
-		index = len(*groups)
-		indexByName[name] = index
-		*groups = append(*groups, dashboardEnvironmentGroup{Name: name})
-	}
-	return &(*groups)[index]
-}
-
-func dashboardResults(snapshot store.DashboardSnapshot, limit int) []dashboardResultView {
+func dashboardResults(snapshot store.DashboardSnapshot, limit int) *collectionlist.List[dashboardResultView] {
 	monitorNames := collectionmapping.AssociateList(
 		collectionlist.NewList(snapshot.Monitors...),
 		func(_ int, monitor store.DashboardMonitor) (string, string) {
@@ -206,9 +139,11 @@ func dashboardResults(snapshot store.DashboardSnapshot, limit int) []dashboardRe
 				MonitorName:     monitorNames.GetOrDefault(result.MonitorID, ""),
 			}
 		},
-	).Values()
-	if limit > 0 && len(results) > limit {
-		return results[:limit]
+	)
+	if limit > 0 && results.Len() > limit {
+		return collectionlist.FilterMapList(results, func(index int, result dashboardResultView) (dashboardResultView, bool) {
+			return result, index < limit
+		})
 	}
 	return results
 }
@@ -246,16 +181,6 @@ func dashboardDiscoveryDetail(sourceKey string) string {
 	default:
 		return sourceKey
 	}
-}
-
-func dashboardMonitorStatusTotals(monitors []dashboardMonitorView) (int, int, int) {
-	up := 0
-	down := 0
-	unknown := 0
-	for index := range monitors {
-		addDashboardStatus(&up, &down, &unknown, monitors[index].Latest)
-	}
-	return up, down, unknown
 }
 
 func addDashboardStatus(up, down, unknown *int, latest *dashboardResultView) {

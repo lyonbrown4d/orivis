@@ -2,8 +2,9 @@ package discovery
 
 import (
 	"fmt"
-	"maps"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 func inferredMonitorFields(source LabelSource, fields map[string]string) (map[string]string, bool) {
@@ -29,9 +30,7 @@ func inferredMonitorFields(source LabelSource, fields map[string]string) (map[st
 }
 
 func cloneFields(fields map[string]string) map[string]string {
-	out := make(map[string]string, len(fields)+3)
-	maps.Copy(out, fields)
-	return out
+	return lo.Assign(map[string]string{}, fields)
 }
 
 func inferMonitorType(ports []int) string {
@@ -66,12 +65,11 @@ func selectMonitorPort(monitorType string, ports []int) int {
 	if len(ports) == 0 {
 		return defaultMonitorPort(monitorType)
 	}
-	for _, want := range preferredMonitorPorts(monitorType) {
-		for _, port := range ports {
-			if port == want {
-				return port
-			}
-		}
+	port, ok := lo.Find(preferredMonitorPorts(monitorType), func(want int) bool {
+		return lo.Contains(ports, want)
+	})
+	if ok {
+		return port
 	}
 	return ports[0]
 }
@@ -99,12 +97,7 @@ func preferredMonitorPorts(monitorType string) []int {
 }
 
 func monitorField(field string) bool {
-	switch field {
-	case "type", "target", "name", "group", "enabled", "interval", "timeout", "retry", "aggregation":
-		return true
-	default:
-		return false
-	}
+	return lo.Contains([]string{"type", "target", "name", "group", "enabled", "interval", "timeout", "retry", "aggregation"}, field)
 }
 
 func defaultMonitorKey(defaultName string) string {
@@ -116,11 +109,11 @@ func defaultMonitorKey(defaultName string) string {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
+	value, ok := lo.Find(values, func(value string) bool {
+		return strings.TrimSpace(value) != ""
+	})
+	if !ok {
+		return ""
 	}
-	return ""
+	return strings.TrimSpace(value)
 }

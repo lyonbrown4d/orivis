@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/store"
@@ -44,15 +45,15 @@ func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *da
 		return huma.Error500InternalServerError("load dashboard snapshot", err)
 	}
 	allMonitors := dashboardMonitors(snapshot)
-	view.AllMonitors = len(allMonitors)
+	view.AllMonitors = allMonitors.Len()
 	view.Groups = dashboardServiceGroups(allMonitors, groupSlug)
 	view.SelectedGroup = dashboardSelectedGroupName(view.Groups, groupSlug)
 	snapshot = dashboardFilteredSnapshot(snapshot, groupSlug)
 	view.GeneratedAt = snapshot.GeneratedAt
-	view.Agents = snapshot.Agents
-	view.Summary.Agents = len(snapshot.Agents)
-	view.Summary.Monitors = len(snapshot.Monitors)
+	view.Agents = collectionlist.NewList(snapshot.Agents...)
+	view.Summary.Agents = view.Agents.Len()
 	view.Monitors = dashboardMonitors(snapshot)
+	view.Summary.Monitors = view.Monitors.Len()
 	view.Environments = dashboardEnvironmentGroups(view.Monitors)
 	view.RecentResults = dashboardResults(snapshot, 20)
 	view.StatusLights = dashboardStatusLights(snapshot, 120)
@@ -68,7 +69,7 @@ func (e *dashboardEndpoint) dashboardSnapshotResponse(ctx context.Context, group
 	return newDashboardSnapshotResponse(view), nil
 }
 
-func dashboardMonitors(snapshot store.DashboardSnapshot) []dashboardMonitorView {
-	latestByMonitor := dashboardLatestResults(snapshot.Results)
-	return dashboardMonitorViews(snapshot.Monitors, latestByMonitor)
+func dashboardMonitors(snapshot store.DashboardSnapshot) *collectionlist.List[dashboardMonitorView] {
+	latestByMonitor := dashboardLatestResults(collectionlist.NewList(snapshot.Results...))
+	return dashboardMonitorViews(collectionlist.NewList(snapshot.Monitors...), latestByMonitor)
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 )
 
@@ -37,15 +38,22 @@ func (d *StaticDiscoverer) Discover(context.Context) ([]protocol.AgentDiscovered
 		return nil, nil
 	}
 
-	out := make([]protocol.AgentDiscoveredMonitor, 0, len(d.monitors))
-	for index := range d.monitors {
-		discovered, err := staticMonitor(d.monitors[index])
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, discovered)
+	monitors, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(d.monitors...),
+		collectionlist.NewListWithCapacity[protocol.AgentDiscoveredMonitor](len(d.monitors)),
+		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, monitor StaticMonitor) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
+			discovered, err := staticMonitor(monitor)
+			if err != nil {
+				return nil, fmt.Errorf("decode static monitor: %w", err)
+			}
+			out.Add(discovered)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("discover static monitors: %w", err)
 	}
-	return out, nil
+	return monitors.Values(), nil
 }
 
 func (d *StaticDiscoverer) Close(context.Context) error {

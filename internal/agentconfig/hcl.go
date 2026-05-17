@@ -216,20 +216,13 @@ func (probe agentHCLProbe) staticMonitor() (discovery.StaticMonitor, error) {
 		Enabled:           probe.Enabled,
 		Interval:          interval,
 		Timeout:           timeout,
-		RetryCount:        optionFromPtr(probe.RetryCount).OrElse(0),
+		RetryCount:        mo.PointerToOption(probe.RetryCount).OrElse(0),
 		AggregationPolicy: strings.TrimSpace(probe.AggregationPolicy),
 	}, nil
 }
 
-func optionFromPtr[T any](value *T) mo.Option[T] {
-	if value == nil {
-		return mo.None[T]()
-	}
-	return mo.Some(*value)
-}
-
 func setOptional[T any](values map[string]any, key string, value *T) {
-	optionFromPtr(value).ForEach(func(value T) {
+	mo.PointerToOption(value).ForEach(func(value T) {
 		values[key] = value
 	})
 }

@@ -10,7 +10,7 @@ require (
 	github.com/arcgolabs/collectionx/list v0.8.0
 	github.com/arcgolabs/collectionx/mapping v0.8.0
 	github.com/arcgolabs/collectionx/set v0.8.0
-	github.com/arcgolabs/configx v0.3.2
+	github.com/arcgolabs/configx v0.4.0
 	github.com/arcgolabs/dbx v0.1.8
 	github.com/arcgolabs/dix v0.11.0
 	github.com/arcgolabs/eventx v0.1.2
@@ -31,10 +31,12 @@ require (
 	github.com/moby/moby/client v0.4.1
 	github.com/prometheus-community/pro-bing v0.8.0
 	github.com/redis/go-redis/v9 v9.19.0
+	github.com/samber/lo v1.53.0
+	github.com/samber/mo v1.16.0
 	github.com/samber/oops v1.21.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	golang.org/x/crypto v0.50.0
+	golang.org/x/crypto v0.51.0
 	modernc.org/sqlite v1.50.1
 )
 
@@ -106,7 +108,7 @@ require (
 	github.com/klauspost/pgzip v1.2.6 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/knadh/koanf/parsers/json v1.0.0 // indirect
-	github.com/knadh/koanf/parsers/toml/v2 v2.2.0 // indirect
+	github.com/knadh/koanf/parsers/toml/v2 v2.2.1 // indirect
 	github.com/knadh/koanf/parsers/yaml v1.1.0 // indirect
 	github.com/knadh/koanf/providers/env/v2 v2.0.0 // indirect
 	github.com/knadh/koanf/providers/file v1.2.1 // indirect
@@ -149,8 +151,6 @@ require (
 	github.com/samber/go-singleflightx v0.3.2 // indirect
 	github.com/samber/go-type-to-string v1.8.0 // indirect
 	github.com/samber/hot v0.13.0 // indirect
-	github.com/samber/lo v1.53.0 // indirect
-	github.com/samber/mo v1.16.0 // indirect
 	github.com/samber/oops/loggers/zerolog v0.0.0-20260504184729-457cdc1d7809 // indirect
 	github.com/samber/slog-common v0.22.0 // indirect
 	github.com/samber/slog-zerolog/v2 v2.9.2 // indirect
@@ -186,8 +186,8 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260504160031-60b97b32f348 // indirect

@@ -124,12 +124,18 @@ func (e *agentEndpoint) syncMonitors(ctx context.Context, input *agentMonitorSyn
 }
 
 func (e *agentEndpoint) syncAgentMonitors(ctx context.Context, agent model.Agent, monitors []protocol.AgentDiscoveredMonitor) (int, error) {
-	synced := 0
-	for index := range monitors {
-		if err := e.syncAgentMonitor(ctx, agent, monitors[index]); err != nil {
-			return 0, err
-		}
-		synced++
+	synced, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(monitors...),
+		0,
+		func(count int, _ int, monitor protocol.AgentDiscoveredMonitor) (int, error) {
+			if err := e.syncAgentMonitor(ctx, agent, monitor); err != nil {
+				return count, err
+			}
+			return count + 1, nil
+		},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("sync agent monitors: %w", err)
 	}
 	return synced, nil
 }

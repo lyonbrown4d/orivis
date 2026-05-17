@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 )
@@ -96,17 +97,24 @@ func parseMonitorGroups(
 	names := groups.Keys()
 	sort.Strings(names)
 
-	monitors := make([]protocol.AgentDiscoveredMonitor, 0, len(names))
-	for _, name := range names {
-		fields, _ := groups.Get(name)
-		fields, _ = inferredMonitorFields(source, fields)
-		monitor, err := parseMonitor(sourceKey, environment, defaultGroup, name, fields)
-		if err != nil {
-			return nil, err
-		}
-		monitors = append(monitors, monitor)
+	monitors, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(names...),
+		collectionlist.NewListWithCapacity[protocol.AgentDiscoveredMonitor](len(names)),
+		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, name string) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
+			fields, _ := groups.Get(name)
+			fields, _ = inferredMonitorFields(source, fields)
+			monitor, err := parseMonitor(sourceKey, environment, defaultGroup, name, fields)
+			if err != nil {
+				return nil, err
+			}
+			out.Add(monitor)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parse monitor label groups: %w", err)
 	}
-	return monitors, nil
+	return monitors.Values(), nil
 }
 
 func parseMonitor(sourceKey, environment, defaultGroup, key string, fields map[string]string) (protocol.AgentDiscoveredMonitor, error) {

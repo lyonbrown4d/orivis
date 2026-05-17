@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/store"
@@ -15,18 +16,18 @@ type dashboardView struct {
 	Version       buildinfo.Info
 	Database      dashboardDatabase
 	GeneratedAt   time.Time
-	Agents        []store.DashboardAgent
-	Monitors      []dashboardMonitorView
-	Environments  []dashboardEnvironmentGroup
-	Groups        []dashboardServiceGroup
+	Agents        *collectionlist.List[store.DashboardAgent]
+	Monitors      *collectionlist.List[dashboardMonitorView]
+	Environments  *collectionlist.List[dashboardEnvironmentGroup]
+	Groups        *collectionlist.List[dashboardServiceGroup]
 	AuthEnabled   bool
 	AllMonitors   int
 	GroupSlug     string
 	SelectedGroup string
 	RefreshPath   string
 	LangOptions   []dashboardLanguageOption
-	RecentResults []dashboardResultView
-	StatusLights  []dashboardStatusLight
+	RecentResults *collectionlist.List[dashboardResultView]
+	StatusLights  *collectionlist.List[dashboardStatusLight]
 	Summary       dashboardSummary
 	T             func(string) string
 }

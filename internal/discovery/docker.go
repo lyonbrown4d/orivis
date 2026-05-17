@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/swarm"
@@ -76,18 +78,17 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 		return nil, fmt.Errorf("list Docker containers: %w", err)
 	}
 
-	out := make([]protocol.AgentDiscoveredMonitor, 0)
-	for index := range result.Items {
-		item := result.Items[index]
-		source := ContainerLabelSource(item)
-		source.DefaultEnvironment = firstNonEmpty(d.defaultEnvironment, source.DefaultEnvironment)
-		monitors, err := ParseLabels(source)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, monitors...)
+	monitors, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(result.Items...),
+		collectionlist.NewList[protocol.AgentDiscoveredMonitor](),
+		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item container.Summary) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
+			return collectDockerLabelMonitors(out, ContainerLabelSource(item), d.defaultEnvironment)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parse Docker container labels: %w", err)
 	}
-	return out, nil
+	return monitors.Values(), nil
 }
 
 func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
@@ -96,17 +97,30 @@ func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.Age
 		return nil, fmt.Errorf("list Docker services: %w", err)
 	}
 
-	out := make([]protocol.AgentDiscoveredMonitor, 0)
-	for index := range result.Items {
-		item := result.Items[index]
-		source := ServiceLabelSource(item)
-		source.DefaultEnvironment = firstNonEmpty(d.defaultEnvironment, source.DefaultEnvironment)
-		monitors, err := ParseLabels(source)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, monitors...)
+	monitors, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(result.Items...),
+		collectionlist.NewList[protocol.AgentDiscoveredMonitor](),
+		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item swarm.Service) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
+			return collectDockerLabelMonitors(out, ServiceLabelSource(item), d.defaultEnvironment)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parse Docker service labels: %w", err)
 	}
+	return monitors.Values(), nil
+}
+
+func collectDockerLabelMonitors(
+	out *collectionlist.List[protocol.AgentDiscoveredMonitor],
+	source LabelSource,
+	defaultEnvironment string,
+) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
+	source.DefaultEnvironment = firstNonEmpty(defaultEnvironment, source.DefaultEnvironment)
+	parsed, err := ParseLabels(source)
+	if err != nil {
+		return nil, err
+	}
+	out.Add(parsed...)
 	return out, nil
 }
 
@@ -185,23 +199,21 @@ func ContainerTargetHost(item container.Summary) string {
 
 // ContainerPorts returns exposed private container ports.
 func ContainerPorts(item container.Summary) []int {
-	ports := make([]int, 0, len(item.Ports))
-	seen := map[int]struct{}{}
-	for _, port := range item.Ports {
+	seen := collectionset.NewSetWithCapacity[int](len(item.Ports))
+	return collectionlist.FilterMapList(collectionlist.NewList(item.Ports...), func(_ int, port container.PortSummary) (int, bool) {
 		if !strings.EqualFold(strings.TrimSpace(port.Type), "tcp") {
-			continue
+			return 0, false
 		}
 		value := int(port.PrivatePort)
 		if value == 0 {
-			continue
+			return 0, false
 		}
-		if _, ok := seen[value]; ok {
-			continue
+		if seen.Contains(value) {
+			return 0, false
 		}
-		seen[value] = struct{}{}
-		ports = append(ports, value)
-	}
-	return ports
+		seen.Add(value)
+		return value, true
+	}).Values()
 }
 
 // ServiceSourceKey returns the stable discovery source key for a Docker Swarm service.
@@ -250,23 +262,21 @@ func ServiceTargetHost(item swarm.Service) string {
 
 // ServicePorts returns exposed target ports for a Docker Swarm service.
 func ServicePorts(item swarm.Service) []int {
-	ports := make([]int, 0, len(item.Endpoint.Ports))
-	seen := map[int]struct{}{}
-	for _, port := range item.Endpoint.Ports {
+	seen := collectionset.NewSetWithCapacity[int](len(item.Endpoint.Ports))
+	return collectionlist.FilterMapList(collectionlist.NewList(item.Endpoint.Ports...), func(_ int, port swarm.PortConfig) (int, bool) {
 		if !strings.EqualFold(string(port.Protocol), "tcp") {
-			continue
+			return 0, false
 		}
 		value := int(port.TargetPort)
 		if value == 0 {
-			continue
+			return 0, false
 		}
-		if _, ok := seen[value]; ok {
-			continue
+		if seen.Contains(value) {
+			return 0, false
 		}
-		seen[value] = struct{}{}
-		ports = append(ports, value)
-	}
-	return ports
+		seen.Add(value)
+		return value, true
+	}).Values()
 }
 
 func containerRuntimeName(item container.Summary) string {

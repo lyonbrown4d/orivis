@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/dbx"
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
+	"github.com/samber/lo"
 	"github.com/samber/oops"
 )
 
@@ -95,17 +97,31 @@ func (s *resultStore) prepareProbeResultRows(
 	queryer resultQueryer,
 	params []RecordProbeResultParams,
 ) ([]model.ProbeResult, []*probeResultRow, error) {
-	results := make([]model.ProbeResult, 0, len(params))
-	rows := make([]*probeResultRow, 0, len(params))
-	for index := range params {
-		result, row, err := s.prepareProbeResultRow(ctx, queryer, params[index])
-		if err != nil {
-			return nil, nil, err
-		}
-		results = append(results, result)
-		rows = append(rows, row)
+	prepared, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(params...),
+		preparedProbeResultRows{
+			results: collectionlist.NewListWithCapacity[model.ProbeResult](len(params)),
+			rows:    collectionlist.NewListWithCapacity[*probeResultRow](len(params)),
+		},
+		func(out preparedProbeResultRows, _ int, params RecordProbeResultParams) (preparedProbeResultRows, error) {
+			result, row, err := s.prepareProbeResultRow(ctx, queryer, params)
+			if err != nil {
+				return out, err
+			}
+			out.results.Add(result)
+			out.rows.Add(row)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("prepare probe result rows: %w", err)
 	}
-	return results, rows, nil
+	return prepared.results.Values(), prepared.rows.Values(), nil
+}
+
+type preparedProbeResultRows struct {
+	results *collectionlist.List[model.ProbeResult]
+	rows    *collectionlist.List[*probeResultRow]
 }
 
 func (s *resultStore) prepareProbeResultRow(
@@ -226,10 +242,5 @@ func normalizeProbeResultParams(params RecordProbeResultParams) (normalizedProbe
 }
 
 func validProbeStatus(status model.Status) bool {
-	switch status {
-	case model.StatusUp, model.StatusDown, model.StatusDegraded, model.StatusUnknown:
-		return true
-	default:
-		return false
-	}
+	return lo.Contains([]model.Status{model.StatusUp, model.StatusDown, model.StatusDegraded, model.StatusUnknown}, status)
 }

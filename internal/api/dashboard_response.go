@@ -90,7 +90,7 @@ func newDashboardSnapshotResponse(view *dashboardView) dashboardSnapshotResponse
 		GroupSlug:     view.GroupSlug,
 		SelectedGroup: view.SelectedGroup,
 		Summary:       view.Summary,
-		Groups:        view.Groups,
+		Groups:        dashboardListValues(view.Groups),
 		Agents:        dashboardAgentResponses(view.Agents),
 		Monitors:      dashboardMonitorResponses(view.Monitors),
 		RecentResults: dashboardResultResponses(view.RecentResults),
@@ -98,9 +98,24 @@ func newDashboardSnapshotResponse(view *dashboardView) dashboardSnapshotResponse
 	}
 }
 
-func dashboardAgentResponses(agents []store.DashboardAgent) []dashboardAgentResponse {
+func dashboardListValues[T any](items *collectionlist.List[T]) []T {
+	if items == nil {
+		return nil
+	}
+	return items.Values()
+}
+
+func dashboardListOrEmpty[T any](items *collectionlist.List[T]) *collectionlist.List[T] {
+	if items == nil {
+		return collectionlist.NewList[T]()
+	}
+	return items
+}
+
+func dashboardAgentResponses(agents *collectionlist.List[store.DashboardAgent]) []dashboardAgentResponse {
+	agents = dashboardListOrEmpty(agents)
 	return collectionlist.MapList(
-		collectionlist.NewList(agents...),
+		agents,
 		func(_ int, agent store.DashboardAgent) dashboardAgentResponse {
 			return dashboardAgentResponse{
 				ID:               agent.ID,
@@ -116,9 +131,10 @@ func dashboardAgentResponses(agents []store.DashboardAgent) []dashboardAgentResp
 	).Values()
 }
 
-func dashboardMonitorResponses(monitors []dashboardMonitorView) []dashboardMonitorResponse {
+func dashboardMonitorResponses(monitors *collectionlist.List[dashboardMonitorView]) []dashboardMonitorResponse {
+	monitors = dashboardListOrEmpty(monitors)
 	return collectionlist.MapList(
-		collectionlist.NewList(monitors...),
+		monitors,
 		func(_ int, monitor dashboardMonitorView) dashboardMonitorResponse {
 			item := dashboardMonitorResponse{
 				ID:                monitor.ID,
@@ -145,9 +161,10 @@ func dashboardMonitorResponses(monitors []dashboardMonitorView) []dashboardMonit
 	).Values()
 }
 
-func dashboardResultResponses(results []dashboardResultView) []dashboardResultResponse {
+func dashboardResultResponses(results *collectionlist.List[dashboardResultView]) []dashboardResultResponse {
+	results = dashboardListOrEmpty(results)
 	return collectionlist.MapList(
-		collectionlist.NewList(results...),
+		results,
 		func(_ int, result dashboardResultView) dashboardResultResponse {
 			return dashboardResultResponseFromView(result)
 		},
@@ -172,9 +189,10 @@ func dashboardResultResponseFromView(result dashboardResultView) dashboardResult
 	}
 }
 
-func dashboardLightResponses(lights []dashboardStatusLight) []dashboardLightResponse {
+func dashboardLightResponses(lights *collectionlist.List[dashboardStatusLight]) []dashboardLightResponse {
+	lights = dashboardListOrEmpty(lights)
 	return collectionlist.MapList(
-		collectionlist.NewList(lights...),
+		lights,
 		func(_ int, light dashboardStatusLight) dashboardLightResponse {
 			return dashboardLightResponse{
 				MonitorName: light.MonitorName,
