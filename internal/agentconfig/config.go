@@ -1,14 +1,15 @@
 package config
 
 import (
-	"context"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/configx"
+	jsonparser "github.com/knadh/koanf/parsers/json"
+	tomlparser "github.com/knadh/koanf/parsers/toml/v2"
+	yamlparser "github.com/knadh/koanf/parsers/yaml"
 	"github.com/lyonbrown4d/orivis/internal/discovery"
 	"github.com/spf13/pflag"
 )
@@ -66,38 +67,10 @@ func finalizeConfig(cfg Config) (Config, error) {
 func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
 	loadOptions := []configx.Option{configx.WithFlagSet(flags)}
 	if configFile != "" {
-		if isHCLConfigFile(configFile) {
-			return LoadHCLFromFlags(flags, configFile, opts...)
-		}
 		loadOptions = append(loadOptions, configx.WithFiles(configFile))
 	}
 	loadOptions = append(loadOptions, opts...)
 	return Load(loadOptions...)
-}
-
-func LoadHCLFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
-	hclValues, err := loadAgentHCLDefaults(configFile)
-	if err != nil {
-		return Config{}, err
-	}
-
-	loadOptions := append(defaultOptions(),
-		configx.WithSource("agent-hcl", func(context.Context) (map[string]any, error) {
-			return hclValues, nil
-		}),
-		configx.WithPriority(configx.SourceDotenv, configx.SourceCustom, configx.SourceEnv, configx.SourceArgs),
-		configx.WithFlagSet(flags),
-	)
-	loadOptions = append(loadOptions, opts...)
-	cfg, err := configx.LoadTErr[Config](loadOptions...)
-	if err != nil {
-		return Config{}, err
-	}
-	return finalizeConfig(cfg)
-}
-
-func isHCLConfigFile(path string) bool {
-	return strings.EqualFold(filepath.Ext(strings.TrimSpace(path)), ".hcl")
 }
 
 type defaultConfigValues struct {
@@ -128,11 +101,24 @@ type defaultConfigValues struct {
 }
 
 func defaultOptions() []configx.Option {
-	return []configx.Option{
+	fileParsers := configFileParserOptions()
+	opts := make([]configx.Option, 0, 4+len(fileParsers))
+	opts = append(opts,
 		configx.WithTypedDefaults(defaultConfig()),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithEnvSeparator("__"),
 		configx.WithValidateLevel(configx.ValidateLevelStruct),
+	)
+	return append(opts, fileParsers...)
+}
+
+func configFileParserOptions() []configx.Option {
+	return []configx.Option{
+		configx.WithFileParser(".json", jsonparser.Parser()),
+		configx.WithFileParser(".toml", tomlparser.Parser()),
+		configx.WithFileParser(".yaml", yamlparser.Parser()),
+		configx.WithFileParser(".yml", yamlparser.Parser()),
+		configx.WithFileParser(".hcl", agentHCLFileParser()),
 	}
 }
 

@@ -24,7 +24,7 @@ type Watcher struct {
 }
 
 func NewWatcherFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (*Watcher, error) {
-	if configFile != "" && !isHCLConfigFile(configFile) {
+	if configFile != "" {
 		return newConfigxWatcher(flags, configFile, opts...)
 	}
 	return newPollingWatcher(flags, configFile, opts...)

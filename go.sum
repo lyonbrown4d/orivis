@@ -68,8 +68,8 @@ github.com/arcgolabs/collectionx/mapping v0.8.0 h1:nocPzyU9ccsJaS3A036O1VH4l2pSv
 github.com/arcgolabs/collectionx/mapping v0.8.0/go.mod h1:X/bcV1HjKy+GRRuLHFUiHQ22hZ8yIF9QDGYIvdQFLo4=
 github.com/arcgolabs/collectionx/set v0.8.0 h1:qIE6LHMWFjcETzikv+acNNvkIShmyAVVtN83sG+GCSg=
 github.com/arcgolabs/collectionx/set v0.8.0/go.mod h1:575TbrhYlQ2LlnYuIDXb7TZRVru9EipuPG5bTE5RxAk=
-github.com/arcgolabs/configx v0.4.0 h1:8O4e0meXBsCU93juKk1Nt7zJQKoxCkq/YYhDjw4wms4=
-github.com/arcgolabs/configx v0.4.0/go.mod h1:rpbHmYiHqTUF9+bMLcUBNGgbLDG9d0VBWAi4/ugjWcM=
+github.com/arcgolabs/configx v0.5.0 h1:D8RdQtipoVxGFm65KSu7y6tnzmuj7IMRiHATDIX5k3o=
+github.com/arcgolabs/configx v0.5.0/go.mod h1:3g37h5yhkKa3ZmSVJ7UI4paDK359vxS9Em+9Q3b42bA=
 github.com/arcgolabs/dbx v0.1.8 h1:oju7LScEA4hk6Y02oBIyI+bee9yDNztkd62Psqz1MAA=
 github.com/arcgolabs/dbx v0.1.8/go.mod h1:UjHgI+XVwvUdRn18DMgyrhwvY2FEJy97p7xoYUmK+Tc=
 github.com/arcgolabs/dix v0.11.0 h1:4wNJdOEkkUnY9gum/eJw0rcKAkrRGo4YPz1HkV5kxXs=

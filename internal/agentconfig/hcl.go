@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -71,10 +72,28 @@ type agentHCLProbe struct {
 	AggregationPolicy string `hcl:"aggregation,optional"`
 }
 
-func loadAgentHCLDefaults(path string) (map[string]any, error) {
+type agentHCLParser struct{}
+
+func agentHCLFileParser() agentHCLParser {
+	return agentHCLParser{}
+}
+
+func (agentHCLParser) Unmarshal(raw []byte) (map[string]any, error) {
+	values, err := decodeAgentHCL("agent.hcl", raw)
+	if err != nil {
+		return nil, err
+	}
+	return values, nil
+}
+
+func (agentHCLParser) Marshal(map[string]any) ([]byte, error) {
+	return nil, errors.New("agent HCL marshal is not supported")
+}
+
+func decodeAgentHCL(filename string, raw []byte) (map[string]any, error) {
 	var file agentHCLFile
-	if err := hclsimple.DecodeFile(path, nil, &file); err != nil {
-		return nil, fmt.Errorf("%w", oops.Wrapf(err, "load agent HCL config %s", path))
+	if err := hclsimple.Decode(filename, raw, nil, &file); err != nil {
+		return nil, fmt.Errorf("%w", oops.Wrapf(err, "load agent HCL config %s", filename))
 	}
 	return file.defaults()
 }
@@ -107,7 +126,7 @@ func (file agentHCLFile) applyAgent(values map[string]any) {
 	setString(values, "agent.token", file.Agent.Token)
 	setString(values, "agent.region", file.Agent.Region)
 	if len(file.Agent.Environments) > 0 {
-		values["agent.environments"] = file.Agent.Environments
+		setValue(values, "agent.environments", file.Agent.Environments)
 	}
 }
 
@@ -140,7 +159,7 @@ func (file agentHCLFile) applyDiscovery(values map[string]any) error {
 		return err
 	}
 	if len(monitors) > 0 {
-		values["discovery.static.monitors"] = monitors
+		setValue(values, "discovery.static.monitors", monitors)
 	}
 	return nil
 }
@@ -151,7 +170,7 @@ func (discoveryConfig agentHCLDiscovery) applyStatic(values map[string]any) {
 	}
 	setOptional(values, "discovery.static.enabled", discoveryConfig.Static.Enabled)
 	if len(discoveryConfig.Static.HCLFiles) > 0 {
-		values["discovery.static.hcl_files"] = discoveryConfig.Static.HCLFiles
+		setValue(values, "discovery.static.hcl_files", discoveryConfig.Static.HCLFiles)
 	}
 }
 
@@ -223,7 +242,7 @@ func (probe agentHCLProbe) staticMonitor() (discovery.StaticMonitor, error) {
 
 func setOptional[T any](values map[string]any, key string, value *T) {
 	mo.PointerToOption(value).ForEach(func(value T) {
-		values[key] = value
+		setValue(values, key, value)
 	})
 }
 
@@ -242,6 +261,20 @@ func parseAgentHCLDuration(value string) (time.Duration, error) {
 func setString(values map[string]any, key, value string) {
 	value = strings.TrimSpace(value)
 	if value != "" {
-		values[key] = value
+		setValue(values, key, value)
 	}
+}
+
+func setValue(values map[string]any, key string, value any) {
+	parts := strings.Split(key, ".")
+	cursor := values
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := cursor[part].(map[string]any)
+		if !ok {
+			next = make(map[string]any)
+			cursor[part] = next
+		}
+		cursor = next
+	}
+	cursor[parts[len(parts)-1]] = value
 }

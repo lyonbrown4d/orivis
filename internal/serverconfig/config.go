@@ -2,6 +2,9 @@ package config
 
 import (
 	"github.com/arcgolabs/configx"
+	jsonparser "github.com/knadh/koanf/parsers/json"
+	tomlparser "github.com/knadh/koanf/parsers/toml/v2"
+	yamlparser "github.com/knadh/koanf/parsers/yaml"
 	"github.com/spf13/pflag"
 )
 
@@ -112,11 +115,23 @@ type defaultConfigValues struct {
 }
 
 func defaultOptions() []configx.Option {
-	return []configx.Option{
+	fileParsers := configFileParserOptions()
+	opts := make([]configx.Option, 0, 4+len(fileParsers))
+	opts = append(opts,
 		configx.WithTypedDefaults(defaultConfig()),
 		configx.WithEnvPrefix("ORIVIS"),
 		configx.WithEnvSeparator("__"),
 		configx.WithValidateLevel(configx.ValidateLevelStruct),
+	)
+	return append(opts, fileParsers...)
+}
+
+func configFileParserOptions() []configx.Option {
+	return []configx.Option{
+		configx.WithFileParser(".json", jsonparser.Parser()),
+		configx.WithFileParser(".toml", tomlparser.Parser()),
+		configx.WithFileParser(".yaml", yamlparser.Parser()),
+		configx.WithFileParser(".yml", yamlparser.Parser()),
 	}
 }
 
