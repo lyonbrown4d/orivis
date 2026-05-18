@@ -109,17 +109,37 @@ export async function fetchSnapshot(group?: string): Promise<DashboardSnapshot> 
     }
     throw new Error('dashboard snapshot cache missing for 304 response');
   }
+  const snapshot = normalizeSnapshot(response.data);
   const etag = response.headers.etag;
   if (typeof etag === 'string' && etag !== '') {
-    snapshotCache.set(cacheKey, { etag, data: response.data });
+    snapshotCache.set(cacheKey, { etag, data: snapshot });
   } else {
     snapshotCache.delete(cacheKey);
   }
-  return response.data;
+  return snapshot;
 }
 
 function snapshotCacheKey(group?: string) {
   return group && group.trim() !== '' ? group : '__all__';
+}
+
+function normalizeSnapshot(snapshot: DashboardSnapshot): DashboardSnapshot {
+  return {
+    ...snapshot,
+    groups: arrayOrEmpty(snapshot.groups),
+    agents: arrayOrEmpty(snapshot.agents).map((agent) => ({
+      ...agent,
+      environment_codes: arrayOrEmpty(agent.environment_codes)
+    })),
+    monitors: arrayOrEmpty(snapshot.monitors),
+    recent_results: arrayOrEmpty(snapshot.recent_results),
+    status_lights: arrayOrEmpty(snapshot.status_lights),
+    notifications: arrayOrEmpty(snapshot.notifications)
+  };
+}
+
+function arrayOrEmpty<T>(items: T[] | null | undefined): T[] {
+  return Array.isArray(items) ? items : [];
 }
 
 export async function fetchAuthSession(): Promise<AuthSession> {
