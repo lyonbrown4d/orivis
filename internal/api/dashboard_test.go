@@ -36,4 +36,36 @@ func TestDashboardSnapshotReturnsJSON(t *testing.T) {
 	if body["env"] != "test" {
 		t.Fatalf("expected env test, got %#v", body["env"])
 	}
+	if etag := rec.Header().Get("ETag"); etag == "" {
+		t.Fatal("expected ETag header")
+	}
+}
+
+func TestDashboardSnapshotSupportsETag(t *testing.T) {
+	cfg := config.Config{}
+	cfg.App.Env = "test"
+	cfg.DB.Driver = "sqlite"
+
+	server := newAPITestServer(cfg, newAPITestStore(t))
+	handler := server.Runtime().HumaAPI().Adapter()
+
+	firstReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/dashboard/snapshot", http.NoBody)
+	firstRec := httptest.NewRecorder()
+	handler.ServeHTTP(firstRec, firstReq)
+	etag := firstRec.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("expected first response ETag")
+	}
+
+	secondReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/dashboard/snapshot", http.NoBody)
+	secondReq.Header.Set("If-None-Match", etag)
+	secondRec := httptest.NewRecorder()
+	handler.ServeHTTP(secondRec, secondReq)
+
+	if secondRec.Code != http.StatusNotModified {
+		t.Fatalf("expected status 304, got %d: %s", secondRec.Code, secondRec.Body.String())
+	}
+	if secondRec.Body.Len() != 0 {
+		t.Fatalf("expected empty 304 response body, got %q", secondRec.Body.String())
+	}
 }

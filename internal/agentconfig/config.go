@@ -29,6 +29,10 @@ type Config struct {
 		Interval time.Duration `mapstructure:"interval" validate:"required"`
 		Jitter   time.Duration `mapstructure:"jitter"`
 	} `mapstructure:"poll"`
+	Buffer struct {
+		Enabled  bool `mapstructure:"enabled"`
+		Capacity int  `mapstructure:"capacity" validate:"min=0"`
+	} `mapstructure:"buffer"`
 	Discovery struct {
 		Static struct {
 			Monitor  discovery.StaticMonitor   `mapstructure:"monitor"`
@@ -88,6 +92,10 @@ type defaultConfigValues struct {
 		Interval time.Duration `json:"interval"`
 		Jitter   time.Duration `json:"jitter"`
 	} `json:"poll"`
+	Buffer struct {
+		Enabled  bool `json:"enabled"`
+		Capacity int  `json:"capacity"`
+	} `json:"buffer"`
 	Discovery struct {
 		Static struct {
 			Enabled  bool     `json:"enabled"`
@@ -133,6 +141,8 @@ func defaultConfig() defaultConfigValues {
 	cfg.Runtime = "host"
 	cfg.Poll.Interval = 30 * time.Second
 	cfg.Poll.Jitter = 5 * time.Second
+	cfg.Buffer.Enabled = true
+	cfg.Buffer.Capacity = 1024
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
 	cfg.Discovery.Docker.Mode = "container"

@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
@@ -11,7 +12,6 @@ import (
 	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
 	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
-	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/probe"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/samber/oops"
@@ -27,6 +27,8 @@ type Runner struct {
 	stop      context.CancelFunc
 	sched     *gocron.Scheduler
 	tasks     *collectionmapping.Map[string, scheduledTask]
+	results   *resultBuffer
+	flushMu   sync.Mutex
 }
 
 type monitorDiscoverer interface {
@@ -39,13 +41,17 @@ type scheduledTask struct {
 }
 
 func NewRunner(cfg config.Config, logger *slog.Logger, client *agentclient.Client) *Runner {
-	return &Runner{
+	runner := &Runner{
 		cfg:     cfg,
 		logger:  logger,
 		client:  client,
 		checker: probe.New(),
 		tasks:   collectionmapping.NewMap[string, scheduledTask](),
 	}
+	if cfg.Buffer.Enabled {
+		runner.results = newResultBuffer(cfg.Buffer.Capacity)
+	}
+	return runner
 }
 
 func (r *Runner) Start(ctx context.Context) error {
@@ -104,6 +110,7 @@ func (r *Runner) syncTasks(ctx context.Context) {
 		r.logger.Warn("agent heartbeat failed", "error", err)
 		return
 	}
+	r.flushBufferedResults(ctx)
 	if err := r.syncDiscoveredMonitors(ctx); err != nil {
 		r.logger.Warn("agent monitor discovery sync failed", "error", err)
 	}
@@ -249,31 +256,4 @@ func (r *Runner) removeTask(monitorID string) {
 		r.logger.Warn("remove agent task failed", "monitor_id", monitorID, "error", err)
 	}
 	r.tasks.Delete(monitorID)
-}
-
-func (r *Runner) runTask(ctx context.Context, task protocol.AgentTask) {
-	if err := ctx.Err(); err != nil {
-		return
-	}
-
-	result := r.checker.Check(ctx, task)
-	if err := r.client.ReportResult(ctx, protocol.AgentResultRequest{
-		AgentID:      r.agentID,
-		Token:        r.cfg.Agent.Token,
-		MonitorID:    task.MonitorID,
-		Status:       string(result.Status),
-		LatencyMS:    result.Latency.Milliseconds(),
-		ErrorMessage: result.ErrorMessage,
-		CheckedAt:    result.CheckedAt,
-		RawDetail:    result.RawDetail,
-	}); err != nil {
-		r.logger.Warn("agent result report failed", "monitor_id", task.MonitorID, "error", err)
-		return
-	}
-
-	level := slog.LevelDebug
-	if result.Status != model.StatusUp {
-		level = slog.LevelWarn
-	}
-	r.logger.Log(ctx, level, "agent task checked", "monitor_id", task.MonitorID, "status", result.Status, "latency", result.Latency)
 }

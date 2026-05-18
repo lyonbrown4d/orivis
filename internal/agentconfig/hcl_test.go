@@ -59,8 +59,11 @@ func assertHCLAgentIdentity(t *testing.T, cfg config.Config) {
 	if cfg.Agent.Name != "hcl-agent" || cfg.Runtime != "docker-compose" {
 		t.Fatalf("unexpected HCL agent config: %#v", cfg)
 	}
-	if cfg.Poll.Interval != 12*time.Second || cfg.Log.Level != "debug" {
+	if cfg.Poll.Interval != 12*time.Second || cfg.Poll.Jitter != time.Second || cfg.Log.Level != "debug" {
 		t.Fatalf("unexpected HCL timing/log config: %#v", cfg)
+	}
+	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 42 {
+		t.Fatalf("unexpected HCL buffer config: %#v", cfg.Buffer)
 	}
 }
 
@@ -96,6 +99,12 @@ runtime = "docker-compose"
 
 poll {
   interval = "12s"
+  jitter = "1s"
+}
+
+buffer {
+  enabled = true
+  capacity = 42
 }
 
 log {

@@ -100,6 +100,18 @@ func (e *dashboardEndpoint) fiberDashboardSnapshot(ctx *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	etag, err := dashboardSnapshotETag(out)
+	if err != nil {
+		return fmt.Errorf("build dashboard snapshot etag: %w", err)
+	}
+	ctx.Set(fiber.HeaderETag, etag)
+	ctx.Set(fiber.HeaderCacheControl, "private, must-revalidate")
+	if dashboardETagMatches(ctx.Get(fiber.HeaderIfNoneMatch), etag) {
+		if err := ctx.SendStatus(fiber.StatusNotModified); err != nil {
+			return fmt.Errorf("write dashboard snapshot not modified response: %w", err)
+		}
+		return nil
+	}
 	if err := ctx.JSON(out); err != nil {
 		return fmt.Errorf("write dashboard snapshot response: %w", err)
 	}

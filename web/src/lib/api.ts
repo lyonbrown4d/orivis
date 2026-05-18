@@ -64,6 +64,8 @@ export const http = axios.create({
   headers: { 'Content-Type': 'application/json' }
 });
 
+const snapshotCache = new Map<string, { etag: string; data: DashboardSnapshot }>();
+
 export async function login(username: string, password: string) {
   await http.post('/api/auth/login', { username, password });
 }
@@ -73,10 +75,30 @@ export async function logout() {
 }
 
 export async function fetchSnapshot(group?: string): Promise<DashboardSnapshot> {
+  const cacheKey = snapshotCacheKey(group);
+  const cached = snapshotCache.get(cacheKey);
   const response = await http.get<DashboardSnapshot>('/api/dashboard/snapshot', {
-    params: group ? { group } : undefined
+    params: group ? { group } : undefined,
+    headers: cached ? { 'If-None-Match': cached.etag } : undefined,
+    validateStatus: (status) => (status >= 200 && status < 300) || status === 304
   });
+  if (response.status === 304) {
+    if (cached) {
+      return cached.data;
+    }
+    throw new Error('dashboard snapshot cache missing for 304 response');
+  }
+  const etag = response.headers.etag;
+  if (typeof etag === 'string' && etag !== '') {
+    snapshotCache.set(cacheKey, { etag, data: response.data });
+  } else {
+    snapshotCache.delete(cacheKey);
+  }
   return response.data;
+}
+
+function snapshotCacheKey(group?: string) {
+  return group && group.trim() !== '' ? group : '__all__';
 }
 
 export async function fetchAuthSession(): Promise<AuthSession> {

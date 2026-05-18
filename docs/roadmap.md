@@ -74,6 +74,8 @@ Discussion points:
 
 ### Agent offline buffering
 
+Status: initial implementation completed. Agents now keep a bounded in-memory FIFO buffer for failed result reports and drain it after server connectivity returns.
+
 - Add bounded local buffering when the server is unavailable.
 - First implementation can be memory-only.
 - Later implementation can optionally use file-backed spool storage.
@@ -113,6 +115,8 @@ Discussion points:
 
 ### Dashboard API efficiency
 
+Status: initial implementation completed. Snapshot endpoints now emit stable semantic ETags and the React client sends `If-None-Match` during polling, reusing cached data on `304 Not Modified`.
+
 - Add `ETag` or `Last-Modified` support for dashboard snapshot endpoints.
 - Consider splitting summary and history into separate endpoints.
 - Keep React Query polling, but reduce payload churn.
@@ -135,6 +139,6 @@ Discussion points:
 
 ## Current recommended next batch
 
-1. Store batch write path: remove ingest N+1.
-2. Dashboard cache invalidation: delete snapshot cache after successful result flush.
-3. Notification delivery reliability: queue plus retry/backoff.
+1. Agent offline buffering: decide whether the memory buffer should evolve into file-backed spool storage.
+2. Notification history UI: persist and display recent delivery attempts.
+3. More production probes: add MongoDB, RabbitMQ/AMQP, and NATS probes.

@@ -49,6 +49,8 @@ func main() {
 	cmd.Flags().String("runtime", "", "agent runtime")
 	cmd.Flags().Duration("poll-interval", 0, "task polling interval")
 	cmd.Flags().Duration("poll-jitter", 0, "maximum initial probe schedule jitter")
+	cmd.Flags().Bool("buffer-enabled", false, "enable bounded memory buffering for failed result reports")
+	cmd.Flags().Int("buffer-capacity", 0, "maximum buffered failed result reports")
 	cmd.Flags().StringSlice("discovery-static-hcl-files", nil, "static probe HCL files")
 	cmd.Flags().Bool("discovery-docker-enabled", false, "enable Docker label discovery")
 	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode: container or swarm")

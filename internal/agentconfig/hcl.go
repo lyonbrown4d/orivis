@@ -18,6 +18,7 @@ type agentHCLFile struct {
 	Agent     *agentHCLAgent     `hcl:"agent,block"`
 	Runtime   string             `hcl:"runtime,optional"`
 	Poll      *agentHCLPoll      `hcl:"poll,block"`
+	Buffer    *agentHCLBuffer    `hcl:"buffer,block"`
 	Log       *agentHCLLog       `hcl:"log,block"`
 	Discovery *agentHCLDiscovery `hcl:"discovery,block"`
 }
@@ -36,6 +37,11 @@ type agentHCLAgent struct {
 type agentHCLPoll struct {
 	Interval string `hcl:"interval,optional"`
 	Jitter   string `hcl:"jitter,optional"`
+}
+
+type agentHCLBuffer struct {
+	Enabled  *bool `hcl:"enabled,optional"`
+	Capacity *int  `hcl:"capacity,optional"`
 }
 
 type agentHCLLog struct {
@@ -105,6 +111,7 @@ func (file agentHCLFile) defaults() (map[string]any, error) {
 	file.applyAgent(values)
 	file.applyRuntime(values)
 	file.applyPoll(values)
+	file.applyBuffer(values)
 	file.applyLog(values)
 	if err := file.applyDiscovery(values); err != nil {
 		return nil, err
@@ -141,6 +148,14 @@ func (file agentHCLFile) applyPoll(values map[string]any) {
 	}
 	setString(values, "poll.interval", file.Poll.Interval)
 	setString(values, "poll.jitter", file.Poll.Jitter)
+}
+
+func (file agentHCLFile) applyBuffer(values map[string]any) {
+	if file.Buffer == nil {
+		return
+	}
+	setOptional(values, "buffer.enabled", file.Buffer.Enabled)
+	setOptional(values, "buffer.capacity", file.Buffer.Capacity)
 }
 
 func (file agentHCLFile) applyLog(values map[string]any) {

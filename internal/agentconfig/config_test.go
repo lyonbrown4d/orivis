@@ -34,11 +34,19 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	if cfg.Poll.Interval != 30*time.Second {
 		t.Fatalf("expected default poll interval, got %s", cfg.Poll.Interval)
 	}
+	assertDefaultBufferConfig(t, cfg)
 	if cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "container" {
 		t.Fatalf("unexpected Docker discovery defaults: %#v", cfg.Discovery.Docker)
 	}
 	if !cfg.Discovery.Static.Enabled || len(cfg.Discovery.Static.Monitors) != 0 {
 		t.Fatalf("unexpected static discovery defaults: %#v", cfg.Discovery.Static)
+	}
+}
+
+func assertDefaultBufferConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
+	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 1024 {
+		t.Fatalf("unexpected buffer defaults: %#v", cfg.Buffer)
 	}
 }
 
@@ -52,6 +60,9 @@ func isolateOrivisEnv(t *testing.T) {
 		"ORIVIS_AGENT__ENVIRONMENTS",
 		"ORIVIS_RUNTIME",
 		"ORIVIS_POLL__INTERVAL",
+		"ORIVIS_POLL__JITTER",
+		"ORIVIS_BUFFER__ENABLED",
+		"ORIVIS_BUFFER__CAPACITY",
 		"ORIVIS_LOG__LEVEL",
 		"ORIVIS_DISCOVERY__DOCKER__ENABLED",
 		"ORIVIS_DISCOVERY__DOCKER__MODE",
