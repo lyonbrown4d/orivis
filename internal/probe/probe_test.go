@@ -247,7 +247,7 @@ func TestPostgresDatabaseProbeRecognized(t *testing.T) {
 
 func TestUnsupportedProbe(t *testing.T) {
 	result := probe.New().Check(context.Background(), protocol.AgentTask{
-		Type:   "amqp",
+		Type:   "unsupported-probe",
 		Target: "localhost:6379",
 	})
 

@@ -107,6 +107,12 @@ func (c *Checker) serviceProbeChecker(probeType string) probeChecker {
 		return c.checkRedis
 	case string(model.MonitorMemcached):
 		return c.checkMemcached
+	case string(model.MonitorMongoDB), "mongo":
+		return c.checkMongoDB
+	case string(model.MonitorRabbitMQ), string(model.MonitorAMQP):
+		return c.checkAMQP
+	case string(model.MonitorNATS):
+		return c.checkNATS
 	default:
 		return nil
 	}

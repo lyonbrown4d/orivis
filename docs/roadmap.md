@@ -102,6 +102,8 @@ Discussion points:
 
 ### More production probes
 
+Status: initial implementation completed for MongoDB, RabbitMQ/AMQP, and NATS using existing Go client libraries instead of hand-rolled protocol commands.
+
 - Add MongoDB probe.
 - Add RabbitMQ/AMQP probe.
 - Add NATS probe.
@@ -128,6 +130,8 @@ Discussion points:
 
 ### Notification history UI
 
+Status: initial implementation completed. Webhook delivery attempts are now persisted and surfaced in the dashboard snapshot and UI sidebar.
+
 - Persist notification delivery attempts.
 - Show recent notification status in the dashboard.
 - Provide enough detail to debug webhook failures without reading server logs.
@@ -139,6 +143,6 @@ Discussion points:
 
 ## Current recommended next batch
 
-1. Agent offline buffering: decide whether the memory buffer should evolve into file-backed spool storage.
-2. Notification history UI: persist and display recent delivery attempts.
-3. More production probes: add MongoDB, RabbitMQ/AMQP, and NATS probes.
+1. More production probes: upgrade Kafka from TCP/basic connectivity to broker metadata checks.
+2. TLS/cert probe: add certificate expiry thresholds and degraded status.
+3. Agent offline buffering: decide whether the memory buffer should evolve into file-backed spool storage.
