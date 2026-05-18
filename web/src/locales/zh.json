@@ -60,5 +60,13 @@
   "loading": "正在加载可用性数据...",
   "up": "正常",
   "unknown": "未知",
-  "updated": "更新时间"
+  "updated": "更新时间",
+  "attempt": "尝试",
+  "httpStatus": "HTTP 状态",
+  "duration": "耗时",
+  "noNotifications": "暂无通知投递记录。",
+  "notifications": "通知",
+  "sentAt": "发送时间",
+  "failed": "失败",
+  "success": "成功"
 }

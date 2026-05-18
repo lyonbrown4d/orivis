@@ -2,14 +2,14 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, ArrowLeft, CircleAlert, Cpu, ExternalLink, RadioTower, Timer } from 'lucide-react';
+import { Activity, ArrowLeft, BellRing, CircleAlert, Cpu, ExternalLink, RadioTower, Timer } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { PreferenceControls } from '@/components/PreferenceControls';
 import { StatusBadge, StatusLights } from '@/components/status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { errorMessage, fetchSnapshot, isUnauthorized, type DashboardSnapshot, type Monitor, type Result } from '@/lib/api';
+import { errorMessage, fetchSnapshot, isUnauthorized, type DashboardSnapshot, type Monitor, type NotificationDelivery, type Result } from '@/lib/api';
 
 export default function DashboardPage({ statusPage = false }: { statusPage?: boolean }) {
   const { t, i18n } = useTranslation();
@@ -176,6 +176,18 @@ function DashboardView({
             )}
           </CardContent>
         </Card>
+
+        <Card className="border-white/60 bg-white/80 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/65">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl font-black">
+              <BellRing className="h-5 w-5 text-teal-600 dark:text-teal-300" />
+              {t('notifications')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {snapshot.notifications.length === 0 ? <EmptyState text={t('noNotifications')} /> : snapshot.notifications.slice(0, 8).map((item) => <NotificationRow key={item.id} item={item} formatTime={formatTime} />)}
+          </CardContent>
+        </Card>
       </aside>
     </div>
   );
@@ -316,6 +328,42 @@ function ResultRow({ result, formatTime }: { result: Result; formatTime: (value?
       </div>
     </div>
   );
+}
+
+function NotificationRow({ item, formatTime }: { item: NotificationDelivery; formatTime: (value?: string) => string }) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white/75 p-4 dark:border-slate-800 dark:bg-slate-900/70">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-black text-slate-950 dark:text-white">{item.monitor_name || item.monitor_id || '-'}</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {item.channel} · {item.event}
+          </p>
+        </div>
+        <Badge className={`rounded-full ${notificationStatusClass(item.status)}`}>{t(item.status)}</Badge>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+        <Metric label={t('attempt')} value={`${item.attempt}/${item.max_attempts}`} />
+        <Metric label={t('httpStatus')} value={item.http_status || '-'} />
+        <Metric label={t('duration')} value={`${item.duration_ms}ms`} />
+        <Metric label={t('sentAt')} value={formatTime(item.created_at)} />
+      </div>
+      {item.error_message && (
+        <div className="mt-3 flex items-start gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{item.error_message}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function notificationStatusClass(status: string) {
+  return status === 'success'
+    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300'
+    : 'bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300';
 }
 
 function IconMetric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {

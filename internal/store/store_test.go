@@ -26,7 +26,7 @@ func TestOpenRunsSQLiteMigrations(t *testing.T) {
 	ctx := context.Background()
 	storage := newTestStore(t)
 
-	for _, table := range []string{"environments", "regions", "agents", "monitors", "probe_results", "schema_migrations"} {
+	for _, table := range []string{"environments", "regions", "agents", "monitors", "probe_results", "notification_deliveries", "schema_migrations"} {
 		assertSQLiteTableExists(ctx, t, storage, table)
 	}
 }
@@ -101,6 +101,35 @@ func TestMonitorTasksAndProbeResults(t *testing.T) {
 	assertAssignedTask(t, storage, agent.ID, monitor.ID)
 	result := recordTestResult(t, storage, agent, monitor.ID)
 	assertProbeResult(t, result, agent, monitor.ID)
+}
+
+func TestNotificationDeliveryHistory(t *testing.T) {
+	storage := newTestStore(t)
+	now := time.Now().UTC()
+	if err := storage.RecordNotificationDelivery(context.Background(), store.NotificationDeliveryParams{
+		Channel:      store.NotificationChannelWebhook,
+		Event:        "monitor_alert",
+		MonitorID:    "monitor-1",
+		AgentID:      "agent-1",
+		Status:       store.NotificationStatusFailed,
+		Attempt:      1,
+		MaxAttempts:  3,
+		HTTPStatus:   500,
+		Duration:     50 * time.Millisecond,
+		ErrorMessage: "webhook notification returned HTTP 500",
+		CheckedAt:    now,
+		SentAt:       now,
+	}); err != nil {
+		t.Fatalf("record notification delivery: %v", err)
+	}
+
+	items, err := storage.DashboardNotifications(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("list dashboard notifications: %v", err)
+	}
+	if len(items) != 1 || items[0].Status != store.NotificationStatusFailed || items[0].HTTPStatus != 500 {
+		t.Fatalf("unexpected notification history: %#v", items)
+	}
 }
 
 func assertSQLiteTableExists(ctx context.Context, t *testing.T, storage *store.Store, table string) {

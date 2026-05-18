@@ -105,7 +105,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	cacheModule := newServerCacheModule(configModule, loggingModule)
 	observabilityModule := newServerObservabilityModule(configModule, loggingModule)
 	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule, cacheModule, observabilityModule)
-	notificationModule := newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule)
+	notificationModule := newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule, storeModule)
 	retentionModule := newServerRetentionModule(configModule, loggingModule, storeModule)
 
 	securityModule := newServerSecurityModule(configModule, loggingModule, observabilityModule)
@@ -207,11 +207,11 @@ func newServerEventModule(loggingModule dix.Module) dix.Module {
 	)
 }
 
-func newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule dix.Module) dix.Module {
+func newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule, storeModule dix.Module) dix.Module {
 	return dix.NewModule("notification",
-		dix.WithModuleImports(configModule, loggingModule, eventModule, cacheModule),
+		dix.WithModuleImports(configModule, loggingModule, eventModule, cacheModule, storeModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr4(notification.NewManager),
+			dix.ProviderErr5(notification.NewManager),
 		),
 		dix.WithModuleHooks(
 			dix.OnStart[*notification.Manager](func(ctx context.Context, manager *notification.Manager) error {

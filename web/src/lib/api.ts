@@ -17,6 +17,7 @@ export interface DashboardSnapshot {
   monitors: Monitor[];
   recent_results: Result[];
   status_lights: Array<{ monitor_name: string; status: Status; latency_ms: number; checked_at: string }>;
+  notifications: NotificationDelivery[];
 }
 
 export interface Monitor {
@@ -50,6 +51,26 @@ export interface Result {
   latency_ms: number;
   error_message?: string;
   checked_at: string;
+  created_at: string;
+}
+
+export interface NotificationDelivery {
+  id: string;
+  channel: string;
+  event: string;
+  monitor_id: string;
+  monitor_name: string;
+  agent_id: string;
+  region_id: string;
+  environment_id: string;
+  status: 'success' | 'failed' | string;
+  attempt: number;
+  max_attempts: number;
+  http_status: number;
+  duration_ms: number;
+  error_message?: string;
+  checked_at: string;
+  sent_at: string;
   created_at: string;
 }
 

@@ -70,6 +70,12 @@ func dashboardFilteredSnapshot(snapshot store.DashboardSnapshot, groupSlug strin
 			return result, monitorIDs.Contains(result.MonitorID)
 		},
 	).Values()
+	out.Notifications = collectionlist.FilterMapList(
+		collectionlist.NewList(snapshot.Notifications...),
+		func(_ int, notification store.DashboardNotification) (store.DashboardNotification, bool) {
+			return notification, monitorIDs.Contains(notification.MonitorID)
+		},
+	).Values()
 	return out
 }
 
@@ -146,6 +152,30 @@ func dashboardResults(snapshot store.DashboardSnapshot, limit int) *collectionli
 		})
 	}
 	return results
+}
+
+func dashboardNotifications(snapshot store.DashboardSnapshot, limit int) *collectionlist.List[dashboardNotificationView] {
+	monitorNames := collectionmapping.AssociateList(
+		collectionlist.NewList(snapshot.Monitors...),
+		func(_ int, monitor store.DashboardMonitor) (string, string) {
+			return monitor.ID, monitor.Name
+		},
+	)
+	notifications := collectionlist.MapList(
+		collectionlist.NewList(snapshot.Notifications...),
+		func(_ int, notification store.DashboardNotification) dashboardNotificationView {
+			return dashboardNotificationView{
+				DashboardNotification: notification,
+				MonitorName:           monitorNames.GetOrDefault(notification.MonitorID, ""),
+			}
+		},
+	)
+	if limit > 0 && notifications.Len() > limit {
+		return collectionlist.FilterMapList(notifications, func(index int, notification dashboardNotificationView) (dashboardNotificationView, bool) {
+			return notification, index < limit
+		})
+	}
+	return notifications
 }
 
 func dashboardDiscoverySource(sourceKey, fallback string) string {

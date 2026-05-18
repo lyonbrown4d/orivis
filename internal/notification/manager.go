@@ -17,6 +17,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/ingest"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
+	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
 type Manager struct {
@@ -24,6 +25,7 @@ type Manager struct {
 	logger        *slog.Logger
 	bus           eventx.BusRuntime
 	cache         cachex.Store
+	storage       *store.Store
 	client        *http.Client
 	mu            sync.Mutex
 	states        map[string]alertState
@@ -59,7 +61,7 @@ type webhookDelivery struct {
 	payload webhookPayload
 }
 
-func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, cacheStore cachex.Store) (*Manager, error) {
+func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, cacheStore cachex.Store, storage *store.Store) (*Manager, error) {
 	timeout, err := parseDuration(cfg.Notification.Webhook.Timeout, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("parse notification webhook timeout: %w", err)
@@ -73,6 +75,7 @@ func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, c
 		logger:        logger,
 		bus:           bus,
 		cache:         cacheStore,
+		storage:       storage,
 		client:        &http.Client{Timeout: timeout},
 		states:        make(map[string]alertState),
 		deliveries:    make(chan webhookDelivery, webhookQueueSize(cfg)),

@@ -8,10 +8,11 @@ import (
 )
 
 type DashboardSnapshot struct {
-	GeneratedAt time.Time
-	Agents      []DashboardAgent
-	Monitors    []DashboardMonitor
-	Results     []DashboardResult
+	GeneratedAt   time.Time
+	Agents        []DashboardAgent
+	Monitors      []DashboardMonitor
+	Results       []DashboardResult
+	Notifications []DashboardNotification
 }
 
 type DashboardAgent struct {

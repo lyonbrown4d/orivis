@@ -28,6 +28,7 @@ type dashboardView struct {
 	LangOptions   []dashboardLanguageOption
 	RecentResults *collectionlist.List[dashboardResultView]
 	StatusLights  *collectionlist.List[dashboardStatusLight]
+	Notifications *collectionlist.List[dashboardNotificationView]
 	Summary       dashboardSummary
 	T             func(string) string
 }
@@ -86,4 +87,9 @@ type dashboardStatusLight struct {
 	Status      model.Status
 	Latency     time.Duration
 	CheckedAt   time.Time
+}
+
+type dashboardNotificationView struct {
+	store.DashboardNotification
+	MonitorName string
 }

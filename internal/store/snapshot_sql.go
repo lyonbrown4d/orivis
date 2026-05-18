@@ -36,11 +36,16 @@ func (s *Store) sqlDashboardSnapshot(ctx context.Context, resultLimit int) (Dash
 	if err != nil {
 		return DashboardSnapshot{}, err
 	}
+	notifications, err := s.DashboardNotifications(ctx, 20)
+	if err != nil {
+		return DashboardSnapshot{}, err
+	}
 	return DashboardSnapshot{
-		GeneratedAt: time.Now().UTC(),
-		Agents:      agents,
-		Monitors:    monitors,
-		Results:     results,
+		GeneratedAt:   time.Now().UTC(),
+		Agents:        agents,
+		Monitors:      monitors,
+		Results:       results,
+		Notifications: notifications,
 	}, nil
 }
 

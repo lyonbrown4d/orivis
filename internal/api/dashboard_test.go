@@ -36,6 +36,9 @@ func TestDashboardSnapshotReturnsJSON(t *testing.T) {
 	if body["env"] != "test" {
 		t.Fatalf("expected env test, got %#v", body["env"])
 	}
+	if _, ok := body["notifications"].([]any); !ok {
+		t.Fatalf("expected notifications array, got %#v", body["notifications"])
+	}
 	if etag := rec.Header().Get("ETag"); etag == "" {
 		t.Fatal("expected ETag header")
 	}

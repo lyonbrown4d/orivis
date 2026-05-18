@@ -60,5 +60,13 @@
   "loading": "Loading uptime data...",
   "up": "Up",
   "unknown": "Unknown",
-  "updated": "Updated"
+  "updated": "Updated",
+  "attempt": "Attempt",
+  "httpStatus": "HTTP status",
+  "duration": "Duration",
+  "noNotifications": "No notification deliveries yet.",
+  "notifications": "Notifications",
+  "sentAt": "Sent at",
+  "failed": "Failed",
+  "success": "Success"
 }

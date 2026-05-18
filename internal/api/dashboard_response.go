@@ -9,21 +9,22 @@ import (
 )
 
 type dashboardSnapshotResponse struct {
-	Name          string                     `json:"name"`
-	Env           string                     `json:"env"`
-	Version       buildinfo.Info             `json:"version"`
-	Database      dashboardDatabase          `json:"database"`
-	GeneratedAt   time.Time                  `json:"generated_at"`
-	AuthEnabled   bool                       `json:"auth_enabled"`
-	AllMonitors   int                        `json:"all_monitors"`
-	GroupSlug     string                     `json:"group_slug"`
-	SelectedGroup string                     `json:"selected_group"`
-	Summary       dashboardSummary           `json:"summary"`
-	Groups        []dashboardServiceGroup    `json:"groups"`
-	Agents        []dashboardAgentResponse   `json:"agents"`
-	Monitors      []dashboardMonitorResponse `json:"monitors"`
-	RecentResults []dashboardResultResponse  `json:"recent_results"`
-	StatusLights  []dashboardLightResponse   `json:"status_lights"`
+	Name          string                          `json:"name"`
+	Env           string                          `json:"env"`
+	Version       buildinfo.Info                  `json:"version"`
+	Database      dashboardDatabase               `json:"database"`
+	GeneratedAt   time.Time                       `json:"generated_at"`
+	AuthEnabled   bool                            `json:"auth_enabled"`
+	AllMonitors   int                             `json:"all_monitors"`
+	GroupSlug     string                          `json:"group_slug"`
+	SelectedGroup string                          `json:"selected_group"`
+	Summary       dashboardSummary                `json:"summary"`
+	Groups        []dashboardServiceGroup         `json:"groups"`
+	Agents        []dashboardAgentResponse        `json:"agents"`
+	Monitors      []dashboardMonitorResponse      `json:"monitors"`
+	RecentResults []dashboardResultResponse       `json:"recent_results"`
+	StatusLights  []dashboardLightResponse        `json:"status_lights"`
+	Notifications []dashboardNotificationResponse `json:"notifications"`
 }
 
 type dashboardAgentResponse struct {
@@ -78,6 +79,26 @@ type dashboardLightResponse struct {
 	CheckedAt   time.Time `json:"checked_at"`
 }
 
+type dashboardNotificationResponse struct {
+	ID            string    `json:"id"`
+	Channel       string    `json:"channel"`
+	Event         string    `json:"event"`
+	MonitorID     string    `json:"monitor_id"`
+	MonitorName   string    `json:"monitor_name"`
+	AgentID       string    `json:"agent_id"`
+	RegionID      string    `json:"region_id"`
+	EnvironmentID string    `json:"environment_id"`
+	Status        string    `json:"status"`
+	Attempt       int       `json:"attempt"`
+	MaxAttempts   int       `json:"max_attempts"`
+	HTTPStatus    int       `json:"http_status"`
+	DurationMS    int64     `json:"duration_ms"`
+	ErrorMessage  string    `json:"error_message,omitempty"`
+	CheckedAt     time.Time `json:"checked_at"`
+	SentAt        time.Time `json:"sent_at"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 func newDashboardSnapshotResponse(view *dashboardView) dashboardSnapshotResponse {
 	return dashboardSnapshotResponse{
 		Name:          view.Name,
@@ -95,6 +116,7 @@ func newDashboardSnapshotResponse(view *dashboardView) dashboardSnapshotResponse
 		Monitors:      dashboardMonitorResponses(view.Monitors),
 		RecentResults: dashboardResultResponses(view.RecentResults),
 		StatusLights:  dashboardLightResponses(view.StatusLights),
+		Notifications: dashboardNotificationResponses(view.Notifications),
 	}
 }
 
@@ -199,6 +221,37 @@ func dashboardLightResponses(lights *collectionlist.List[dashboardStatusLight]) 
 				Status:      string(light.Status),
 				LatencyMS:   light.Latency.Milliseconds(),
 				CheckedAt:   light.CheckedAt,
+			}
+		},
+	).Values()
+}
+
+func dashboardNotificationResponses(notifications *collectionlist.List[dashboardNotificationView]) []dashboardNotificationResponse {
+	notifications = dashboardListOrEmpty(notifications)
+	if notifications.Len() == 0 {
+		return []dashboardNotificationResponse{}
+	}
+	return collectionlist.MapList(
+		notifications,
+		func(_ int, notification dashboardNotificationView) dashboardNotificationResponse {
+			return dashboardNotificationResponse{
+				ID:            notification.ID,
+				Channel:       notification.Channel,
+				Event:         notification.Event,
+				MonitorID:     notification.MonitorID,
+				MonitorName:   notification.MonitorName,
+				AgentID:       notification.AgentID,
+				RegionID:      notification.RegionID,
+				EnvironmentID: notification.EnvironmentID,
+				Status:        notification.Status,
+				Attempt:       notification.Attempt,
+				MaxAttempts:   notification.MaxAttempts,
+				HTTPStatus:    notification.HTTPStatus,
+				DurationMS:    notification.Duration.Milliseconds(),
+				ErrorMessage:  notification.ErrorMessage,
+				CheckedAt:     notification.CheckedAt,
+				SentAt:        notification.SentAt,
+				CreatedAt:     notification.CreatedAt,
 			}
 		},
 	).Values()

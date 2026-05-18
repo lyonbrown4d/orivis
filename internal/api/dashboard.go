@@ -60,6 +60,7 @@ func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *da
 	view.Environments = dashboardEnvironmentGroups(view.Monitors)
 	view.RecentResults = dashboardResults(snapshot, 20)
 	view.StatusLights = dashboardStatusLights(snapshot, 120)
+	view.Notifications = dashboardNotifications(snapshot, 20)
 	view.Summary.Up, view.Summary.Down, view.Summary.Unknown = dashboardMonitorStatusTotals(view.Monitors)
 	return nil
 }

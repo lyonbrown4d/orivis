@@ -30,7 +30,7 @@ func TestWebhookNotificationUsesCachedAlertState(t *testing.T) {
 	})
 
 	cfg := notificationTestConfig(server.URL)
-	manager, err := notification.NewManager(cfg, nil, bus, cachex.NewMemoryStore())
+	manager, err := notification.NewManager(cfg, nil, bus, cachex.NewMemoryStore(), nil)
 	if err != nil {
 		t.Fatalf("new notification manager: %v", err)
 	}

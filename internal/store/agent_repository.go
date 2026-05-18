@@ -104,23 +104,25 @@ func newAgentEnvironmentRepository(database *dbx.DB) *repository.Base[agentEnvir
 }
 
 type Repositories struct {
-	regions           *repository.Base[regionRow, regionSchema]
-	environments      *repository.Base[environmentRow, environmentSchema]
-	agents            *repository.Base[agentRecord, agentSchema]
-	agentEnvironments *repository.Base[agentEnvironmentRow, agentEnvironmentSchema]
-	monitors          *repository.Base[monitorRecord, monitorSchema]
-	monitorAgents     *repository.Base[monitorAgentRow, monitorAgentSchema]
-	probeResults      *repository.Base[probeResultRow, probeResultSchema]
+	regions                *repository.Base[regionRow, regionSchema]
+	environments           *repository.Base[environmentRow, environmentSchema]
+	agents                 *repository.Base[agentRecord, agentSchema]
+	agentEnvironments      *repository.Base[agentEnvironmentRow, agentEnvironmentSchema]
+	monitors               *repository.Base[monitorRecord, monitorSchema]
+	monitorAgents          *repository.Base[monitorAgentRow, monitorAgentSchema]
+	probeResults           *repository.Base[probeResultRow, probeResultSchema]
+	notificationDeliveries *repository.Base[notificationDeliveryRow, notificationDeliverySchema]
 }
 
 func NewRepositories(database *dbx.DB) *Repositories {
 	return &Repositories{
-		regions:           newRegionRepository(database),
-		environments:      newEnvironmentRepository(database),
-		agents:            newAgentRepository(database),
-		agentEnvironments: newAgentEnvironmentRepository(database),
-		monitors:          newMonitorRepository(database),
-		monitorAgents:     newMonitorAgentRepository(database),
-		probeResults:      newProbeResultRepository(database),
+		regions:                newRegionRepository(database),
+		environments:           newEnvironmentRepository(database),
+		agents:                 newAgentRepository(database),
+		agentEnvironments:      newAgentEnvironmentRepository(database),
+		monitors:               newMonitorRepository(database),
+		monitorAgents:          newMonitorAgentRepository(database),
+		probeResults:           newProbeResultRepository(database),
+		notificationDeliveries: newNotificationDeliveryRepository(database),
 	}
 }
