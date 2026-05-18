@@ -143,7 +143,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	eventModule := newServerEventModule(loggingModule)
 	cacheModule := newServerCacheModule(configModule, loggingModule)
 	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule)
-	notificationModule := newServerNotificationModule(configModule, loggingModule, eventModule)
+	notificationModule := newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule)
 	retentionModule := newServerRetentionModule(configModule, loggingModule, storeModule)
 
 	observabilityModule := newServerObservabilityModule(configModule, loggingModule)
@@ -195,7 +195,7 @@ func newServerCacheModule(configModule, loggingModule dix.Module) dix.Module {
 		dix.WithModuleHooks(
 			dix.OnStop[cachex.Store](func(ctx context.Context, cacheStore cachex.Store) error {
 				return cacheStore.Close(ctx)
-			}, dix.LifecycleName("close-cache")),
+			}, dix.LifecycleName("close-cache"), dix.LifecycleAfter("stop-http-server", "stop-notification")),
 		),
 	)
 }
@@ -247,11 +247,11 @@ func newServerEventModule(loggingModule dix.Module) dix.Module {
 	)
 }
 
-func newServerNotificationModule(configModule, loggingModule, eventModule dix.Module) dix.Module {
+func newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule dix.Module) dix.Module {
 	return dix.NewModule("notification",
-		dix.WithModuleImports(configModule, loggingModule, eventModule),
+		dix.WithModuleImports(configModule, loggingModule, eventModule, cacheModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr3(notification.NewManager),
+			dix.ProviderErr4(notification.NewManager),
 		),
 		dix.WithModuleHooks(
 			dix.OnStart[*notification.Manager](func(ctx context.Context, manager *notification.Manager) error {

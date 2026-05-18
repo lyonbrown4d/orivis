@@ -128,6 +128,27 @@ func TestSMTPProbe(t *testing.T) {
 	}
 }
 
+func TestMemcachedProbe(t *testing.T) {
+	listener, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen memcached: %v", err)
+	}
+	t.Cleanup(func() {
+		closeTestResource(t, listener)
+	})
+	go serveMemcachedProbeTestConnection(t, listener)
+
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorMemcached),
+		Target:         "memcached://" + listener.Addr().String(),
+		TimeoutSeconds: 2,
+	})
+
+	if result.Status != model.StatusUp {
+		t.Fatalf("expected memcached probe up, got %#v", result)
+	}
+}
+
 func serveSMTPProbeTestConnection(t *testing.T, listener net.Listener) {
 	t.Helper()
 	conn, err := listener.Accept()
@@ -147,6 +168,23 @@ func serveSMTPProbeTestConnection(t *testing.T, listener net.Listener) {
 		return
 	}
 	if _, readErr := conn.Read(buffer); readErr != nil {
+		return
+	}
+}
+
+func serveMemcachedProbeTestConnection(t *testing.T, listener net.Listener) {
+	t.Helper()
+	conn, err := listener.Accept()
+	if err != nil {
+		return
+	}
+	defer closeTestResource(t, conn)
+	buffer := make([]byte, 128)
+	n, err := conn.Read(buffer)
+	if err != nil || !strings.HasPrefix(strings.ToLower(string(buffer[:n])), "version") {
+		return
+	}
+	if _, writeErr := io.WriteString(conn, "VERSION 1.6.22\r\n"); writeErr != nil {
 		return
 	}
 }

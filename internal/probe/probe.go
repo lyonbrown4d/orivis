@@ -105,6 +105,8 @@ func (c *Checker) serviceProbeChecker(probeType string) probeChecker {
 		return c.checkSMTP
 	case string(model.MonitorRedis):
 		return c.checkRedis
+	case string(model.MonitorMemcached):
+		return c.checkMemcached
 	default:
 		return nil
 	}

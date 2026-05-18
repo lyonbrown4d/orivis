@@ -26,18 +26,19 @@ const (
 type MonitorType string
 
 const (
-	MonitorHTTP     MonitorType = "http"
-	MonitorTCP      MonitorType = "tcp"
-	MonitorPing     MonitorType = "ping"
-	MonitorDNS      MonitorType = "dns"
-	MonitorTLS      MonitorType = "tls"
-	MonitorUDP      MonitorType = "udp"
-	MonitorSMTP     MonitorType = "smtp"
-	MonitorRedis    MonitorType = "redis"
-	MonitorDatabase MonitorType = "database"
-	MonitorSQLite   MonitorType = "sqlite"
-	MonitorMySQL    MonitorType = "mysql"
-	MonitorPostgres MonitorType = "postgres"
+	MonitorHTTP      MonitorType = "http"
+	MonitorTCP       MonitorType = "tcp"
+	MonitorPing      MonitorType = "ping"
+	MonitorDNS       MonitorType = "dns"
+	MonitorTLS       MonitorType = "tls"
+	MonitorUDP       MonitorType = "udp"
+	MonitorSMTP      MonitorType = "smtp"
+	MonitorRedis     MonitorType = "redis"
+	MonitorMemcached MonitorType = "memcached"
+	MonitorDatabase  MonitorType = "database"
+	MonitorSQLite    MonitorType = "sqlite"
+	MonitorMySQL     MonitorType = "mysql"
+	MonitorPostgres  MonitorType = "postgres"
 )
 
 type AggregationPolicy string
