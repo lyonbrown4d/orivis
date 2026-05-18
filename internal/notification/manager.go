@@ -3,12 +3,10 @@ package notification
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +32,7 @@ type Manager struct {
 	done          chan struct{}
 	stopOnce      sync.Once
 	unsubscribe   func()
+	channels      []webhookChannel
 	maxAttempts   int
 	retryInterval time.Duration
 }
@@ -59,9 +58,14 @@ type webhookPayload struct {
 
 type webhookDelivery struct {
 	payload webhookPayload
+	channel webhookChannel
 }
 
 func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, cacheStore cachex.Store, storage *store.Store) (*Manager, error) {
+	channels, err := webhookChannelsFromConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 	timeout, err := parseDuration(cfg.Notification.Webhook.Timeout, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("parse notification webhook timeout: %w", err)
@@ -81,6 +85,7 @@ func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, c
 		deliveries:    make(chan webhookDelivery, webhookQueueSize(cfg)),
 		stop:          make(chan struct{}),
 		done:          make(chan struct{}),
+		channels:      channels,
 		maxAttempts:   webhookMaxAttempts(cfg),
 		retryInterval: retryInterval,
 	}, nil
@@ -147,131 +152,65 @@ func (m *Manager) drainDeliveries(ctx context.Context) {
 
 func (m *Manager) handleProbeResultsRecorded(ctx context.Context, event ingest.ProbeResultsRecordedEvent) error {
 	for index := range event.Results {
-		result := event.Results[index]
-		payload, ok, err := m.nextWebhookPayload(ctx, result)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			continue
-		}
-		if err := m.enqueueWebhook(ctx, payload); err != nil {
+		if err := m.handleProbeResult(ctx, event.Results[index]); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *Manager) enqueueWebhook(ctx context.Context, payload webhookPayload) error {
+func (m *Manager) handleProbeResult(ctx context.Context, result model.ProbeResult) error {
+	payload, ok, err := m.nextWebhookPayload(ctx, result)
+	if err != nil || !ok {
+		return err
+	}
+	channels, err := m.webhookChannels(ctx, result)
+	if err != nil {
+		return err
+	}
+	for index := range channels {
+		if err := m.enqueueWebhook(ctx, payload, channels[index]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) webhookChannels(ctx context.Context, result model.ProbeResult) ([]webhookChannel, error) {
+	if len(m.channels) == 0 {
+		return nil, nil
+	}
+	groupName, err := m.monitorGroupName(ctx, result.MonitorID)
+	if err != nil {
+		return nil, err
+	}
+	return matchingWebhookChannels(m.channels, result.MonitorID, groupName), nil
+}
+
+func (m *Manager) monitorGroupName(ctx context.Context, monitorID string) (string, error) {
+	if m.storage == nil || m.storage.MonitorStore() == nil {
+		return "", nil
+	}
+	monitor, err := m.storage.MonitorStore().Get(ctx, monitorID)
+	if err != nil {
+		return "", fmt.Errorf("load monitor for notification routing: %w", err)
+	}
+	return monitor.GroupName, nil
+}
+
+func (m *Manager) enqueueWebhook(ctx context.Context, payload webhookPayload, channel webhookChannel) error {
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("enqueue webhook notification: %w", ctx.Err())
-	case m.deliveries <- webhookDelivery{payload: payload}:
+	case m.deliveries <- webhookDelivery{payload: payload, channel: channel}:
 		return nil
 	default:
 		return errors.New("webhook notification delivery queue is full")
 	}
 }
 
-func (m *Manager) nextWebhookPayload(ctx context.Context, result model.ProbeResult) (webhookPayload, bool, error) {
-	now := time.Now().UTC()
-	cooldown, err := parseDuration(m.cfg.Notification.Webhook.Cooldown, 5*time.Minute)
-	if err != nil {
-		return webhookPayload{}, false, fmt.Errorf("parse notification webhook cooldown: %w", err)
-	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	state, err := m.loadAlertState(ctx, result.MonitorID)
-	if err != nil {
-		return webhookPayload{}, false, err
-	}
-	if result.Status == model.StatusUp {
-		return m.nextRecoveryPayload(ctx, result, state, now, cooldown)
-	}
-	return m.nextAlertPayload(ctx, result, state, now, cooldown)
-}
-
-func (m *Manager) nextRecoveryPayload(
-	ctx context.Context,
-	result model.ProbeResult,
-	state alertState,
-	now time.Time,
-	cooldown time.Duration,
-) (webhookPayload, bool, error) {
-	if !state.Active || !m.cfg.Notification.Webhook.RecoveryEnabled {
-		if err := m.storeAlertState(ctx, result.MonitorID, alertState{Active: false, Status: result.Status}, cooldown); err != nil {
-			return webhookPayload{}, false, err
-		}
-		return webhookPayload{}, false, nil
-	}
-	if err := m.storeAlertState(ctx, result.MonitorID, alertState{Active: false, Status: result.Status, LastSentAt: now}, cooldown); err != nil {
-		return webhookPayload{}, false, err
-	}
-	return newWebhookPayload("monitor_recovered", result, now), true, nil
-}
-
-func (m *Manager) nextAlertPayload(
-	ctx context.Context,
-	result model.ProbeResult,
-	state alertState,
-	now time.Time,
-	cooldown time.Duration,
-) (webhookPayload, bool, error) {
-	if state.Active && state.Status == result.Status && now.Sub(state.LastSentAt) < cooldown {
-		return webhookPayload{}, false, nil
-	}
-	if err := m.storeAlertState(ctx, result.MonitorID, alertState{Active: true, Status: result.Status, LastSentAt: now}, cooldown); err != nil {
-		return webhookPayload{}, false, err
-	}
-	return newWebhookPayload("monitor_alert", result, now), true, nil
-}
-
-func (m *Manager) loadAlertState(ctx context.Context, monitorID string) (alertState, error) {
-	if m.cache == nil {
-		return m.states[monitorID], nil
-	}
-	raw, ok, err := m.cache.Get(ctx, alertStateCacheKey(monitorID))
-	if err != nil {
-		return alertState{}, fmt.Errorf("load alert state: %w", err)
-	}
-	if !ok {
-		return alertState{}, nil
-	}
-	var state alertState
-	if err := json.Unmarshal(raw, &state); err != nil {
-		return alertState{}, fmt.Errorf("decode alert state: %w", err)
-	}
-	return state, nil
-}
-
-func (m *Manager) storeAlertState(ctx context.Context, monitorID string, state alertState, cooldown time.Duration) error {
-	if m.cache == nil {
-		m.states[monitorID] = state
-		return nil
-	}
-	raw, err := json.Marshal(state)
-	if err != nil {
-		return fmt.Errorf("encode alert state: %w", err)
-	}
-	if err := m.cache.Set(ctx, alertStateCacheKey(monitorID), raw, alertStateTTL(cooldown)); err != nil {
-		return fmt.Errorf("store alert state: %w", err)
-	}
-	return nil
-}
-
-func alertStateCacheKey(monitorID string) string {
-	return "notification:alert:" + strings.TrimSpace(monitorID)
-}
-
-func alertStateTTL(cooldown time.Duration) time.Duration {
-	if cooldown < time.Hour {
-		return 24 * time.Hour
-	}
-	return cooldown * 24
-}
-
 func (m *Manager) enabled() bool {
-	return m.cfg.Notification.Webhook.Enabled && strings.TrimSpace(m.cfg.Notification.Webhook.URL) != ""
+	return len(m.channels) > 0
 }
 
 func newWebhookPayload(event string, result model.ProbeResult, sentAt time.Time) webhookPayload {

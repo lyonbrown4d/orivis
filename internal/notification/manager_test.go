@@ -58,6 +58,45 @@ func TestWebhookNotificationUsesCachedAlertState(t *testing.T) {
 	}
 }
 
+func TestWebhookNotificationRoutesByMonitor(t *testing.T) {
+	payloads := newWebhookPayloadRecorder(t)
+	server := httptest.NewServer(payloads)
+	defer server.Close()
+
+	bus := newNotificationTestBus(t)
+	cfg := notificationTestConfig("")
+	cfg.Notification.Webhook.Routes = []string{"name=ops;url=" + server.URL + ";monitors=monitor-1"}
+	manager, err := notification.NewManager(cfg, nil, bus, cachex.NewMemoryStore(), nil)
+	if err != nil {
+		t.Fatalf("new notification manager: %v", err)
+	}
+	ctx := context.Background()
+	if err := manager.Start(ctx); err != nil {
+		t.Fatalf("start notification manager: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := manager.Stop(ctx); err != nil {
+			t.Errorf("stop notification manager: %v", err)
+		}
+	})
+
+	publishProbeResults(t, bus, notificationTestResultForMonitor("monitor-1", model.StatusDown))
+	_ = payloads.waitEvents(t, 1)
+	publishProbeResults(t, bus, notificationTestResultForMonitor("monitor-2", model.StatusDown))
+	payloads.expectNoMoreEvents(t, 100*time.Millisecond)
+}
+
+func newNotificationTestBus(t *testing.T) eventx.BusRuntime {
+	t.Helper()
+	bus := eventx.New()
+	t.Cleanup(func() {
+		if err := bus.Close(); err != nil {
+			t.Errorf("close event bus: %v", err)
+		}
+	})
+	return bus
+}
+
 type webhookPayloadRecorder struct {
 	t      *testing.T
 	mu     sync.Mutex
@@ -131,8 +170,12 @@ func notificationTestConfig(url string) config.Config {
 }
 
 func notificationTestResult(status model.Status) model.ProbeResult {
+	return notificationTestResultForMonitor("monitor-1", status)
+}
+
+func notificationTestResultForMonitor(monitorID string, status model.Status) model.ProbeResult {
 	return model.ProbeResult{
-		MonitorID: "monitor-1",
+		MonitorID: monitorID,
 		AgentID:   "agent-1",
 		Status:    status,
 		CheckedAt: time.Now().UTC(),

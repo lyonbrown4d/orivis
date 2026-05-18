@@ -83,6 +83,7 @@ type Config struct {
 			RetryInterval   string   `mapstructure:"retryinterval"   validate:"required"`
 			Secret          string   `mapstructure:"secret"`
 			Headers         []string `mapstructure:"headers"`
+			Routes          []string `mapstructure:"routes"`
 			RecoveryEnabled bool     `mapstructure:"recoveryenabled"`
 		} `mapstructure:"webhook"`
 	} `mapstructure:"notification"`
@@ -160,6 +161,7 @@ type defaultConfigValues struct {
 			MaxAttempts     int      `json:"maxattempts"`
 			RetryInterval   string   `json:"retryinterval"`
 			Headers         []string `json:"headers"`
+			Routes          []string `json:"routes"`
 			RecoveryEnabled bool     `json:"recoveryenabled"`
 		} `json:"webhook"`
 	} `json:"notification"`
@@ -214,6 +216,7 @@ func defaultConfig() defaultConfigValues {
 	cfg.Notification.Webhook.MaxAttempts = 3
 	cfg.Notification.Webhook.RetryInterval = "5s"
 	cfg.Notification.Webhook.Headers = []string{}
+	cfg.Notification.Webhook.Routes = []string{}
 	cfg.Notification.Webhook.RecoveryEnabled = true
 	return cfg
 }

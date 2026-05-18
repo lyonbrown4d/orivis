@@ -17,17 +17,18 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
-func (m *Manager) deliverWebhook(ctx context.Context, payload webhookPayload) (int, error) {
+func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) (int, error) {
+	payload := delivery.payload
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return 0, fmt.Errorf("marshal webhook payload: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, webhookMethod(m.cfg), strings.TrimSpace(m.cfg.Notification.Webhook.URL), bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, delivery.channel.method, strings.TrimSpace(delivery.channel.url), bytes.NewReader(body))
 	if err != nil {
 		return 0, fmt.Errorf("build webhook request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if headerErr := applyWebhookHeaders(req, m.cfg, body); headerErr != nil {
+	if headerErr := applyWebhookHeaders(req, delivery.channel, body); headerErr != nil {
 		return 0, headerErr
 	}
 
@@ -43,7 +44,7 @@ func (m *Manager) deliverWebhook(ctx context.Context, payload webhookPayload) (i
 		return resp.StatusCode, fmt.Errorf("webhook notification returned HTTP %d", resp.StatusCode)
 	}
 	if m.logger != nil {
-		m.logger.Info("sent webhook notification", "event", payload.Event, "monitor_id", payload.MonitorID, "status", payload.Status)
+		m.logger.Info("sent webhook notification", "channel", delivery.channel.channelName(), "event", payload.Event, "monitor_id", payload.MonitorID, "status", payload.Status)
 	}
 	return resp.StatusCode, nil
 }
@@ -52,8 +53,8 @@ func (m *Manager) deliverWithRetry(ctx context.Context, delivery webhookDelivery
 	var lastErr error
 	for attempt := 1; attempt <= m.maxAttempts; attempt++ {
 		startedAt := time.Now()
-		statusCode, err := m.deliverWebhook(ctx, delivery.payload)
-		m.recordDeliveryAttempt(ctx, delivery.payload, attempt, statusCode, time.Since(startedAt), err)
+		statusCode, err := m.deliverWebhook(ctx, delivery)
+		m.recordDeliveryAttempt(ctx, delivery, attempt, statusCode, time.Since(startedAt), err)
 		if err != nil {
 			lastErr = err
 			if !m.waitBeforeRetry(ctx, attempt) {
@@ -68,7 +69,7 @@ func (m *Manager) deliverWithRetry(ctx context.Context, delivery webhookDelivery
 
 func (m *Manager) recordDeliveryAttempt(
 	ctx context.Context,
-	payload webhookPayload,
+	delivery webhookDelivery,
 	attempt int,
 	statusCode int,
 	duration time.Duration,
@@ -83,8 +84,9 @@ func (m *Manager) recordDeliveryAttempt(
 		status = store.NotificationStatusFailed
 		errMessage = deliveryErr.Error()
 	}
+	payload := delivery.payload
 	if err := m.storage.RecordNotificationDelivery(context.WithoutCancel(ctx), store.NotificationDeliveryParams{
-		Channel:       store.NotificationChannelWebhook,
+		Channel:       delivery.channel.channelName(),
 		Event:         payload.Event,
 		MonitorID:     payload.MonitorID,
 		AgentID:       payload.AgentID,
@@ -125,19 +127,11 @@ func (m *Manager) logDeliveryError(err error) {
 	}
 }
 
-func webhookMethod(cfg config.Config) string {
-	method := strings.ToUpper(strings.TrimSpace(cfg.Notification.Webhook.Method))
-	if method == "" {
-		return http.MethodPost
-	}
-	return method
-}
-
-func applyWebhookHeaders(req *http.Request, cfg config.Config, body []byte) error {
-	for key, value := range webhookHeaders(cfg) {
+func applyWebhookHeaders(req *http.Request, channel webhookChannel, body []byte) error {
+	for key, value := range webhookHeaders(channel.headers) {
 		req.Header.Set(key, value)
 	}
-	signature, err := webhookSignature(cfg.Notification.Webhook.Secret, body)
+	signature, err := webhookSignature(channel.secret, body)
 	if err != nil {
 		return err
 	}
@@ -147,9 +141,9 @@ func applyWebhookHeaders(req *http.Request, cfg config.Config, body []byte) erro
 	return nil
 }
 
-func webhookHeaders(cfg config.Config) map[string]string {
+func webhookHeaders(values []string) map[string]string {
 	headers := make(map[string]string)
-	for _, entry := range webhookHeaderEntries(cfg.Notification.Webhook.Headers) {
+	for _, entry := range webhookHeaderEntries(values) {
 		key, value, ok := splitWebhookHeader(entry)
 		if ok {
 			headers[key] = value

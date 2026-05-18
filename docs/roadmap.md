@@ -34,11 +34,12 @@ Discussion points:
 
 ### Webhook security and customization
 
-Status: initial implementation completed. Webhook notifications now support configured headers and optional HMAC-SHA256 signatures through `X-Orivis-Signature`.
+Status: initial implementation completed. Webhook notifications now support configured headers, optional HMAC-SHA256 signatures through `X-Orivis-Signature`, and route-specific webhook channels using monitor or group filters.
 
 - Support configured request headers for webhook channels.
 - Add optional payload signing, for example `X-Orivis-Signature`.
 - Keep the default webhook shape simple and stable.
+- Support multiple webhook routes with monitor/group-level filters.
 
 Discussion points:
 
@@ -143,6 +144,6 @@ Discussion points:
 
 ## Current recommended next batch
 
-1. Notification routing: add multiple webhook channels and monitor/group-level routing.
-2. Dashboard detail views: add per-monitor history and notification delivery drill-down pages.
-3. Agent file spool hardening: add compaction metrics and corruption recovery.
+1. Dashboard detail views: add per-monitor history and notification delivery drill-down pages.
+2. Agent file spool hardening: add compaction metrics and corruption recovery.
+3. Notification routing hardening: add route-level observability and group routing integration tests.

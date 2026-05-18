@@ -47,5 +47,6 @@ func registerServerNotificationFlags(cmd *cobra.Command) {
 	cmd.Flags().String("notification-webhook-retry-interval", "", "webhook notification retry interval")
 	cmd.Flags().String("notification-webhook-secret", "", "webhook notification HMAC secret")
 	cmd.Flags().StringSlice("notification-webhook-headers", nil, "webhook notification headers as Name=Value")
+	cmd.Flags().StringSlice("notification-webhook-routes", nil, "webhook notification routes as name=ops;url=https://...;groups=core|db;monitors=m1|m2")
 	cmd.Flags().Bool("notification-webhook-recovery-enabled", false, "send webhook recovery notifications")
 }

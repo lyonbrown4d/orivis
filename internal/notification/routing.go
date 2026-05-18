@@ -1,0 +1,145 @@
+package notification
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
+)
+
+type webhookChannel struct {
+	name       string
+	url        string
+	method     string
+	secret     string
+	headers    []string
+	monitorIDs []string
+	groups     []string
+}
+
+func webhookChannelsFromConfig(cfg config.Config) ([]webhookChannel, error) {
+	channels := make([]webhookChannel, 0, len(cfg.Notification.Webhook.Routes)+1)
+	if cfg.Notification.Webhook.Enabled && strings.TrimSpace(cfg.Notification.Webhook.URL) != "" {
+		channels = append(channels, defaultWebhookChannel(cfg))
+	}
+	for _, entry := range cfg.Notification.Webhook.Routes {
+		channel, err := parseWebhookRoute(entry, cfg)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(channel.url) != "" {
+			channels = append(channels, channel)
+		}
+	}
+	return channels, nil
+}
+
+func defaultWebhookChannel(cfg config.Config) webhookChannel {
+	return webhookChannel{
+		name:    "webhook",
+		url:     strings.TrimSpace(cfg.Notification.Webhook.URL),
+		method:  webhookMethod(cfg.Notification.Webhook.Method),
+		secret:  cfg.Notification.Webhook.Secret,
+		headers: cfg.Notification.Webhook.Headers,
+	}
+}
+
+func parseWebhookRoute(entry string, cfg config.Config) (webhookChannel, error) {
+	fields := parseRouteFields(entry)
+	channel := webhookChannel{
+		name:       firstNonEmpty(fields["name"], "webhook"),
+		url:        strings.TrimSpace(fields["url"]),
+		method:     webhookMethod(firstNonEmpty(fields["method"], cfg.Notification.Webhook.Method)),
+		secret:     firstNonEmpty(fields["secret"], cfg.Notification.Webhook.Secret),
+		headers:    routeList(firstNonEmpty(fields["headers"], strings.Join(cfg.Notification.Webhook.Headers, "|"))),
+		monitorIDs: routeList(fields["monitors"]),
+		groups:     routeList(fields["groups"]),
+	}
+	if channel.url == "" {
+		return webhookChannel{}, fmt.Errorf("webhook route %q missing url", entry)
+	}
+	return channel, nil
+}
+
+func parseRouteFields(entry string) map[string]string {
+	fields := make(map[string]string)
+	for part := range strings.SplitSeq(entry, ";") {
+		key, value, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		value = strings.TrimSpace(value)
+		if key != "" {
+			fields[key] = value
+		}
+	}
+	return fields
+}
+
+func routeList(value string) []string {
+	out := make([]string, 0)
+	for part := range strings.SplitSeq(value, "|") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func (c webhookChannel) matches(monitorID, groupName string) bool {
+	if len(c.monitorIDs) == 0 && len(c.groups) == 0 {
+		return true
+	}
+	return containsFold(c.monitorIDs, monitorID) || containsFold(c.groups, groupName)
+}
+
+func matchingWebhookChannels(channels []webhookChannel, monitorID, groupName string) []webhookChannel {
+	matches := make([]webhookChannel, 0, len(channels))
+	for index := range channels {
+		if channels[index].matches(monitorID, groupName) {
+			matches = append(matches, channels[index])
+		}
+	}
+	return matches
+}
+
+func (c webhookChannel) channelName() string {
+	name := strings.TrimSpace(c.name)
+	if name == "" || name == "webhook" {
+		return "webhook"
+	}
+	return "webhook:" + name
+}
+
+func containsFold(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	for _, value := range values {
+		if strings.EqualFold(value, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func webhookMethod(method string) string {
+	method = strings.ToUpper(strings.TrimSpace(method))
+	if method == "" {
+		return http.MethodPost
+	}
+	return method
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
