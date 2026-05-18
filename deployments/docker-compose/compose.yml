@@ -22,48 +22,11 @@ services:
       - agent.env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - orivis-agent-data:/data
     depends_on:
       server:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 12
-    labels:
-      orivis.enable: "true"
-      orivis.group: "datastores"
-      orivis.monitor.type: "redis"
-      orivis.monitor.interval: "10s"
-      orivis.monitor.timeout: "3s"
-
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: orivis
-      POSTGRES_PASSWORD: orivis
-      POSTGRES_DB: orivis
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U orivis -d orivis"]
-      interval: 10s
-      timeout: 3s
-      retries: 12
-    labels:
-      orivis.enable: "true"
-      orivis.group: "datastores"
-      orivis.monitor.type: "postgres"
-      orivis.monitor.target: "postgres://orivis:orivis@postgres:5432/orivis?sslmode=disable"
-      orivis.monitor.interval: "10s"
-      orivis.monitor.timeout: "3s"
 
 volumes:
   orivis-data:
+  orivis-agent-data:
