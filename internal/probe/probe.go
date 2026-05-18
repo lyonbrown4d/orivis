@@ -2,7 +2,6 @@ package probe
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net"
@@ -107,12 +106,21 @@ func (c *Checker) serviceProbeChecker(probeType string) probeChecker {
 		return c.checkRedis
 	case string(model.MonitorMemcached):
 		return c.checkMemcached
+	default:
+		return c.productionProbeChecker(probeType)
+	}
+}
+
+func (c *Checker) productionProbeChecker(probeType string) probeChecker {
+	switch probeType {
 	case string(model.MonitorMongoDB), "mongo":
 		return c.checkMongoDB
 	case string(model.MonitorRabbitMQ), string(model.MonitorAMQP):
 		return c.checkAMQP
 	case string(model.MonitorNATS):
 		return c.checkNATS
+	case string(model.MonitorKafka):
+		return c.checkKafka
 	default:
 		return nil
 	}
@@ -162,28 +170,6 @@ func (c *Checker) checkDNS(ctx context.Context, task protocol.AgentTask) (model.
 		return model.StatusDown, map[string]any{"target": task.Target, "host": host}, wrapError(err, "execute DNS probe")
 	}
 	return model.StatusUp, map[string]any{"target": task.Target, "host": host, "answers": ips}, nil
-}
-
-func (c *Checker) checkTLS(ctx context.Context, task protocol.AgentTask) (model.Status, map[string]any, error) {
-	host, _, err := net.SplitHostPort(task.Target)
-	if err != nil {
-		host = task.Target
-	}
-	dialer := tls.Dialer{Config: &tls.Config{ServerName: host}}
-	conn, err := dialer.DialContext(ctx, "tcp", task.Target)
-	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target, "server_name": host}, wrapError(err, "execute TLS probe")
-	}
-	defer closeSilently(conn)
-
-	detail := map[string]any{"target": task.Target, "server_name": host}
-	if tlsConn, ok := conn.(*tls.Conn); ok {
-		state := tlsConn.ConnectionState()
-		if len(state.PeerCertificates) > 0 {
-			detail["not_after"] = state.PeerCertificates[0].NotAfter
-		}
-	}
-	return model.StatusUp, detail, nil
 }
 
 func taskTimeout(task protocol.AgentTask) time.Duration {

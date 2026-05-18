@@ -39,6 +39,16 @@ func TestNATSProbeRecognized(t *testing.T) {
 	assertRecognizedDownProbe(t, "NATS", result)
 }
 
+func TestKafkaProbeRecognized(t *testing.T) {
+	result := probe.New().Check(context.Background(), protocol.AgentTask{
+		Type:           string(model.MonitorKafka),
+		Target:         "kafka://127.0.0.1:1?topic=orivis",
+		TimeoutSeconds: 1,
+	})
+
+	assertRecognizedDownProbe(t, "Kafka", result)
+}
+
 func assertRecognizedDownProbe(t *testing.T, name string, result probe.Result) {
 	t.Helper()
 	if result.Status == model.StatusUnknown {

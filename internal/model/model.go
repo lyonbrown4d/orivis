@@ -39,6 +39,7 @@ const (
 	MonitorRabbitMQ  MonitorType = "rabbitmq"
 	MonitorAMQP      MonitorType = "amqp"
 	MonitorNATS      MonitorType = "nats"
+	MonitorKafka     MonitorType = "kafka"
 	MonitorDatabase  MonitorType = "database"
 	MonitorSQLite    MonitorType = "sqlite"
 	MonitorMySQL     MonitorType = "mysql"

@@ -102,7 +102,7 @@ Discussion points:
 
 ### More production probes
 
-Status: initial implementation completed for MongoDB, RabbitMQ/AMQP, and NATS using existing Go client libraries instead of hand-rolled protocol commands.
+Status: initial implementation completed for MongoDB, RabbitMQ/AMQP, NATS, and Kafka using existing Go client libraries instead of hand-rolled protocol commands. TLS/cert probes now report `degraded` before expiry and `down` after expiry.
 
 - Add MongoDB probe.
 - Add RabbitMQ/AMQP probe.
@@ -143,6 +143,6 @@ Discussion points:
 
 ## Current recommended next batch
 
-1. More production probes: upgrade Kafka from TCP/basic connectivity to broker metadata checks.
-2. TLS/cert probe: add certificate expiry thresholds and degraded status.
-3. Agent offline buffering: decide whether the memory buffer should evolve into file-backed spool storage.
+1. Agent offline buffering: decide whether the memory buffer should evolve into file-backed spool storage.
+2. Notification routing: add multiple webhook channels and monitor/group-level routing.
+3. Dashboard detail views: add per-monitor history and notification delivery drill-down pages.
