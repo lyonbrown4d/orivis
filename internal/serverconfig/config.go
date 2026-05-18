@@ -15,7 +15,8 @@ type Config struct {
 		Env string `mapstructure:"env" validate:"required"`
 	} `mapstructure:"app"`
 	HTTP struct {
-		Addr string `mapstructure:"addr" validate:"required"`
+		Addr           string `mapstructure:"addr"           validate:"required"`
+		BodyLimitBytes int    `mapstructure:"bodylimitbytes"`
 	} `mapstructure:"http"`
 	Web struct {
 		Enabled bool   `mapstructure:"enabled"`
@@ -111,7 +112,8 @@ type defaultConfigValues struct {
 		Env string `json:"env"`
 	} `json:"app"`
 	HTTP struct {
-		Addr string `json:"addr"`
+		Addr           string `json:"addr"`
+		BodyLimitBytes int    `json:"bodylimitbytes"`
 	} `json:"http"`
 	Web struct {
 		Root string `json:"root"`
@@ -192,6 +194,7 @@ func defaultConfig() defaultConfigValues {
 	var cfg defaultConfigValues
 	cfg.App.Env = "development"
 	cfg.HTTP.Addr = ":8080"
+	cfg.HTTP.BodyLimitBytes = 4 * 1024 * 1024
 	cfg.Web.Root = "web/dist"
 	cfg.Log.Level = "info"
 	cfg.DB.Driver = "sqlite"

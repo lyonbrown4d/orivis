@@ -155,6 +155,8 @@ ORIVIS_DB__DSN=file:orivis.db
 | `ORIVIS_AGENT__ENVIRONMENTS` | empty | Comma-separated environment codes. |
 | `ORIVIS_RUNTIME` | `host` | Agent runtime type. |
 | `ORIVIS_POLL__INTERVAL` | `30s` | Task sync fallback interval. |
+| `ORIVIS_TRANSPORT__GZIPRESULTS` | `true` | Gzip result report request bodies. |
+| `ORIVIS_TRANSPORT__RETRYATTEMPTS` | `3` | Agent HTTP retry attempts for transient failures and server backpressure. |
 | `ORIVIS_DISCOVERY__PROVIDER` | empty | Set to `docker` to enable Docker, Docker Compose, or Docker Swarm label discovery. |
 | `ORIVIS_DISCOVERY__DOCKER__MODE` | `auto` | Advanced Docker discovery override: `auto`, `container`, or `swarm`. |
 

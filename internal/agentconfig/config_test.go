@@ -35,7 +35,18 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 		t.Fatalf("expected default poll interval, got %s", cfg.Poll.Interval)
 	}
 	assertDefaultBufferConfig(t, cfg)
+	assertDefaultTransportConfig(t, cfg)
 	assertDefaultDiscoveryConfig(t, cfg)
+}
+
+func assertDefaultTransportConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
+	if cfg.Transport.RequestTimeout != 10*time.Second || cfg.Transport.ResponseHeaderTimeout != 10*time.Second {
+		t.Fatalf("unexpected default transport timeouts: %#v", cfg.Transport)
+	}
+	if cfg.Transport.RetryAttempts != 3 || cfg.Transport.RetryJitterRatio != 0.2 || !cfg.Transport.GzipResults {
+		t.Fatalf("unexpected default transport retry config: %#v", cfg.Transport)
+	}
 }
 
 func assertDefaultDiscoveryConfig(t *testing.T, cfg config.Config) {
@@ -73,6 +84,17 @@ func isolateOrivisEnv(t *testing.T) {
 		"ORIVIS_BUFFER__DRIVER",
 		"ORIVIS_BUFFER__PATH",
 		"ORIVIS_BUFFER__CAPACITY",
+		"ORIVIS_TRANSPORT__REQUESTTIMEOUT",
+		"ORIVIS_TRANSPORT__MAXIDLECONNS",
+		"ORIVIS_TRANSPORT__MAXIDLECONNSPERHOST",
+		"ORIVIS_TRANSPORT__IDLECONNTIMEOUT",
+		"ORIVIS_TRANSPORT__TLSHANDSHAKETIMEOUT",
+		"ORIVIS_TRANSPORT__RESPONSEHEADERTIMEOUT",
+		"ORIVIS_TRANSPORT__RETRYATTEMPTS",
+		"ORIVIS_TRANSPORT__RETRYBASEDELAY",
+		"ORIVIS_TRANSPORT__RETRYMAXDELAY",
+		"ORIVIS_TRANSPORT__RETRYJITTERRATIO",
+		"ORIVIS_TRANSPORT__GZIPRESULTS",
 		"ORIVIS_LOG__LEVEL",
 		"ORIVIS_DISCOVERY__PROVIDER",
 		"ORIVIS_DISCOVERY__DOCKER__ENABLED",

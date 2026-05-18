@@ -13,6 +13,10 @@ import (
 	adapterfiber "github.com/arcgolabs/httpx/adapter/fiber"
 	"github.com/arcgolabs/observabilityx"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/gofiber/fiber/v2/middleware/helmet"
+	fiberrecover "github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
@@ -56,7 +60,15 @@ func NewServer(
 	deps ServerRuntimeDeps,
 	endpoints *collectionlist.List[httpx.Endpoint],
 ) *Server {
-	app := fiber.New()
+	bodyLimit := httpBodyLimit(cfg)
+	app := fiber.New(fiber.Config{
+		BodyLimit: bodyLimit,
+	})
+	app.Use(requestid.New())
+	app.Use(fiberrecover.New())
+	app.Use(helmet.New())
+	app.Use(gzipRequestMiddleware(bodyLimit))
+	app.Use(compress.New())
 
 	fiberAdapter := adapterfiber.New(app, adapter.HumaOptions{
 		Title:       "Orivis API",

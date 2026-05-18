@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/arcgolabs/clientx"
 	clienthttp "github.com/arcgolabs/clientx/http"
@@ -12,10 +11,13 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
+	"resty.dev/v3"
 )
 
 type Client struct {
-	HTTP clienthttp.Client
+	HTTP        clienthttp.Client
+	retry       retryConfig
+	gzipResults bool
 }
 
 func New(cfg config.Config, logger *slog.Logger, obs observabilityx.Observability) (*Client, error) {
@@ -24,27 +26,27 @@ func New(cfg config.Config, logger *slog.Logger, obs observabilityx.Observabilit
 	httpClient, err := clienthttp.New(
 		clienthttp.Config{
 			BaseURL:   cfg.Server.URL,
-			Timeout:   10 * time.Second,
+			Timeout:   cfg.Transport.RequestTimeout,
 			UserAgent: "orivis-agent/" + buildinfo.Version,
 		},
+		agentHTTPTransportOption(cfg),
 		clienthttp.WithHooks(
 			clientx.NewLoggingHook(logger),
 			clientx.NewObservabilityHook(obs, clientx.WithHookMetricPrefix("orivis_agent_client")),
 		),
 		clienthttp.WithPolicies(
-			clientx.NewTimeoutPolicy(10*time.Second),
-			clientx.NewRetryPolicy(clientx.RetryPolicyConfig{
-				MaxAttempts: 3,
-				BaseDelay:   time.Second,
-				MaxDelay:    5 * time.Second,
-			}),
+			clientx.NewTimeoutPolicy(cfg.Transport.RequestTimeout),
 		),
 	)
 	if err != nil {
 		return nil, wrapError(err, "create agent HTTP client")
 	}
 
-	return &Client{HTTP: httpClient}, nil
+	return &Client{
+		HTTP:        httpClient,
+		retry:       newRetryConfig(cfg),
+		gzipResults: cfg.Transport.GzipResults,
+	}, nil
 }
 
 func (c *Client) Close(context.Context) error {
@@ -59,9 +61,11 @@ func (c *Client) Close(context.Context) error {
 
 func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest) (protocol.AgentRegisterResponse, error) {
 	var out protocol.AgentRegisterResponse
-	resp, err := c.HTTP.Execute(
+	resp, err := c.execute(
 		ctx,
-		c.HTTP.R().SetBody(req).SetResult(&out),
+		func() *resty.Request {
+			return c.HTTP.R().SetBody(req).SetResult(&out)
+		},
 		http.MethodPost,
 		"/api/agent/register",
 	)
@@ -76,9 +80,11 @@ func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest
 
 func (c *Client) Heartbeat(ctx context.Context, req protocol.AgentHeartbeatRequest) (protocol.AgentHeartbeatResponse, error) {
 	var out protocol.AgentHeartbeatResponse
-	resp, err := c.HTTP.Execute(
+	resp, err := c.execute(
 		ctx,
-		c.HTTP.R().SetBody(req).SetResult(&out),
+		func() *resty.Request {
+			return c.HTTP.R().SetBody(req).SetResult(&out)
+		},
 		http.MethodPost,
 		"/api/agent/heartbeat",
 	)
@@ -93,14 +99,15 @@ func (c *Client) Heartbeat(ctx context.Context, req protocol.AgentHeartbeatReque
 
 func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (protocol.AgentTasksResponse, error) {
 	var out protocol.AgentTasksResponse
-	request := c.HTTP.R().
-		SetQueryParam("agent_id", req.AgentID).
-		SetResult(&out)
-	if req.Token != "" {
-		request.SetQueryParam("token", req.Token)
-	}
-
-	resp, err := c.HTTP.Execute(ctx, request, http.MethodGet, "/api/agent/tasks")
+	resp, err := c.execute(ctx, func() *resty.Request {
+		request := c.HTTP.R().
+			SetQueryParam("agent_id", req.AgentID).
+			SetResult(&out)
+		if req.Token != "" {
+			request.SetQueryParam("token", req.Token)
+		}
+		return request
+	}, http.MethodGet, "/api/agent/tasks")
 	if err != nil {
 		return out, wrapError(err, "execute tasks request")
 	}
@@ -112,9 +119,11 @@ func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (pro
 
 func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSyncRequest) (protocol.AgentMonitorSyncResponse, error) {
 	var out protocol.AgentMonitorSyncResponse
-	resp, err := c.HTTP.Execute(
+	resp, err := c.execute(
 		ctx,
-		c.HTTP.R().SetBody(req).SetResult(&out),
+		func() *resty.Request {
+			return c.HTTP.R().SetBody(req).SetResult(&out)
+		},
 		http.MethodPost,
 		"/api/agent/monitors",
 	)
@@ -128,12 +137,18 @@ func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSync
 }
 
 func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultRequest) error {
-	resp, err := c.HTTP.Execute(
-		ctx,
-		c.HTTP.R().SetBody(req),
-		http.MethodPost,
-		"/api/agent/results",
-	)
+	body, err := c.resultRequestBody(req)
+	if err != nil {
+		return err
+	}
+	resp, err := c.execute(ctx, func() *resty.Request {
+		request := c.HTTP.R()
+		if c.gzipResults {
+			request.SetHeader("Content-Encoding", "gzip")
+			request.SetHeader("Content-Type", "application/json")
+		}
+		return request.SetBody(body)
+	}, http.MethodPost, "/api/agent/results")
 	if err != nil {
 		return wrapError(err, "execute report result request")
 	}

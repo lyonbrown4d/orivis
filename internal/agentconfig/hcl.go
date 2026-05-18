@@ -18,6 +18,7 @@ type agentHCLFile struct {
 	Runtime   string             `hcl:"runtime,optional"`
 	Poll      *agentHCLPoll      `hcl:"poll,block"`
 	Buffer    *agentHCLBuffer    `hcl:"buffer,block"`
+	Transport *agentHCLTransport `hcl:"transport,block"`
 	Log       *agentHCLLog       `hcl:"log,block"`
 	Discovery *agentHCLDiscovery `hcl:"discovery,block"`
 }
@@ -114,6 +115,7 @@ func (file agentHCLFile) defaults() (map[string]any, error) {
 	file.applyRuntime(values)
 	file.applyPoll(values)
 	file.applyBuffer(values)
+	file.applyTransport(values)
 	file.applyLog(values)
 	if err := file.applyDiscovery(values); err != nil {
 		return nil, err

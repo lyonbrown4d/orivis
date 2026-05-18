@@ -8,7 +8,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN")
+	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_HTTP__BODYLIMITBYTES", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -24,6 +24,9 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	}
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("expected default HTTP address, got %q", cfg.HTTP.Addr)
+	}
+	if cfg.HTTP.BodyLimitBytes != 4*1024*1024 {
+		t.Fatalf("expected default HTTP body limit, got %d", cfg.HTTP.BodyLimitBytes)
 	}
 	if cfg.Web.Enabled || cfg.Web.Root != "web/dist" {
 		t.Fatalf("unexpected default web config: %#v", cfg.Web)
@@ -45,6 +48,7 @@ func unset(t *testing.T, keys ...string) {
 func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_APP__ENV", "test")
 	t.Setenv("ORIVIS_HTTP__ADDR", ":9090")
+	t.Setenv("ORIVIS_HTTP__BODYLIMITBYTES", "1024")
 	t.Setenv("ORIVIS_WEB__ENABLED", "true")
 	t.Setenv("ORIVIS_WEB__ROOT", "/app/web")
 	t.Setenv("ORIVIS_LOG__LEVEL", "debug")
@@ -60,7 +64,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 
 func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	t.Helper()
-	if cfg.App.Env != "test" || cfg.HTTP.Addr != ":9090" || cfg.Log.Level != "debug" {
+	if cfg.App.Env != "test" || cfg.HTTP.Addr != ":9090" || cfg.HTTP.BodyLimitBytes != 1024 || cfg.Log.Level != "debug" {
 		t.Fatalf("unexpected environment app config: %#v", cfg)
 	}
 	if cfg.DB.Driver != "sqlite" || cfg.DB.DSN != "file:orivis.db" {

@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -50,6 +51,43 @@ func postJSON[T any](t *testing.T, handler httpHandler, path string, body any, e
 	}
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != expectedStatus {
+		t.Fatalf("expected status %d, got %d: %s", expectedStatus, rec.Code, rec.Body.String())
+	}
+
+	var out T
+	if rec.Body.Len() == 0 {
+		return out
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v; body=%s", err, rec.Body.String())
+	}
+	return out
+}
+
+func postGzipJSON[T any](t *testing.T, handler httpHandler, path string, body any, expectedStatus int) T {
+	t.Helper()
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+	var buf bytes.Buffer
+	writer := gzip.NewWriter(&buf)
+	if _, err := writer.Write(payload); err != nil {
+		t.Fatalf("gzip request: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close gzip request: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, path, bytes.NewReader(buf.Bytes()))
+	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()

@@ -63,12 +63,23 @@ func assertHCLAgentIdentity(t *testing.T, cfg config.Config) {
 		t.Fatalf("unexpected HCL timing/log config: %#v", cfg)
 	}
 	assertHCLBuffer(t, cfg)
+	assertHCLTransport(t, cfg)
 }
 
 func assertHCLBuffer(t *testing.T, cfg config.Config) {
 	t.Helper()
 	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 42 || cfg.Buffer.Driver != "file" || cfg.Buffer.Path != "agent-buffer.jsonl" {
 		t.Fatalf("unexpected HCL buffer config: %#v", cfg.Buffer)
+	}
+}
+
+func assertHCLTransport(t *testing.T, cfg config.Config) {
+	t.Helper()
+	if cfg.Transport.RequestTimeout != 7*time.Second || cfg.Transport.ResponseHeaderTimeout != 4*time.Second {
+		t.Fatalf("unexpected HCL transport timeouts: %#v", cfg.Transport)
+	}
+	if cfg.Transport.RetryAttempts != 4 || cfg.Transport.RetryJitterRatio != 0.3 || !cfg.Transport.GzipResults {
+		t.Fatalf("unexpected HCL transport retry config: %#v", cfg.Transport)
 	}
 }
 
@@ -110,6 +121,20 @@ buffer {
   driver = "file"
   path = "agent-buffer.jsonl"
   capacity = 42
+}
+
+transport {
+  request_timeout = "7s"
+  max_idle_conns = 80
+  max_idle_conns_per_host = 12
+  idle_conn_timeout = "45s"
+  tls_handshake_timeout = "5s"
+  response_header_timeout = "4s"
+  retry_attempts = 4
+  retry_base_delay = "500ms"
+  retry_max_delay = "3s"
+  retry_jitter_ratio = 0.3
+  gzip_results = true
 }
 
 log {

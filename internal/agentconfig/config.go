@@ -35,6 +35,19 @@ type Config struct {
 		Path     string `mapstructure:"path"`
 		Capacity int    `mapstructure:"capacity" validate:"min=0"`
 	} `mapstructure:"buffer"`
+	Transport struct {
+		RequestTimeout        time.Duration `mapstructure:"requesttimeout"`
+		MaxIdleConns          int           `mapstructure:"maxidleconns"`
+		MaxIdleConnsPerHost   int           `mapstructure:"maxidleconnsperhost"`
+		IdleConnTimeout       time.Duration `mapstructure:"idleconntimeout"`
+		TLSHandshakeTimeout   time.Duration `mapstructure:"tlshandshaketimeout"`
+		ResponseHeaderTimeout time.Duration `mapstructure:"responseheadertimeout"`
+		RetryAttempts         int           `mapstructure:"retryattempts"`
+		RetryBaseDelay        time.Duration `mapstructure:"retrybasedelay"`
+		RetryMaxDelay         time.Duration `mapstructure:"retrymaxdelay"`
+		RetryJitterRatio      float64       `mapstructure:"retryjitterratio"`
+		GzipResults           bool          `mapstructure:"gzipresults"`
+	} `mapstructure:"transport"`
 	Discovery struct {
 		Provider string `mapstructure:"provider"`
 		Static   struct {
@@ -67,6 +80,7 @@ func finalizeConfig(cfg Config) (Config, error) {
 	if err := normalizeBufferConfig(&cfg); err != nil {
 		return Config{}, err
 	}
+	normalizeTransportConfig(&cfg)
 	if err := normalizeDiscoveryConfig(&cfg); err != nil {
 		return Config{}, err
 	}
@@ -107,6 +121,19 @@ type defaultConfigValues struct {
 		Path     string `json:"path"`
 		Capacity int    `json:"capacity"`
 	} `json:"buffer"`
+	Transport struct {
+		RequestTimeout        time.Duration `json:"requesttimeout"`
+		MaxIdleConns          int           `json:"maxidleconns"`
+		MaxIdleConnsPerHost   int           `json:"maxidleconnsperhost"`
+		IdleConnTimeout       time.Duration `json:"idleconntimeout"`
+		TLSHandshakeTimeout   time.Duration `json:"tlshandshaketimeout"`
+		ResponseHeaderTimeout time.Duration `json:"responseheadertimeout"`
+		RetryAttempts         int           `json:"retryattempts"`
+		RetryBaseDelay        time.Duration `json:"retrybasedelay"`
+		RetryMaxDelay         time.Duration `json:"retrymaxdelay"`
+		RetryJitterRatio      float64       `json:"retryjitterratio"`
+		GzipResults           bool          `json:"gzipresults"`
+	} `json:"transport"`
 	Discovery struct {
 		Provider string `json:"provider"`
 		Static   struct {
@@ -157,6 +184,17 @@ func defaultConfig() defaultConfigValues {
 	cfg.Buffer.Driver = "memory"
 	cfg.Buffer.Path = "orivis-agent-buffer.jsonl"
 	cfg.Buffer.Capacity = 1024
+	cfg.Transport.RequestTimeout = 10 * time.Second
+	cfg.Transport.MaxIdleConns = 100
+	cfg.Transport.MaxIdleConnsPerHost = 16
+	cfg.Transport.IdleConnTimeout = 90 * time.Second
+	cfg.Transport.TLSHandshakeTimeout = 10 * time.Second
+	cfg.Transport.ResponseHeaderTimeout = 10 * time.Second
+	cfg.Transport.RetryAttempts = 3
+	cfg.Transport.RetryBaseDelay = time.Second
+	cfg.Transport.RetryMaxDelay = 5 * time.Second
+	cfg.Transport.RetryJitterRatio = 0.2
+	cfg.Transport.GzipResults = true
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
 	cfg.Discovery.Docker.Mode = discovery.DockerModeAuto

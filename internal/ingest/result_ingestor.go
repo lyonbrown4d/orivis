@@ -34,19 +34,10 @@ type ResultIngestor struct {
 	startOnce     sync.Once
 	stopOnce      sync.Once
 	started       atomic.Bool
-	unsubscribe   func()
-}
-
-type probeResultReceivedEvent struct {
-	params store.RecordProbeResultParams
 }
 
 type ProbeResultsRecordedEvent struct {
 	Results []model.ProbeResult
-}
-
-func (e probeResultReceivedEvent) Name() string {
-	return "orivis.probe.result.received"
 }
 
 func (e ProbeResultsRecordedEvent) Name() string {
@@ -106,38 +97,23 @@ func (i *ResultIngestor) Enqueue(ctx context.Context, params store.RecordProbeRe
 	if i.bus == nil {
 		return wrapError(ErrClosed, "enqueue probe result")
 	}
-	event := probeResultReceivedEvent{params: cloneRecordProbeResultParams(params)}
-	if err := i.bus.PublishAsync(context.WithoutCancel(ctx), event); err != nil {
-		return wrapError(err, "publish probe result received event")
-	}
-	return nil
+	return i.enqueue(ctx, params)
 }
 
 func (i *ResultIngestor) Start(ctx context.Context) error {
 	if i == nil {
 		return nil
 	}
-	var startErr error
 	i.startOnce.Do(func() {
-		unsubscribe, err := eventx.Subscribe[probeResultReceivedEvent](i.bus, i.handleProbeResultReceived)
-		if err != nil {
-			startErr = wrapError(err, "subscribe probe result received event")
-			return
-		}
-		i.unsubscribe = unsubscribe
 		i.started.Store(true)
 		go i.run(ctx)
 	})
-	return startErr
+	return nil
 }
 
 func (i *ResultIngestor) Stop(ctx context.Context) error {
 	if i == nil {
 		return nil
-	}
-	if i.unsubscribe != nil {
-		i.unsubscribe()
-		i.unsubscribe = nil
 	}
 	i.queue.close()
 	if !i.started.Load() {
@@ -191,11 +167,11 @@ func (i *ResultIngestor) notify() {
 	}
 }
 
-func (i *ResultIngestor) handleProbeResultReceived(ctx context.Context, event probeResultReceivedEvent) error {
+func (i *ResultIngestor) enqueue(ctx context.Context, params store.RecordProbeResultParams) error {
 	if err := ctx.Err(); err != nil {
-		return wrapError(err, "handle probe result received event")
+		return wrapError(err, "enqueue result ingest queue")
 	}
-	size, err := i.queue.push(event.params)
+	size, err := i.queue.push(cloneRecordProbeResultParams(params))
 	if err != nil {
 		if errors.Is(err, ErrQueueFull) {
 			i.metrics.observeQueueFull(ctx, size)
