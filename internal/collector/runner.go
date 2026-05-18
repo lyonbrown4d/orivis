@@ -27,7 +27,7 @@ type Runner struct {
 	stop      context.CancelFunc
 	sched     *gocron.Scheduler
 	tasks     *collectionmapping.Map[string, scheduledTask]
-	results   *resultBuffer
+	results   ResultQueue
 	flushMu   sync.Mutex
 }
 
@@ -49,7 +49,7 @@ func NewRunner(cfg config.Config, logger *slog.Logger, client *agentclient.Clien
 		tasks:   collectionmapping.NewMap[string, scheduledTask](),
 	}
 	if cfg.Buffer.Enabled {
-		runner.results = newResultBuffer(cfg.Buffer.Capacity)
+		runner.results = newResultQueue(cfg.Buffer.Driver, cfg.Buffer.Path, cfg.Buffer.Capacity)
 	}
 	return runner
 }

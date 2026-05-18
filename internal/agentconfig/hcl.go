@@ -40,8 +40,10 @@ type agentHCLPoll struct {
 }
 
 type agentHCLBuffer struct {
-	Enabled  *bool `hcl:"enabled,optional"`
-	Capacity *int  `hcl:"capacity,optional"`
+	Enabled  *bool  `hcl:"enabled,optional"`
+	Driver   string `hcl:"driver,optional"`
+	Path     string `hcl:"path,optional"`
+	Capacity *int   `hcl:"capacity,optional"`
 }
 
 type agentHCLLog struct {
@@ -155,6 +157,8 @@ func (file agentHCLFile) applyBuffer(values map[string]any) {
 		return
 	}
 	setOptional(values, "buffer.enabled", file.Buffer.Enabled)
+	setString(values, "buffer.driver", file.Buffer.Driver)
+	setString(values, "buffer.path", file.Buffer.Path)
 	setOptional(values, "buffer.capacity", file.Buffer.Capacity)
 }
 
@@ -262,7 +266,6 @@ func setOptional[T any](values map[string]any, key string, value *T) {
 		setValue(values, key, value)
 	})
 }
-
 func parseAgentHCLDuration(value string) (time.Duration, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

@@ -30,8 +30,10 @@ type Config struct {
 		Jitter   time.Duration `mapstructure:"jitter"`
 	} `mapstructure:"poll"`
 	Buffer struct {
-		Enabled  bool `mapstructure:"enabled"`
-		Capacity int  `mapstructure:"capacity" validate:"min=0"`
+		Enabled  bool   `mapstructure:"enabled"`
+		Driver   string `mapstructure:"driver"`
+		Path     string `mapstructure:"path"`
+		Capacity int    `mapstructure:"capacity" validate:"min=0"`
 	} `mapstructure:"buffer"`
 	Discovery struct {
 		Static struct {
@@ -61,6 +63,9 @@ func Load(opts ...configx.Option) (Config, error) {
 func finalizeConfig(cfg Config) (Config, error) {
 	cfg.Agent.Environments = normalizeStringSlice(cfg.Agent.Environments)
 	cfg.Discovery.Static.HCLFiles = normalizeStringSlice(cfg.Discovery.Static.HCLFiles)
+	if err := normalizeBufferConfig(&cfg); err != nil {
+		return Config{}, err
+	}
 	hclMonitors, err := discovery.LoadStaticMonitorsHCL(cfg.Discovery.Static.HCLFiles)
 	if err != nil {
 		return Config{}, fmt.Errorf("load static monitors HCL: %w", err)
@@ -93,8 +98,10 @@ type defaultConfigValues struct {
 		Jitter   time.Duration `json:"jitter"`
 	} `json:"poll"`
 	Buffer struct {
-		Enabled  bool `json:"enabled"`
-		Capacity int  `json:"capacity"`
+		Enabled  bool   `json:"enabled"`
+		Driver   string `json:"driver"`
+		Path     string `json:"path"`
+		Capacity int    `json:"capacity"`
 	} `json:"buffer"`
 	Discovery struct {
 		Static struct {
@@ -142,12 +149,31 @@ func defaultConfig() defaultConfigValues {
 	cfg.Poll.Interval = 30 * time.Second
 	cfg.Poll.Jitter = 5 * time.Second
 	cfg.Buffer.Enabled = true
+	cfg.Buffer.Driver = "memory"
+	cfg.Buffer.Path = "orivis-agent-buffer.jsonl"
 	cfg.Buffer.Capacity = 1024
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
 	cfg.Discovery.Docker.Mode = "container"
 	cfg.Log.Level = "info"
 	return cfg
+}
+
+func normalizeBufferConfig(cfg *Config) error {
+	cfg.Buffer.Driver = strings.ToLower(strings.TrimSpace(cfg.Buffer.Driver))
+	if cfg.Buffer.Driver == "" {
+		cfg.Buffer.Driver = "memory"
+	}
+	cfg.Buffer.Path = strings.TrimSpace(cfg.Buffer.Path)
+	if cfg.Buffer.Path == "" {
+		cfg.Buffer.Path = "orivis-agent-buffer.jsonl"
+	}
+	switch cfg.Buffer.Driver {
+	case "memory", "file":
+		return nil
+	default:
+		return fmt.Errorf("unsupported buffer driver %q", cfg.Buffer.Driver)
+	}
 }
 
 func normalizeStaticMonitors(single discovery.StaticMonitor, monitors, hclMonitors []discovery.StaticMonitor) []discovery.StaticMonitor {

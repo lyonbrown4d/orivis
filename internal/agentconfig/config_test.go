@@ -48,6 +48,9 @@ func assertDefaultBufferConfig(t *testing.T, cfg config.Config) {
 	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 1024 {
 		t.Fatalf("unexpected buffer defaults: %#v", cfg.Buffer)
 	}
+	if cfg.Buffer.Driver != "memory" || cfg.Buffer.Path != "orivis-agent-buffer.jsonl" {
+		t.Fatalf("unexpected buffer storage defaults: %#v", cfg.Buffer)
+	}
 }
 
 func isolateOrivisEnv(t *testing.T) {
@@ -62,6 +65,8 @@ func isolateOrivisEnv(t *testing.T) {
 		"ORIVIS_POLL__INTERVAL",
 		"ORIVIS_POLL__JITTER",
 		"ORIVIS_BUFFER__ENABLED",
+		"ORIVIS_BUFFER__DRIVER",
+		"ORIVIS_BUFFER__PATH",
 		"ORIVIS_BUFFER__CAPACITY",
 		"ORIVIS_LOG__LEVEL",
 		"ORIVIS_DISCOVERY__DOCKER__ENABLED",

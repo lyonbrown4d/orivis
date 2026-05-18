@@ -74,7 +74,7 @@ Discussion points:
 
 ### Agent offline buffering
 
-Status: initial implementation completed. Agents now keep a bounded in-memory FIFO buffer for failed result reports and drain it after server connectivity returns.
+Status: initial implementation completed. Agents now keep a bounded FIFO buffer for failed result reports and drain it after server connectivity returns. The default driver is memory; `buffer.driver=file` enables a JSONL file-backed spool.
 
 - Add bounded local buffering when the server is unavailable.
 - First implementation can be memory-only.
@@ -143,6 +143,6 @@ Discussion points:
 
 ## Current recommended next batch
 
-1. Agent offline buffering: decide whether the memory buffer should evolve into file-backed spool storage.
-2. Notification routing: add multiple webhook channels and monitor/group-level routing.
-3. Dashboard detail views: add per-monitor history and notification delivery drill-down pages.
+1. Notification routing: add multiple webhook channels and monitor/group-level routing.
+2. Dashboard detail views: add per-monitor history and notification delivery drill-down pages.
+3. Agent file spool hardening: add compaction metrics and corruption recovery.

@@ -62,7 +62,12 @@ func assertHCLAgentIdentity(t *testing.T, cfg config.Config) {
 	if cfg.Poll.Interval != 12*time.Second || cfg.Poll.Jitter != time.Second || cfg.Log.Level != "debug" {
 		t.Fatalf("unexpected HCL timing/log config: %#v", cfg)
 	}
-	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 42 {
+	assertHCLBuffer(t, cfg)
+}
+
+func assertHCLBuffer(t *testing.T, cfg config.Config) {
+	t.Helper()
+	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 42 || cfg.Buffer.Driver != "file" || cfg.Buffer.Path != "agent-buffer.jsonl" {
 		t.Fatalf("unexpected HCL buffer config: %#v", cfg.Buffer)
 	}
 }
@@ -104,6 +109,8 @@ poll {
 
 buffer {
   enabled = true
+  driver = "file"
+  path = "agent-buffer.jsonl"
   capacity = 42
 }
 

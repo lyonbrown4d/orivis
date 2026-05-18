@@ -50,7 +50,7 @@ func (r *Runner) logTaskResult(ctx context.Context, task protocol.AgentTask, sta
 }
 
 func (r *Runner) hasBufferedResults() bool {
-	return r.results != nil && r.results.len() > 0
+	return r.results != nil && r.results.Len() > 0
 }
 
 func (r *Runner) bufferResult(req protocol.AgentResultRequest, reportErr error) {
@@ -61,7 +61,15 @@ func (r *Runner) bufferResult(req protocol.AgentResultRequest, reportErr error) 
 		return
 	}
 
-	result := r.results.push(req)
+	result := r.results.Push(req)
+	if result.err != nil {
+		if reportErr == nil {
+			r.logger.Warn("agent result buffer write failed", "monitor_id", req.MonitorID, "error", result.err)
+			return
+		}
+		r.logger.Warn("agent result report failed; buffer write failed", "monitor_id", req.MonitorID, "error", reportErr, "buffer_error", result.err)
+		return
+	}
 	if !result.buffered {
 		if reportErr == nil {
 			r.logger.Debug("agent result dropped; buffer capacity is zero", "monitor_id", req.MonitorID, "buffer_size", result.size)
@@ -98,17 +106,20 @@ func (r *Runner) flushBufferedResults(ctx context.Context) {
 
 	flushed := 0
 	for {
-		req, ok := r.results.peek()
+		req, ok := r.results.Peek()
 		if !ok {
 			break
 		}
 		req.AgentID = r.agentID
 		req.Token = r.cfg.Agent.Token
 		if err := r.client.ReportResult(ctx, req); err != nil {
-			r.logger.Warn("agent buffered result flush failed", "flushed", flushed, "remaining", r.results.len(), "error", err)
+			r.logger.Warn("agent buffered result flush failed", "flushed", flushed, "remaining", r.results.Len(), "error", err)
 			return
 		}
-		r.results.drop()
+		if err := r.results.Drop(); err != nil {
+			r.logger.Warn("agent buffered result drop failed", "flushed", flushed, "remaining", r.results.Len(), "error", err)
+			return
+		}
 		flushed++
 	}
 	if flushed > 0 {
