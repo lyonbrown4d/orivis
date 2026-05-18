@@ -1,0 +1,134 @@
+# Orivis roadmap
+
+This roadmap captures the next production-hardening work items for Orivis. Priorities are ordered by expected impact on single-node reliability, agent/server throughput, and operational usefulness.
+
+## P0
+
+### Store batch write path
+
+Status: initial implementation completed. `ResultStore.RecordBatch` now preloads monitor-agent assignments and monitor metadata for the incoming batch instead of querying once per result.
+
+- Remove the current result-ingest N+1 pattern in `ResultStore.RecordBatch`.
+- Batch preload monitor-agent assignments and monitor metadata for all `monitor_id + agent_id` pairs in the incoming batch.
+- Reuse the preloaded records while preparing probe result rows.
+- Keep authorization semantics unchanged: a result can only be recorded for a monitor assigned to the reporting agent.
+
+Discussion points:
+
+- Whether to keep the existing repository abstraction for preload queries or add one dedicated read model query for ingest.
+- Whether invalid rows in a mixed batch should fail the whole batch or fall back to per-row recording.
+
+### Notification delivery reliability
+
+Status: initial implementation completed. Webhook notifications now use an internal bounded delivery queue with retry and bounded backoff.
+
+- Add an internal delivery queue for webhook notifications.
+- Add retry with bounded exponential backoff.
+- Add delivery timeout and maximum attempts.
+- Keep ingest and event handling non-blocking when notification delivery is slow.
+
+Discussion points:
+
+- Whether delivery attempts should be persisted in SQLite in the first implementation.
+- Whether failed notifications should be visible in the dashboard immediately or only via logs/metrics.
+
+### Webhook security and customization
+
+Status: initial implementation completed. Webhook notifications now support configured headers and optional HMAC-SHA256 signatures through `X-Orivis-Signature`.
+
+- Support configured request headers for webhook channels.
+- Add optional payload signing, for example `X-Orivis-Signature`.
+- Keep the default webhook shape simple and stable.
+
+Discussion points:
+
+- Signature algorithm: HMAC-SHA256 is the likely default.
+- Header config shape: environment-friendly flat keys versus file-only structured config.
+
+## P1
+
+### Dashboard cache invalidation
+
+- Keep TTL cache as a fallback.
+- Invalidate dashboard snapshot cache after successful probe result flush.
+- Invalidate only known dashboard keys first, then consider wildcard/prefix invalidation if needed.
+
+Discussion points:
+
+- Whether the cache interface should grow `DeletePrefix` or dashboard should maintain explicit known keys.
+- Whether invalidation should happen in ingest or via an event subscriber.
+
+### Ingest queue observability
+
+- Add Prometheus metrics for queue length, queue full count, flush batch size, flush duration, and record errors.
+- Expose enough labels to debug without creating high-cardinality metrics.
+
+Discussion points:
+
+- Metric names and label shape should stay stable before a beta release.
+- Queue length can be sampled on flush instead of updated on every enqueue.
+
+### Agent offline buffering
+
+- Add bounded local buffering when the server is unavailable.
+- First implementation can be memory-only.
+- Later implementation can optionally use file-backed spool storage.
+
+Discussion points:
+
+- Whether offline buffering should preserve every probe result or only the latest status per monitor.
+- Whether memory buffering should be enabled by default.
+
+### Probe scheduling jitter
+
+- Add initial jitter to scheduled probe execution.
+- Keep configured intervals stable after startup.
+- Avoid thundering herd behavior when many agents start together.
+
+Discussion points:
+
+- Jitter should probably be a percentage of interval with a small maximum cap.
+- Need deterministic mode for tests and local debugging.
+
+## P2
+
+### More production probes
+
+- Add MongoDB probe.
+- Add RabbitMQ/AMQP probe.
+- Add NATS probe.
+- Upgrade Kafka from basic connectivity to broker metadata checks.
+- Enhance TLS/cert probe with certificate expiry thresholds and degraded status.
+
+Discussion points:
+
+- Each protocol probe should use the official or de-facto standard Go client where practical.
+- Avoid heavy transitive dependencies unless the probe requires real protocol semantics.
+
+### Dashboard API efficiency
+
+- Add `ETag` or `Last-Modified` support for dashboard snapshot endpoints.
+- Consider splitting summary and history into separate endpoints.
+- Keep React Query polling, but reduce payload churn.
+
+Discussion points:
+
+- Snapshot payload compatibility matters because the frontend is now separated.
+- ETag should include group and result-limit inputs.
+
+### Notification history UI
+
+- Persist notification delivery attempts.
+- Show recent notification status in the dashboard.
+- Provide enough detail to debug webhook failures without reading server logs.
+
+Discussion points:
+
+- This likely depends on the P0 delivery queue decision.
+- A simple append-only table is enough for the first version.
+
+## Current recommended next batch
+
+1. Store batch write path: remove ingest N+1.
+2. Dashboard cache invalidation: delete snapshot cache after successful result flush.
+3. Notification delivery reliability: queue plus retry/backoff.

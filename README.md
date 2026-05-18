@@ -285,3 +285,4 @@ POST /api/agent/results        report probe result
 ```
 
 See [release-checklist.md](docs/release-checklist.md) for the alpha release checklist.
+See [roadmap.md](docs/roadmap.md) for planned production-hardening work.

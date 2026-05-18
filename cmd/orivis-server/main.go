@@ -59,45 +59,6 @@ func main() {
 	}
 }
 
-func registerServerFlags(cmd *cobra.Command, configFile *string) {
-	cmd.Flags().StringVar(configFile, "config", "", "config file path")
-	cmd.Flags().String("app-env", "", "runtime environment")
-	cmd.Flags().String("http-addr", "", "HTTP listen address")
-	cmd.Flags().Bool("web-enabled", false, "serve built web SPA from the server")
-	cmd.Flags().String("web-root", "", "built web SPA root directory")
-	cmd.Flags().String("log-level", "", "log level")
-	cmd.Flags().String("db-driver", "", "database driver")
-	cmd.Flags().String("db-dsn", "", "database DSN")
-	cmd.Flags().Int("db-max-open-conns", 0, "maximum open sqlite connections")
-	cmd.Flags().String("db-busy-timeout", "", "sqlite busy timeout")
-	cmd.Flags().String("cache-driver", "", "cache driver: memory or redis")
-	cmd.Flags().String("cache-prefix", "", "cache key prefix")
-	cmd.Flags().String("cache-redis-addr", "", "redis cache address")
-	cmd.Flags().String("cache-redis-password", "", "redis cache password")
-	cmd.Flags().Int("cache-redis-db", 0, "redis cache database")
-	cmd.Flags().Bool("cache-redis-tls", false, "enable TLS for redis cache")
-	cmd.Flags().String("dashboard-snapshot-ttl", "", "dashboard snapshot cache TTL")
-	cmd.Flags().Int("ingest-queue-size", 0, "probe result ingest queue size")
-	cmd.Flags().Int("ingest-batch-size", 0, "probe result ingest batch size")
-	cmd.Flags().String("ingest-flush-interval", "", "probe result ingest flush interval")
-	cmd.Flags().Bool("retention-enabled", false, "enable probe result retention cleanup")
-	cmd.Flags().String("retention-result-ttl", "", "probe result retention TTL")
-	cmd.Flags().String("retention-cleanup-interval", "", "probe result retention cleanup interval")
-	cmd.Flags().String("auth-agent-token", "", "agent shared token")
-	cmd.Flags().Bool("auth-dashboard-enabled", false, "enable dashboard login")
-	cmd.Flags().String("auth-dashboard-username", "", "dashboard login username")
-	cmd.Flags().String("auth-dashboard-password", "", "dashboard login password")
-	cmd.Flags().String("auth-dashboard-jwt-secret", "", "dashboard JWT signing secret")
-	cmd.Flags().Bool("observability-prometheus-enabled", false, "enable Prometheus observability adapter")
-	cmd.Flags().String("observability-prometheus-namespace", "", "Prometheus metric namespace")
-	cmd.Flags().Bool("notification-webhook-enabled", false, "enable webhook notifications")
-	cmd.Flags().String("notification-webhook-url", "", "webhook notification URL")
-	cmd.Flags().String("notification-webhook-method", "", "webhook notification HTTP method")
-	cmd.Flags().String("notification-webhook-timeout", "", "webhook notification timeout")
-	cmd.Flags().String("notification-webhook-cooldown", "", "webhook notification cooldown")
-	cmd.Flags().Bool("notification-webhook-recovery-enabled", false, "send webhook recovery notifications")
-}
-
 func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	configModule := dix.NewModule("config",
 		dix.WithModuleProviders(

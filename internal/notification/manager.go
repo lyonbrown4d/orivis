@@ -2,12 +2,10 @@
 package notification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -22,14 +20,20 @@ import (
 )
 
 type Manager struct {
-	cfg         config.Config
-	logger      *slog.Logger
-	bus         eventx.BusRuntime
-	cache       cachex.Store
-	client      *http.Client
-	mu          sync.Mutex
-	states      map[string]alertState
-	unsubscribe func()
+	cfg           config.Config
+	logger        *slog.Logger
+	bus           eventx.BusRuntime
+	cache         cachex.Store
+	client        *http.Client
+	mu            sync.Mutex
+	states        map[string]alertState
+	deliveries    chan webhookDelivery
+	stop          chan struct{}
+	done          chan struct{}
+	stopOnce      sync.Once
+	unsubscribe   func()
+	maxAttempts   int
+	retryInterval time.Duration
 }
 
 type alertState struct {
@@ -51,22 +55,35 @@ type webhookPayload struct {
 	SentAt        time.Time    `json:"sent_at"`
 }
 
+type webhookDelivery struct {
+	payload webhookPayload
+}
+
 func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, cacheStore cachex.Store) (*Manager, error) {
 	timeout, err := parseDuration(cfg.Notification.Webhook.Timeout, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("parse notification webhook timeout: %w", err)
 	}
+	retryInterval, err := parseDuration(cfg.Notification.Webhook.RetryInterval, 5*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("parse notification webhook retry interval: %w", err)
+	}
 	return &Manager{
-		cfg:    cfg,
-		logger: logger,
-		bus:    bus,
-		cache:  cacheStore,
-		client: &http.Client{Timeout: timeout},
-		states: make(map[string]alertState),
+		cfg:           cfg,
+		logger:        logger,
+		bus:           bus,
+		cache:         cacheStore,
+		client:        &http.Client{Timeout: timeout},
+		states:        make(map[string]alertState),
+		deliveries:    make(chan webhookDelivery, webhookQueueSize(cfg)),
+		stop:          make(chan struct{}),
+		done:          make(chan struct{}),
+		maxAttempts:   webhookMaxAttempts(cfg),
+		retryInterval: retryInterval,
 	}, nil
 }
 
-func (m *Manager) Start(context.Context) error {
+func (m *Manager) Start(ctx context.Context) error {
 	if m == nil || !m.enabled() {
 		return nil
 	}
@@ -78,16 +95,51 @@ func (m *Manager) Start(context.Context) error {
 		return fmt.Errorf("subscribe probe results recorded event: %w", err)
 	}
 	m.unsubscribe = unsubscribe
+	go m.run(ctx)
 	return nil
 }
 
-func (m *Manager) Stop(context.Context) error {
-	if m == nil || m.unsubscribe == nil {
+func (m *Manager) Stop(ctx context.Context) error {
+	if m == nil {
 		return nil
 	}
-	m.unsubscribe()
-	m.unsubscribe = nil
+	if m.unsubscribe != nil {
+		m.unsubscribe()
+		m.unsubscribe = nil
+	} else {
+		return nil
+	}
+	m.stopOnce.Do(func() {
+		close(m.stop)
+	})
+	<-m.done
 	return nil
+}
+
+func (m *Manager) run(ctx context.Context) {
+	defer close(m.done)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.stop:
+			m.drainDeliveries(context.WithoutCancel(ctx))
+			return
+		case delivery := <-m.deliveries:
+			m.logDeliveryError(m.deliverWithRetry(ctx, delivery))
+		}
+	}
+}
+
+func (m *Manager) drainDeliveries(ctx context.Context) {
+	for {
+		select {
+		case delivery := <-m.deliveries:
+			m.logDeliveryError(m.deliverWithRetry(ctx, delivery))
+		default:
+			return
+		}
+	}
 }
 
 func (m *Manager) handleProbeResultsRecorded(ctx context.Context, event ingest.ProbeResultsRecordedEvent) error {
@@ -100,11 +152,22 @@ func (m *Manager) handleProbeResultsRecorded(ctx context.Context, event ingest.P
 		if !ok {
 			continue
 		}
-		if err := m.deliverWebhook(ctx, payload); err != nil {
+		if err := m.enqueueWebhook(ctx, payload); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (m *Manager) enqueueWebhook(ctx context.Context, payload webhookPayload) error {
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("enqueue webhook notification: %w", ctx.Err())
+	case m.deliveries <- webhookDelivery{payload: payload}:
+		return nil
+	default:
+		return errors.New("webhook notification delivery queue is full")
+	}
 }
 
 func (m *Manager) nextWebhookPayload(ctx context.Context, result model.ProbeResult) (webhookPayload, bool, error) {
@@ -204,34 +267,6 @@ func alertStateTTL(cooldown time.Duration) time.Duration {
 	return cooldown * 24
 }
 
-func (m *Manager) deliverWebhook(ctx context.Context, payload webhookPayload) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal webhook payload: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, webhookMethod(m.cfg), strings.TrimSpace(m.cfg.Notification.Webhook.URL), bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("build webhook request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := m.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("deliver webhook notification: %w", err)
-	}
-	defer closeBody(resp.Body)
-	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
-		return fmt.Errorf("read webhook response body: %w", err)
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		return fmt.Errorf("webhook notification returned HTTP %d", resp.StatusCode)
-	}
-	if m.logger != nil {
-		m.logger.Info("sent webhook notification", "event", payload.Event, "monitor_id", payload.MonitorID, "status", payload.Status)
-	}
-	return nil
-}
-
 func (m *Manager) enabled() bool {
 	return m.cfg.Notification.Webhook.Enabled && strings.TrimSpace(m.cfg.Notification.Webhook.URL) != ""
 }
@@ -248,37 +283,5 @@ func newWebhookPayload(event string, result model.ProbeResult, sentAt time.Time)
 		ErrorMessage:  result.ErrorMessage,
 		CheckedAt:     result.CheckedAt,
 		SentAt:        sentAt,
-	}
-}
-
-func webhookMethod(cfg config.Config) string {
-	method := strings.ToUpper(strings.TrimSpace(cfg.Notification.Webhook.Method))
-	if method == "" {
-		return http.MethodPost
-	}
-	return method
-}
-
-func parseDuration(value string, fallback time.Duration) (time.Duration, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fallback, nil
-	}
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, fmt.Errorf("parse duration %q: %w", value, err)
-	}
-	if duration <= 0 {
-		return fallback, nil
-	}
-	return duration, nil
-}
-
-func closeBody(body io.Closer) {
-	if body == nil {
-		return
-	}
-	if err := body.Close(); err != nil {
-		return
 	}
 }

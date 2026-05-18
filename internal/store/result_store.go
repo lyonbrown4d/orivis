@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -39,7 +38,7 @@ type resultStore struct {
 }
 
 type resultQueryer interface {
-	QueryRowContext(ctx context.Context, query string, args ...any) *dbx.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 func (s *resultStore) Record(ctx context.Context, params RecordProbeResultParams) (model.ProbeResult, error) {
@@ -97,16 +96,28 @@ func (s *resultStore) prepareProbeResultRows(
 	queryer resultQueryer,
 	params []RecordProbeResultParams,
 ) ([]model.ProbeResult, []*probeResultRow, error) {
+	normalized, err := normalizeProbeResultParamList(params)
+	if err != nil {
+		return nil, nil, err
+	}
+	monitors, err := s.monitorLookupForAgentBatch(ctx, queryer, normalized.Values())
+	if err != nil {
+		return nil, nil, err
+	}
 	prepared, err := collectionlist.ReduceErrList(
-		collectionlist.NewList(params...),
+		normalized,
 		preparedProbeResultRows{
 			results: collectionlist.NewListWithCapacity[model.ProbeResult](len(params)),
 			rows:    collectionlist.NewListWithCapacity[*probeResultRow](len(params)),
 		},
-		func(out preparedProbeResultRows, _ int, params RecordProbeResultParams) (preparedProbeResultRows, error) {
-			result, row, err := s.prepareProbeResultRow(ctx, queryer, params)
-			if err != nil {
-				return out, err
+		func(out preparedProbeResultRows, _ int, params normalizedProbeResultParams) (preparedProbeResultRows, error) {
+			monitor, ok := monitors[monitorAgentKey(params.MonitorID, params.Agent.ID)]
+			if !ok {
+				return out, fmt.Errorf("%w: assigned monitor %s", ErrNotFound, params.MonitorID)
+			}
+			result, row, rowErr := s.prepareProbeResultRowWithMonitor(ctx, params, monitor)
+			if rowErr != nil {
+				return out, rowErr
 			}
 			out.results.Add(result)
 			out.rows.Add(row)
@@ -124,21 +135,11 @@ type preparedProbeResultRows struct {
 	rows    *collectionlist.List[*probeResultRow]
 }
 
-func (s *resultStore) prepareProbeResultRow(
+func (s *resultStore) prepareProbeResultRowWithMonitor(
 	ctx context.Context,
-	queryer resultQueryer,
-	params RecordProbeResultParams,
+	normalized normalizedProbeResultParams,
+	monitor model.Monitor,
 ) (model.ProbeResult, *probeResultRow, error) {
-	normalized, err := normalizeProbeResultParams(params)
-	if err != nil {
-		return model.ProbeResult{}, nil, err
-	}
-
-	monitor, err := s.monitorForAgentWithQueryer(ctx, queryer, normalized.MonitorID, normalized.Agent.ID)
-	if err != nil {
-		return model.ProbeResult{}, nil, err
-	}
-
 	id, err := s.ids.NewID(ctx, "res")
 	if err != nil {
 		return model.ProbeResult{}, nil, fmt.Errorf("generate probe result id: %w", err)
@@ -159,47 +160,6 @@ func (s *resultStore) prepareProbeResultRow(
 		RawDetail:     normalized.RawDetail,
 		CreatedAt:     now,
 	}, row, nil
-}
-
-func (s *resultStore) monitorForAgentWithQueryer(
-	ctx context.Context,
-	queryer resultQueryer,
-	monitorID,
-	agentID string,
-) (model.Monitor, error) {
-	var rec monitorRecord
-	err := queryer.QueryRowContext(
-		ctx,
-		`SELECT m.id, m.name, m.type, m.target, m.environment_id, m.enabled,
-                m.interval_seconds, m.timeout_seconds, m.retry_count,
-                m.aggregation_policy, m.source, m.created_at, m.updated_at
-         FROM monitors m
-         JOIN monitor_agents ma ON ma.monitor_id = m.id
-         WHERE m.id = ? AND ma.agent_id = ? AND m.enabled = 1`,
-		monitorID,
-		agentID,
-	).Scan(
-		&rec.ID,
-		&rec.Name,
-		&rec.Type,
-		&rec.Target,
-		&rec.EnvironmentID,
-		&rec.Enabled,
-		&rec.IntervalSeconds,
-		&rec.TimeoutSeconds,
-		&rec.RetryCount,
-		&rec.AggregationPolicy,
-		&rec.Source,
-		&rec.CreatedAt,
-		&rec.UpdatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return model.Monitor{}, fmt.Errorf("%w: assigned monitor %s", ErrNotFound, monitorID)
-		}
-		return model.Monitor{}, fmt.Errorf("find monitor for agent: %w", err)
-	}
-	return rec.model()
 }
 
 type normalizedProbeResultParams struct {

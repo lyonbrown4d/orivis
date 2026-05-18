@@ -73,12 +73,17 @@ type Config struct {
 	} `mapstructure:"observability"`
 	Notification struct {
 		Webhook struct {
-			Enabled         bool   `mapstructure:"enabled"`
-			URL             string `mapstructure:"url"`
-			Method          string `mapstructure:"method"          validate:"required"`
-			Timeout         string `mapstructure:"timeout"         validate:"required"`
-			Cooldown        string `mapstructure:"cooldown"        validate:"required"`
-			RecoveryEnabled bool   `mapstructure:"recoveryenabled"`
+			Enabled         bool     `mapstructure:"enabled"`
+			URL             string   `mapstructure:"url"`
+			Method          string   `mapstructure:"method"          validate:"required"`
+			Timeout         string   `mapstructure:"timeout"         validate:"required"`
+			Cooldown        string   `mapstructure:"cooldown"        validate:"required"`
+			QueueSize       int      `mapstructure:"queuesize"`
+			MaxAttempts     int      `mapstructure:"maxattempts"`
+			RetryInterval   string   `mapstructure:"retryinterval"   validate:"required"`
+			Secret          string   `mapstructure:"secret"`
+			Headers         []string `mapstructure:"headers"`
+			RecoveryEnabled bool     `mapstructure:"recoveryenabled"`
 		} `mapstructure:"webhook"`
 	} `mapstructure:"notification"`
 }
@@ -148,10 +153,14 @@ type defaultConfigValues struct {
 	} `json:"observability"`
 	Notification struct {
 		Webhook struct {
-			Method          string `json:"method"`
-			Timeout         string `json:"timeout"`
-			Cooldown        string `json:"cooldown"`
-			RecoveryEnabled bool   `json:"recoveryenabled"`
+			Method          string   `json:"method"`
+			Timeout         string   `json:"timeout"`
+			Cooldown        string   `json:"cooldown"`
+			QueueSize       int      `json:"queuesize"`
+			MaxAttempts     int      `json:"maxattempts"`
+			RetryInterval   string   `json:"retryinterval"`
+			Headers         []string `json:"headers"`
+			RecoveryEnabled bool     `json:"recoveryenabled"`
 		} `json:"webhook"`
 	} `json:"notification"`
 }
@@ -201,6 +210,10 @@ func defaultConfig() defaultConfigValues {
 	cfg.Notification.Webhook.Method = "POST"
 	cfg.Notification.Webhook.Timeout = "5s"
 	cfg.Notification.Webhook.Cooldown = "5m"
+	cfg.Notification.Webhook.QueueSize = 128
+	cfg.Notification.Webhook.MaxAttempts = 3
+	cfg.Notification.Webhook.RetryInterval = "5s"
+	cfg.Notification.Webhook.Headers = []string{}
 	cfg.Notification.Webhook.RecoveryEnabled = true
 	return cfg
 }
