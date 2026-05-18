@@ -3,7 +3,6 @@ package collector
 import (
 	"context"
 	"log/slog"
-	"strconv"
 	"time"
 
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
@@ -227,8 +226,13 @@ func (r *Runner) removeMissingTasks(contains func(string) bool) {
 
 func (r *Runner) scheduleTask(ctx context.Context, task protocol.AgentTask, signature string) error {
 	interval := taskInterval(task, r.cfg.Poll.Interval)
+	jitter := taskInitialJitter(task, r.cfg.Poll.Jitter, interval)
 	taskCopy := task
-	job, err := r.sched.Every(interval).SingletonMode().Do(func() {
+	schedule := r.sched.Every(interval)
+	if jitter > 0 {
+		schedule = schedule.StartAt(time.Now().UTC().Add(jitter))
+	}
+	job, err := schedule.SingletonMode().Do(func() {
 		r.runTask(ctx, taskCopy)
 	})
 	if err != nil {
@@ -236,7 +240,7 @@ func (r *Runner) scheduleTask(ctx context.Context, task protocol.AgentTask, sign
 	}
 	job.Tag(taskTag(task.MonitorID))
 	r.tasks.Set(task.MonitorID, scheduledTask{signature: signature})
-	r.logger.Info("agent task scheduled", "monitor_id", task.MonitorID, "interval", interval)
+	r.logger.Info("agent task scheduled", "monitor_id", task.MonitorID, "interval", interval, "initial_jitter", jitter)
 	return nil
 }
 
@@ -272,22 +276,4 @@ func (r *Runner) runTask(ctx context.Context, task protocol.AgentTask) {
 		level = slog.LevelWarn
 	}
 	r.logger.Log(ctx, level, "agent task checked", "monitor_id", task.MonitorID, "status", result.Status, "latency", result.Latency)
-}
-
-func taskInterval(task protocol.AgentTask, fallback time.Duration) time.Duration {
-	if task.IntervalSeconds > 0 {
-		return time.Duration(task.IntervalSeconds) * time.Second
-	}
-	if fallback > 0 {
-		return fallback
-	}
-	return 30 * time.Second
-}
-
-func taskSignature(task protocol.AgentTask) string {
-	return task.Type + "\x00" + task.Target + "\x00" + strconv.Itoa(task.IntervalSeconds) + "\x00" + strconv.Itoa(task.TimeoutSeconds)
-}
-
-func taskTag(monitorID string) string {
-	return "monitor:" + monitorID
 }

@@ -70,6 +70,13 @@ func (q *resultQueue) popBatch(limit int) *collectionlist.List[store.RecordProbe
 	return out
 }
 
+func (q *resultQueue) len() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	return q.items.Len()
+}
+
 func (q *resultQueue) close() {
 	q.mu.Lock()
 	defer q.mu.Unlock()

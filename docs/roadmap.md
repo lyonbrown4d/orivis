@@ -49,6 +49,8 @@ Discussion points:
 
 ### Dashboard cache invalidation
 
+Status: initial implementation completed. Ingest now invalidates the dashboard snapshot cache after successful result recording while keeping TTL cache as fallback.
+
 - Keep TTL cache as a fallback.
 - Invalidate dashboard snapshot cache after successful probe result flush.
 - Invalidate only known dashboard keys first, then consider wildcard/prefix invalidation if needed.
@@ -59,6 +61,8 @@ Discussion points:
 - Whether invalidation should happen in ingest or via an event subscriber.
 
 ### Ingest queue observability
+
+Status: initial implementation completed. Ingest now records queue length, queue-full count, flush batch size, flush duration, and record errors through `observabilityx`.
 
 - Add Prometheus metrics for queue length, queue full count, flush batch size, flush duration, and record errors.
 - Expose enough labels to debug without creating high-cardinality metrics.
@@ -80,6 +84,8 @@ Discussion points:
 - Whether memory buffering should be enabled by default.
 
 ### Probe scheduling jitter
+
+Status: initial implementation completed. Agent probe jobs now support `poll.jitter` and use stable per-monitor initial jitter to reduce synchronized startup checks.
 
 - Add initial jitter to scheduled probe execution.
 - Keep configured intervals stable after startup.

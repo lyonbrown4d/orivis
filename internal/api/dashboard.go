@@ -10,6 +10,7 @@ import (
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
+	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
@@ -71,7 +72,7 @@ func (e *dashboardEndpoint) loadDashboardSnapshot(ctx context.Context, resultLim
 		}
 		return snapshot, nil
 	}
-	key := fmt.Sprintf("dashboard:snapshot:%d", resultLimit)
+	key := cachex.DashboardSnapshotKey(resultLimit)
 	if snapshot, ok := e.cachedDashboardSnapshot(ctx, key); ok {
 		return snapshot, nil
 	}

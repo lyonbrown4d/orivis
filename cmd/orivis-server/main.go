@@ -103,11 +103,10 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 
 	eventModule := newServerEventModule(loggingModule)
 	cacheModule := newServerCacheModule(configModule, loggingModule)
-	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule)
+	observabilityModule := newServerObservabilityModule(configModule, loggingModule)
+	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule, cacheModule, observabilityModule)
 	notificationModule := newServerNotificationModule(configModule, loggingModule, eventModule, cacheModule)
 	retentionModule := newServerRetentionModule(configModule, loggingModule, storeModule)
-
-	observabilityModule := newServerObservabilityModule(configModule, loggingModule)
 
 	securityModule := newServerSecurityModule(configModule, loggingModule, observabilityModule)
 
@@ -225,11 +224,11 @@ func newServerNotificationModule(configModule, loggingModule, eventModule, cache
 	)
 }
 
-func newServerIngestModule(configModule, loggingModule, storeModule, eventModule dix.Module) dix.Module {
+func newServerIngestModule(configModule, loggingModule, storeModule, eventModule, cacheModule, observabilityModule dix.Module) dix.Module {
 	return dix.NewModule("ingest",
-		dix.WithModuleImports(configModule, loggingModule, storeModule, eventModule),
+		dix.WithModuleImports(configModule, loggingModule, storeModule, eventModule, cacheModule, observabilityModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr4(ingest.NewResultIngestor),
+			dix.ProviderErr6(ingest.NewResultIngestor),
 		),
 		dix.WithModuleHooks(
 			dix.OnStart[*ingest.ResultIngestor](func(ctx context.Context, resultIngestor *ingest.ResultIngestor) error {

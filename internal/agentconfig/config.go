@@ -27,6 +27,7 @@ type Config struct {
 	Runtime string `mapstructure:"runtime" validate:"required"`
 	Poll    struct {
 		Interval time.Duration `mapstructure:"interval" validate:"required"`
+		Jitter   time.Duration `mapstructure:"jitter"`
 	} `mapstructure:"poll"`
 	Discovery struct {
 		Static struct {
@@ -85,6 +86,7 @@ type defaultConfigValues struct {
 	Runtime string `json:"runtime"`
 	Poll    struct {
 		Interval time.Duration `json:"interval"`
+		Jitter   time.Duration `json:"jitter"`
 	} `json:"poll"`
 	Discovery struct {
 		Static struct {
@@ -130,6 +132,7 @@ func defaultConfig() defaultConfigValues {
 	cfg.Agent.Environments = []string{}
 	cfg.Runtime = "host"
 	cfg.Poll.Interval = 30 * time.Second
+	cfg.Poll.Jitter = 5 * time.Second
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
 	cfg.Discovery.Docker.Mode = "container"

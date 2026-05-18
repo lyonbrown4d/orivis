@@ -48,6 +48,7 @@ func main() {
 	cmd.Flags().StringSlice("agent-environments", nil, "agent environment codes")
 	cmd.Flags().String("runtime", "", "agent runtime")
 	cmd.Flags().Duration("poll-interval", 0, "task polling interval")
+	cmd.Flags().Duration("poll-jitter", 0, "maximum initial probe schedule jitter")
 	cmd.Flags().StringSlice("discovery-static-hcl-files", nil, "static probe HCL files")
 	cmd.Flags().Bool("discovery-docker-enabled", false, "enable Docker label discovery")
 	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode: container or swarm")

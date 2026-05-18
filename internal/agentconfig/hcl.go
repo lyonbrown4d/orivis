@@ -35,6 +35,7 @@ type agentHCLAgent struct {
 
 type agentHCLPoll struct {
 	Interval string `hcl:"interval,optional"`
+	Jitter   string `hcl:"jitter,optional"`
 }
 
 type agentHCLLog struct {
@@ -139,6 +140,7 @@ func (file agentHCLFile) applyPoll(values map[string]any) {
 		return
 	}
 	setString(values, "poll.interval", file.Poll.Interval)
+	setString(values, "poll.jitter", file.Poll.Jitter)
 }
 
 func (file agentHCLFile) applyLog(values map[string]any) {
