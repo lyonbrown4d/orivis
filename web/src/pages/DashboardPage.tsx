@@ -292,7 +292,12 @@ function MonitorRow({ monitor, formatTime }: { monitor: Monitor; formatTime: (va
           <p className="font-black text-slate-950 dark:text-white">{monitor.name}</p>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{monitor.target}</p>
         </div>
-        <StatusBadge status={monitor.latest?.status || 'unknown'} label={t(monitor.latest?.status || 'unknown')} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={monitor.latest?.status || 'unknown'} label={t(monitor.latest?.status || 'unknown')} />
+          <Button asChild variant="outline" className="h-8 rounded-full bg-white/70 px-3 text-xs dark:bg-slate-950/60">
+            <Link to={`/monitors/${encodeURIComponent(monitor.id)}`}>{t('details')}</Link>
+          </Button>
+        </div>
       </div>
       <div className="mt-4 grid gap-3 text-sm md:grid-cols-4">
         <IconMetric icon={<Cpu className="h-4 w-4" />} label={t('environment')} value={monitor.environment_code || '-'} />

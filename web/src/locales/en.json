@@ -68,5 +68,11 @@
   "notifications": "Notifications",
   "sentAt": "Sent at",
   "failed": "Failed",
-  "success": "Success"
+  "success": "Success",
+  "monitorDetails": "Monitor details",
+  "monitorNotFound": "Monitor not found.",
+  "probeHistory": "Probe history",
+  "notificationDeliveries": "Notification deliveries",
+  "retryCount": "Retry count",
+  "createdAt": "Created at"
 }

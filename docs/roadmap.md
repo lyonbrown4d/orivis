@@ -142,8 +142,17 @@ Discussion points:
 - This likely depends on the P0 delivery queue decision.
 - A simple append-only table is enough for the first version.
 
+### Dashboard detail views
+
+Status: initial implementation completed. The React dashboard now exposes a per-monitor detail route with recent probe history and notification delivery drill-down sourced from the existing snapshot payload.
+
+- Add a per-monitor detail route.
+- Show recent probe history for the selected monitor.
+- Show notification deliveries for the selected monitor.
+- Keep the first implementation frontend-only while snapshot data volume remains small.
+
 ## Current recommended next batch
 
-1. Dashboard detail views: add per-monitor history and notification delivery drill-down pages.
-2. Agent file spool hardening: add compaction metrics and corruption recovery.
-3. Notification routing hardening: add route-level observability and group routing integration tests.
+1. Agent file spool hardening: add compaction metrics and corruption recovery.
+2. Notification routing hardening: add route-level observability and group routing integration tests.
+3. Dashboard detail views: add dedicated server endpoints when snapshot-level history is no longer enough.

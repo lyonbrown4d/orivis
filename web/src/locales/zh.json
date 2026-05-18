@@ -68,5 +68,11 @@
   "notifications": "通知",
   "sentAt": "发送时间",
   "failed": "失败",
-  "success": "成功"
+  "success": "成功",
+  "monitorDetails": "监控详情",
+  "monitorNotFound": "未找到监控项。",
+  "probeHistory": "探针历史",
+  "notificationDeliveries": "通知投递",
+  "retryCount": "重试次数",
+  "createdAt": "创建时间"
 }
