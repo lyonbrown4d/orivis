@@ -90,6 +90,7 @@ func TestParseLabelsInfersSingleMonitorFromDockerMetadata(t *testing.T) {
 		Labels:             map[string]string{"orivis.enable": "true", "orivis.monitor.type": "redis"},
 		DefaultName:        "redis",
 		DefaultEnvironment: "project",
+		DefaultGroup:       "project",
 		TargetHost:         "redis",
 		Ports:              []int{6379},
 	})
@@ -108,6 +109,9 @@ func TestParseLabelsInfersSingleMonitorFromDockerMetadata(t *testing.T) {
 	}
 	if monitor.EnvironmentCode != "project" {
 		t.Fatalf("unexpected environment: %#v", monitor)
+	}
+	if monitor.GroupName != "project" {
+		t.Fatalf("unexpected group: %#v", monitor)
 	}
 }
 

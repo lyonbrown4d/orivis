@@ -36,7 +36,8 @@ type Config struct {
 		Capacity int    `mapstructure:"capacity" validate:"min=0"`
 	} `mapstructure:"buffer"`
 	Discovery struct {
-		Static struct {
+		Provider string `mapstructure:"provider"`
+		Static   struct {
 			Monitor  discovery.StaticMonitor   `mapstructure:"monitor"`
 			Enabled  bool                      `mapstructure:"enabled"`
 			HCLFiles []string                  `mapstructure:"hcl_files"`
@@ -64,6 +65,9 @@ func finalizeConfig(cfg Config) (Config, error) {
 	cfg.Agent.Environments = normalizeStringSlice(cfg.Agent.Environments)
 	cfg.Discovery.Static.HCLFiles = normalizeStringSlice(cfg.Discovery.Static.HCLFiles)
 	if err := normalizeBufferConfig(&cfg); err != nil {
+		return Config{}, err
+	}
+	if err := normalizeDiscoveryConfig(&cfg); err != nil {
 		return Config{}, err
 	}
 	hclMonitors, err := discovery.LoadStaticMonitorsHCL(cfg.Discovery.Static.HCLFiles)
@@ -104,7 +108,8 @@ type defaultConfigValues struct {
 		Capacity int    `json:"capacity"`
 	} `json:"buffer"`
 	Discovery struct {
-		Static struct {
+		Provider string `json:"provider"`
+		Static   struct {
 			Enabled  bool     `json:"enabled"`
 			HCLFiles []string `json:"hcl_files"`
 		} `json:"static"`
@@ -154,7 +159,7 @@ func defaultConfig() defaultConfigValues {
 	cfg.Buffer.Capacity = 1024
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
-	cfg.Discovery.Docker.Mode = "container"
+	cfg.Discovery.Docker.Mode = discovery.DockerModeAuto
 	cfg.Log.Level = "info"
 	return cfg
 }
@@ -174,6 +179,25 @@ func normalizeBufferConfig(cfg *Config) error {
 	default:
 		return fmt.Errorf("unsupported buffer driver %q", cfg.Buffer.Driver)
 	}
+}
+
+func normalizeDiscoveryConfig(cfg *Config) error {
+	cfg.Discovery.Provider = strings.ToLower(strings.TrimSpace(cfg.Discovery.Provider))
+	switch cfg.Discovery.Provider {
+	case "":
+	case "docker":
+		cfg.Discovery.Docker.Enabled = true
+		if runtime := strings.TrimSpace(cfg.Runtime); runtime == "" || strings.EqualFold(runtime, "host") {
+			cfg.Runtime = "docker"
+		}
+	default:
+		return fmt.Errorf("unsupported discovery provider %q", cfg.Discovery.Provider)
+	}
+	cfg.Discovery.Docker.Mode = strings.ToLower(strings.TrimSpace(cfg.Discovery.Docker.Mode))
+	if cfg.Discovery.Docker.Mode == "" {
+		cfg.Discovery.Docker.Mode = discovery.DockerModeAuto
+	}
+	return nil
 }
 
 func normalizeStaticMonitors(single discovery.StaticMonitor, monitors, hclMonitors []discovery.StaticMonitor) []discovery.StaticMonitor {

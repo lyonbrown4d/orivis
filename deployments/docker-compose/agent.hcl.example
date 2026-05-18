@@ -9,8 +9,6 @@ agent {
   environments = ["dev"]
 }
 
-runtime = "docker-compose"
-
 poll {
   interval = "30s"
 }
@@ -20,13 +18,10 @@ log {
 }
 
 discovery {
+  provider = "docker"
+
   static {
     enabled = true
-  }
-
-  docker {
-    enabled = true
-    mode = "container"
   }
 
   probe "http" "server-health" {

@@ -49,6 +49,9 @@ func TestContainerLabelSourceUsesComposeMetadata(t *testing.T) {
 	if source.DefaultName != "redis" || source.DefaultEnvironment != "project" || source.TargetHost != "redis" {
 		t.Fatalf("unexpected source metadata: %#v", source)
 	}
+	if source.DefaultGroup != "project" {
+		t.Fatalf("unexpected source group: %#v", source)
+	}
 	if len(source.Ports) != 1 || source.Ports[0] != 6379 {
 		t.Fatalf("unexpected source ports: %#v", source)
 	}
@@ -68,5 +71,26 @@ func TestServiceSourceKey(t *testing.T) {
 	})
 	if key != "docker:swarm:stack:web" {
 		t.Fatalf("unexpected service source key: %q", key)
+	}
+}
+
+func TestServiceLabelSourceUsesSwarmStackGroup(t *testing.T) {
+	source := discovery.ServiceLabelSource(swarm.Service{
+		ID: "abcdef1234567890",
+		Spec: swarm.ServiceSpec{
+			Annotations: swarm.Annotations{
+				Name: "web",
+				Labels: map[string]string{
+					"com.docker.stack.namespace": "stack",
+					"orivis.enable":              "true",
+				},
+			},
+		},
+	})
+	if source.SourceKey != "docker:swarm:stack:web" {
+		t.Fatalf("unexpected source key: %#v", source)
+	}
+	if source.DefaultName != "web" || source.DefaultEnvironment != "stack" || source.DefaultGroup != "stack" {
+		t.Fatalf("unexpected source metadata: %#v", source)
 	}
 }

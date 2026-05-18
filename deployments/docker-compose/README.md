@@ -35,7 +35,9 @@ docker compose -f deployments/docker-compose/compose.yml up -d
 
 The server image already enables the bundled SPA and serves `/app/web`, so `ORIVIS_WEB__ENABLED` and `ORIVIS_WEB__ROOT` are intentionally not part of `server.env`.
 
-The agent reads Docker labels and container metadata through the Docker socket. Add labels to application containers that the agent can reach from its Docker network:
+The agent reads Docker labels and metadata through the Docker socket when `ORIVIS_DISCOVERY__PROVIDER=docker` is set. Standalone Docker and Docker Compose use container labels. Docker Swarm managers use service labels from `deploy.labels`; Swarm workers fall back to local container labels.
+
+Add labels to application containers or Swarm services that the agent can reach from its Docker network:
 
 ```yaml
 labels:
@@ -45,6 +47,8 @@ labels:
   orivis.monitor.interval: "10s"
   orivis.monitor.timeout: "3s"
 ```
+
+See `../../docs/docker-labels.md` for HTTP, TCP, Redis, database, Kafka, TLS, multi-monitor, Docker Compose, and Docker Swarm examples.
 
 When credentials are required, keep an explicit target:
 

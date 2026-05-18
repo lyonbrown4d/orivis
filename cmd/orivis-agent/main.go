@@ -54,8 +54,9 @@ func main() {
 	cmd.Flags().String("buffer-path", "", "file buffer JSONL path")
 	cmd.Flags().Int("buffer-capacity", 0, "maximum buffered failed result reports")
 	cmd.Flags().StringSlice("discovery-static-hcl-files", nil, "static probe HCL files")
-	cmd.Flags().Bool("discovery-docker-enabled", false, "enable Docker label discovery")
-	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode: container or swarm")
+	cmd.Flags().String("discovery-provider", "", "discovery provider, for example docker")
+	cmd.Flags().Bool("discovery-docker-enabled", false, "enable Docker label discovery (legacy)")
+	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode override: auto, container, or swarm")
 	cmd.Flags().String("log-level", "", "log level")
 
 	if err := cmd.Execute(); err != nil {

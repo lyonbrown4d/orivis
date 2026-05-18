@@ -35,7 +35,12 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 		t.Fatalf("expected default poll interval, got %s", cfg.Poll.Interval)
 	}
 	assertDefaultBufferConfig(t, cfg)
-	if cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "container" {
+	assertDefaultDiscoveryConfig(t, cfg)
+}
+
+func assertDefaultDiscoveryConfig(t *testing.T, cfg config.Config) {
+	t.Helper()
+	if cfg.Discovery.Provider != "" || cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "auto" {
 		t.Fatalf("unexpected Docker discovery defaults: %#v", cfg.Discovery.Docker)
 	}
 	if !cfg.Discovery.Static.Enabled || len(cfg.Discovery.Static.Monitors) != 0 {
@@ -69,6 +74,7 @@ func isolateOrivisEnv(t *testing.T) {
 		"ORIVIS_BUFFER__PATH",
 		"ORIVIS_BUFFER__CAPACITY",
 		"ORIVIS_LOG__LEVEL",
+		"ORIVIS_DISCOVERY__PROVIDER",
 		"ORIVIS_DISCOVERY__DOCKER__ENABLED",
 		"ORIVIS_DISCOVERY__DOCKER__MODE",
 		"ORIVIS_DISCOVERY__STATIC__ENABLED",
@@ -126,19 +132,36 @@ func TestLoadAgentEnvironments(t *testing.T) {
 
 func TestLoadDockerDiscovery(t *testing.T) {
 	isolateOrivisEnv(t)
-	t.Setenv("ORIVIS_DISCOVERY__DOCKER__ENABLED", "true")
-	t.Setenv("ORIVIS_DISCOVERY__DOCKER__MODE", "swarm")
+	t.Setenv("ORIVIS_DISCOVERY__PROVIDER", "docker")
 
 	cfg, err := config.Load()
 	if err != nil {
 		t.Fatalf("expected environment config to load: %v", err)
 	}
 
-	if !cfg.Discovery.Docker.Enabled {
+	if cfg.Discovery.Provider != "docker" || !cfg.Discovery.Docker.Enabled {
 		t.Fatal("expected Docker discovery to be enabled")
 	}
-	if cfg.Discovery.Docker.Mode != "swarm" {
+	if cfg.Discovery.Docker.Mode != "auto" {
 		t.Fatalf("expected Docker discovery mode from environment, got %q", cfg.Discovery.Docker.Mode)
+	}
+	if cfg.Runtime != "docker" {
+		t.Fatalf("expected Docker provider to set runtime, got %q", cfg.Runtime)
+	}
+}
+
+func TestLoadLegacyDockerDiscoveryMode(t *testing.T) {
+	isolateOrivisEnv(t)
+	t.Setenv("ORIVIS_DISCOVERY__DOCKER__ENABLED", "true")
+	t.Setenv("ORIVIS_DISCOVERY__DOCKER__MODE", "swarm")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("expected legacy environment config to load: %v", err)
+	}
+
+	if !cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "swarm" {
+		t.Fatalf("unexpected legacy Docker discovery config: %#v", cfg.Discovery.Docker)
 	}
 }
 

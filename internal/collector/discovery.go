@@ -17,7 +17,7 @@ func (r *Runner) configureDiscovery() error {
 		r.logger.Info("static discovery enabled", "count", len(r.cfg.Discovery.Static.Monitors))
 	}
 
-	if r.cfg.Discovery.Docker.Enabled {
+	if r.dockerDiscoveryEnabled() {
 		discoverer, err := agentdiscovery.NewDockerDiscoverer(agentdiscovery.DockerOptions{
 			Mode:               r.cfg.Discovery.Docker.Mode,
 			DefaultEnvironment: defaultDiscoveryEnvironment(r.cfg.Agent.Environments),
@@ -26,7 +26,7 @@ func (r *Runner) configureDiscovery() error {
 			return oops.Wrapf(err, "create Docker discoverer")
 		}
 		discoverers.Add(discoverer)
-		r.logger.Info("Docker discovery enabled", "mode", r.cfg.Discovery.Docker.Mode)
+		r.logger.Info("Docker discovery enabled", "provider", r.cfg.Discovery.Provider, "mode", r.cfg.Discovery.Docker.Mode)
 	}
 
 	switch discoverers.Len() {
@@ -39,6 +39,10 @@ func (r *Runner) configureDiscovery() error {
 		r.discovery = compositeDiscoverer{discoverers: discoverers}
 	}
 	return nil
+}
+
+func (r *Runner) dockerDiscoveryEnabled() bool {
+	return r.cfg.Discovery.Provider == "docker" || r.cfg.Discovery.Docker.Enabled
 }
 
 func defaultDiscoveryEnvironment(environments []string) string {

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/hashicorp/hcl/v2/hclsimple"
@@ -51,9 +50,10 @@ type agentHCLLog struct {
 }
 
 type agentHCLDiscovery struct {
-	Static *agentHCLStatic `hcl:"static,block"`
-	Docker *agentHCLDocker `hcl:"docker,block"`
-	Probes []agentHCLProbe `hcl:"probe,block"`
+	Provider string          `hcl:"provider,optional"`
+	Static   *agentHCLStatic `hcl:"static,block"`
+	Docker   *agentHCLDocker `hcl:"docker,block"`
+	Probes   []agentHCLProbe `hcl:"probe,block"`
 }
 
 type agentHCLStatic struct {
@@ -173,6 +173,7 @@ func (file agentHCLFile) applyDiscovery(values map[string]any) error {
 	if file.Discovery == nil {
 		return nil
 	}
+	setString(values, "discovery.provider", file.Discovery.Provider)
 	file.Discovery.applyStatic(values)
 	file.Discovery.applyDocker(values)
 	monitors, err := file.Discovery.staticMonitors()
@@ -259,42 +260,4 @@ func (probe agentHCLProbe) staticMonitor() (discovery.StaticMonitor, error) {
 		RetryCount:        mo.PointerToOption(probe.RetryCount).OrElse(0),
 		AggregationPolicy: strings.TrimSpace(probe.AggregationPolicy),
 	}, nil
-}
-
-func setOptional[T any](values map[string]any, key string, value *T) {
-	mo.PointerToOption(value).ForEach(func(value T) {
-		setValue(values, key, value)
-	})
-}
-func parseAgentHCLDuration(value string) (time.Duration, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0, nil
-	}
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, fmt.Errorf("%w", oops.Wrapf(err, "parse agent HCL duration %q", value))
-	}
-	return duration, nil
-}
-
-func setString(values map[string]any, key, value string) {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		setValue(values, key, value)
-	}
-}
-
-func setValue(values map[string]any, key string, value any) {
-	parts := strings.Split(key, ".")
-	cursor := values
-	for _, part := range parts[:len(parts)-1] {
-		next, ok := cursor[part].(map[string]any)
-		if !ok {
-			next = make(map[string]any)
-			cursor[part] = next
-		}
-		cursor = next
-	}
-	cursor[parts[len(parts)-1]] = value
 }

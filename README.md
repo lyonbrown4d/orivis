@@ -155,8 +155,8 @@ ORIVIS_DB__DSN=file:orivis.db
 | `ORIVIS_AGENT__ENVIRONMENTS` | empty | Comma-separated environment codes. |
 | `ORIVIS_RUNTIME` | `host` | Agent runtime type. |
 | `ORIVIS_POLL__INTERVAL` | `30s` | Task sync fallback interval. |
-| `ORIVIS_DISCOVERY__DOCKER__ENABLED` | `false` | Enable Docker label discovery. |
-| `ORIVIS_DISCOVERY__DOCKER__MODE` | `container` | Docker discovery mode: `container` or `swarm`. |
+| `ORIVIS_DISCOVERY__PROVIDER` | empty | Set to `docker` to enable Docker, Docker Compose, or Docker Swarm label discovery. |
+| `ORIVIS_DISCOVERY__DOCKER__MODE` | `auto` | Advanced Docker discovery override: `auto`, `container`, or `swarm`. |
 
 ## Security
 
@@ -197,6 +197,7 @@ Kafka is not implemented yet and is not advertised as a supported probe.
 ## Docker labels
 
 Orivis monitor discovery uses labels with an `orivis.` prefix.
+See [docker-labels.md](docs/docker-labels.md) for full Docker, Compose, and Swarm label examples.
 
 ```yaml
 labels:
@@ -206,7 +207,7 @@ labels:
   orivis.monitor.interval: "30s"
 ```
 
-When Docker discovery is enabled, Orivis uses container metadata to infer the monitor name, environment, target host, and ports.
+When Docker discovery is enabled, Orivis uses Docker metadata to infer the monitor name, environment, group, target host, and ports.
 For Redis, `orivis.monitor.type=redis` is enough to infer `redis://<service>:6379`.
 For database probes that need credentials, keep `orivis.monitor.target` explicit.
 
@@ -217,19 +218,13 @@ Use `orivis.monitor.group` or `orivis.monitor.<name>.group` to override the grou
 
 Supported monitor fields are `type`, `target`, `name`, `group`, `enabled`, `interval`, `timeout`, `retry`, and `aggregation`.
 
-Enable Docker container labels:
+Enable Docker, Docker Compose, or Docker Swarm label discovery:
 
 ```env
-ORIVIS_DISCOVERY__DOCKER__ENABLED=true
-ORIVIS_DISCOVERY__DOCKER__MODE=container
+ORIVIS_DISCOVERY__PROVIDER=docker
 ```
 
-Enable Docker Swarm service labels:
-
-```env
-ORIVIS_DISCOVERY__DOCKER__ENABLED=true
-ORIVIS_DISCOVERY__DOCKER__MODE=swarm
-```
+`auto` mode uses container labels for standalone Docker and Docker Compose. On Swarm managers it uses service labels from `deploy.labels`; on Swarm workers it falls back to local container labels.
 
 Agent HCL example:
 

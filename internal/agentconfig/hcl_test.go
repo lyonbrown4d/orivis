@@ -56,7 +56,7 @@ func assertHCLAgentIdentity(t *testing.T, cfg config.Config) {
 	if cfg.Server.URL != "http://server:8080" {
 		t.Fatalf("expected HCL server URL, got %q", cfg.Server.URL)
 	}
-	if cfg.Agent.Name != "hcl-agent" || cfg.Runtime != "docker-compose" {
+	if cfg.Agent.Name != "hcl-agent" || cfg.Runtime != "docker" {
 		t.Fatalf("unexpected HCL agent config: %#v", cfg)
 	}
 	if cfg.Poll.Interval != 12*time.Second || cfg.Poll.Jitter != time.Second || cfg.Log.Level != "debug" {
@@ -74,7 +74,7 @@ func assertHCLBuffer(t *testing.T, cfg config.Config) {
 
 func assertHCLAgentDiscovery(t *testing.T, cfg config.Config) {
 	t.Helper()
-	if !cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "container" {
+	if cfg.Discovery.Provider != "docker" || !cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "auto" {
 		t.Fatalf("unexpected HCL Docker discovery config: %#v", cfg.Discovery.Docker)
 	}
 	if len(cfg.Discovery.Static.Monitors) != 2 {
@@ -100,8 +100,6 @@ agent {
   environments = ["dev", "staging"]
 }
 
-runtime = "docker-compose"
-
 poll {
   interval = "12s"
   jitter = "1s"
@@ -119,6 +117,8 @@ log {
 }
 
 discovery {
+  provider = "docker"
+
   static {
     enabled = true
 
@@ -132,11 +132,6 @@ discovery {
       retry_count = 1
       aggregation = "majority_down"
     }
-  }
-
-  docker {
-    enabled = true
-    mode = "container"
   }
 
   probe "http" "server-health" {
