@@ -37,11 +37,33 @@ func (c *Client) execute(ctx context.Context, build func() *resty.Request, metho
 		if !retryableAgentResponse(resp, err) || attempt == attempts {
 			return resp, wrapRetryError(err)
 		}
-		if waitErr := sleepRetry(ctx, c.retry.delay(attempt)); waitErr != nil {
+		delay := c.retry.delay(attempt)
+		c.logRetry(ctx, method, endpoint, attempt, attempts, delay, resp, err)
+		if waitErr := sleepRetry(ctx, delay); waitErr != nil {
 			return resp, waitErr
 		}
 	}
 	return resp, wrapRetryError(err)
+}
+
+func (c *Client) logRetry(ctx context.Context, method, endpoint string, attempt, maxAttempts int, delay time.Duration, resp *resty.Response, err error) {
+	if c == nil || c.logger == nil {
+		return
+	}
+	args := []any{
+		"method", method,
+		"endpoint", endpoint,
+		"attempt", attempt,
+		"max_attempts", maxAttempts,
+		"next_delay", delay,
+	}
+	if resp != nil {
+		args = append(args, "status_code", resp.StatusCode(), "status", resp.Status())
+	}
+	if err != nil {
+		args = append(args, "error", err)
+	}
+	c.logger.DebugContext(ctx, "agent HTTP request retrying", args...)
 }
 
 func retryableAgentResponse(resp *resty.Response, err error) bool {

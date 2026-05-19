@@ -16,6 +16,9 @@ func (i *ResultIngestor) recordBatch(ctx context.Context, batch *collectionlist.
 			return wrapError(err, "record probe result batch")
 		}
 		i.logFlushError(wrapError(err, "record probe result batch"))
+		if i.logger != nil {
+			i.logger.Warn("result batch record failed; falling back to individual writes", "count", batch.Len())
+		}
 		return i.recordIndividually(ctx, batch)
 	}
 	i.publishRecordedResults(ctx, results)

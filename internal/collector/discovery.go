@@ -26,11 +26,17 @@ func (r *Runner) configureDiscovery() error {
 			return oops.Wrapf(err, "create Docker discoverer")
 		}
 		discoverers.Add(discoverer)
-		r.logger.Info("Docker discovery enabled", "provider", r.cfg.Discovery.Provider, "mode", r.cfg.Discovery.Docker.Mode)
+		r.logger.Info(
+			"Docker discovery enabled",
+			"provider", r.cfg.Discovery.Provider,
+			"mode", r.cfg.Discovery.Docker.Mode,
+			"default_environment", defaultDiscoveryEnvironment(r.cfg.Agent.Environments),
+		)
 	}
 
 	switch discoverers.Len() {
 	case 0:
+		r.logger.Info("monitor discovery disabled")
 		return nil
 	case 1:
 		discoverer, _ := discoverers.GetFirst()

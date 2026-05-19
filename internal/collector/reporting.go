@@ -46,7 +46,16 @@ func (r *Runner) logTaskResult(ctx context.Context, task protocol.AgentTask, sta
 	if status != model.StatusUp {
 		level = slog.LevelWarn
 	}
-	r.logger.Log(ctx, level, "agent task checked", "monitor_id", task.MonitorID, "status", status, "latency", latency)
+	r.logger.Log(
+		ctx,
+		level,
+		"agent task checked",
+		"monitor_id", task.MonitorID,
+		"type", task.Type,
+		"target", task.Target,
+		"status", status,
+		"latency", latency,
+	)
 }
 
 func (r *Runner) hasBufferedResults() bool {

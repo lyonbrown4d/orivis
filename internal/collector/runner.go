@@ -61,6 +61,12 @@ func (r *Runner) Start(ctx context.Context) error {
 		"region", r.cfg.Agent.Region,
 		"runtime", r.cfg.Runtime,
 		"server_url", r.cfg.Server.URL,
+		"log_level", r.cfg.Log.Level,
+		"poll_interval", r.cfg.Poll.Interval,
+		"poll_jitter", r.cfg.Poll.Jitter,
+		"discovery_provider", r.cfg.Discovery.Provider,
+		"docker_mode", r.cfg.Discovery.Docker.Mode,
+		"buffer_enabled", r.cfg.Buffer.Enabled,
 	)
 
 	if err := r.configureDiscovery(); err != nil {
@@ -79,6 +85,7 @@ func (r *Runner) Start(ctx context.Context) error {
 	}
 	r.sched = scheduler
 	scheduler.StartAsync()
+	r.logger.Info("agent sync scheduler started", "interval", r.cfg.Poll.Interval)
 	go r.syncTasks(runCtx)
 	return nil
 }
@@ -103,6 +110,7 @@ func (r *Runner) syncTasks(ctx context.Context) {
 	if err := ctx.Err(); err != nil {
 		return
 	}
+	start := time.Now()
 	if !r.ensureRegistered(ctx) {
 		return
 	}
@@ -121,6 +129,7 @@ func (r *Runner) syncTasks(ctx context.Context) {
 	}
 	r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
 	r.reconcileTasks(ctx, tasks.Tasks)
+	r.logger.Debug("agent sync cycle completed", "duration", time.Since(start), "task_count", len(tasks.Tasks))
 }
 
 func (r *Runner) ensureRegistered(ctx context.Context) bool {
@@ -178,6 +187,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 	if err != nil {
 		return oops.Wrapf(err, "discover monitors")
 	}
+	r.logger.Debug("agent monitor discovery completed", "count", len(monitors))
 	if len(monitors) == 0 {
 		return nil
 	}
@@ -189,7 +199,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 	if err != nil {
 		return oops.Wrapf(err, "sync discovered monitors")
 	}
-	r.logger.Debug("agent discovered monitors synced", "count", response.Synced)
+	r.logger.Info("agent discovered monitors synced", "discovered", len(monitors), "synced", response.Synced)
 	return nil
 }
 

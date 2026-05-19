@@ -72,6 +72,14 @@ func NewResultIngestor(
 	if err != nil {
 		return nil, err
 	}
+	if logger != nil {
+		logger.Info(
+			"result ingestor configured",
+			"queue_size", queueSize,
+			"batch_size", batchSize,
+			"flush_interval", flushInterval,
+		)
+	}
 	return &ResultIngestor{
 		store:         storage,
 		logger:        logger,
@@ -106,6 +114,9 @@ func (i *ResultIngestor) Start(ctx context.Context) error {
 	}
 	i.startOnce.Do(func() {
 		i.started.Store(true)
+		if i.logger != nil {
+			i.logger.Info("result ingestor started", "flush_interval", i.flushInterval, "batch_size", i.batchSize)
+		}
 		go i.run(ctx)
 	})
 	return nil
@@ -175,6 +186,9 @@ func (i *ResultIngestor) enqueue(ctx context.Context, params store.RecordProbeRe
 	if err != nil {
 		if errors.Is(err, ErrQueueFull) {
 			i.metrics.observeQueueFull(ctx, size)
+			if i.logger != nil {
+				i.logger.Warn("result ingest queue full", "size", size, "batch_size", i.batchSize, "monitor_id", params.MonitorID)
+			}
 		}
 		return err
 	}
@@ -214,9 +228,13 @@ func (i *ResultIngestor) flushNextBatch(ctx context.Context) (bool, error) {
 	}
 	start := time.Now()
 	err := i.recordBatch(ctx, batch)
-	i.metrics.observeFlushBatch(ctx, batch.Len(), time.Since(start), err)
+	duration := time.Since(start)
+	i.metrics.observeFlushBatch(ctx, batch.Len(), duration, err)
 	if err != nil {
 		return batch.Len() < i.batchSize, err
+	}
+	if i.logger != nil {
+		i.logger.Debug("result ingest batch flushed", "count", batch.Len(), "duration", duration, "remaining", i.queue.len())
 	}
 	return batch.Len() < i.batchSize, nil
 }

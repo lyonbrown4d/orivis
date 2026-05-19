@@ -16,6 +16,7 @@ import (
 
 type Client struct {
 	HTTP        clienthttp.Client
+	logger      *slog.Logger
 	retry       retryConfig
 	gzipResults bool
 }
@@ -44,6 +45,7 @@ func New(cfg config.Config, logger *slog.Logger, obs observabilityx.Observabilit
 
 	return &Client{
 		HTTP:        httpClient,
+		logger:      logger,
 		retry:       newRetryConfig(cfg),
 		gzipResults: cfg.Transport.GzipResults,
 	}, nil
