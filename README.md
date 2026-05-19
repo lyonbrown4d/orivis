@@ -148,7 +148,7 @@ ORIVIS_DB__DSN=file:orivis.db
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `ORIVIS_SERVER__URL` | `http://127.0.0.1:8080` | Server base URL. |
+| `ORIVIS_SERVER__URL` | empty | Optional server base URL. When empty, the agent falls back to built-in mDNS discovery. |
 | `ORIVIS_AGENT__NAME` | `local-agent` | Agent name. |
 | `ORIVIS_AGENT__TOKEN` | empty | Agent token. Must match server token when configured. |
 | `ORIVIS_AGENT__REGION` | `local` | Agent region code. |

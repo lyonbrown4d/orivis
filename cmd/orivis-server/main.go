@@ -25,6 +25,7 @@ import (
 	"github.com/lyonbrown4d/orivis/internal/security"
 	serverconfig "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	serverobs "github.com/lyonbrown4d/orivis/internal/serverobservability"
+	"github.com/lyonbrown4d/orivis/internal/servicediscovery"
 	"github.com/lyonbrown4d/orivis/internal/store"
 	"github.com/spf13/cobra"
 )
@@ -127,13 +128,45 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 			}, dix.LifecycleName("stop-http-server")),
 		),
 	)
+	mdnsModule := newServerMDNSModule(configModule, loggingModule)
 
 	return dix.New("orivis-server",
 		dix.WithProfile(dix.ProfileDev),
 		dix.WithVersion(buildinfo.Version),
 		dix.WithAppDescription("distributed availability observability platform"),
 		dix.WithRunStopTimeout(10*time.Second),
-		dix.WithModules(httpModule, retentionModule, notificationModule),
+		dix.WithModules(httpModule, mdnsModule, retentionModule, notificationModule),
+	)
+}
+
+func newServerMDNSModule(configModule, loggingModule dix.Module) dix.Module {
+	return dix.NewModule("mdns",
+		dix.WithModuleImports(configModule, loggingModule),
+		dix.WithModuleProviders(
+			dix.Provider2(func(cfg serverconfig.Config, logger *slog.Logger) *servicediscovery.MDNSAdvertiser {
+				port := cfg.MDNS.Port
+				if port <= 0 {
+					port = servicediscovery.HTTPPortFromAddr(cfg.HTTP.Addr, 8080)
+				}
+				return servicediscovery.NewMDNSAdvertiser(servicediscovery.MDNSAdvertiseConfig{
+					Enabled:  cfg.MDNS.Enabled,
+					Service:  cfg.MDNS.Service,
+					Domain:   cfg.MDNS.Domain,
+					Instance: cfg.MDNS.Instance,
+					Scheme:   cfg.MDNS.Scheme,
+					Port:     port,
+					Version:  buildinfo.Version,
+				}, logger)
+			}),
+		),
+		dix.WithModuleHooks(
+			dix.OnStart[*servicediscovery.MDNSAdvertiser](func(ctx context.Context, advertiser *servicediscovery.MDNSAdvertiser) error {
+				return advertiser.Start(ctx)
+			}, dix.LifecycleName("start-mdns-discovery"), dix.LifecycleAfter("start-http-server")),
+			dix.OnStop[*servicediscovery.MDNSAdvertiser](func(ctx context.Context, advertiser *servicediscovery.MDNSAdvertiser) error {
+				return advertiser.Stop(ctx)
+			}, dix.LifecycleName("stop-mdns-discovery"), dix.LifecycleBefore("stop-http-server")),
+		),
 	)
 }
 

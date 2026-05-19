@@ -10,6 +10,7 @@ import (
 	"github.com/arcgolabs/observabilityx"
 	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
 	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
+	"github.com/lyonbrown4d/orivis/internal/servicediscovery"
 	"github.com/samber/oops"
 )
 
@@ -24,8 +25,9 @@ type RuntimeController struct {
 }
 
 type runtimeInstance struct {
-	client *agentclient.Client
-	runner *Runner
+	client    *agentclient.Client
+	runner    *Runner
+	serverURL string
 }
 
 func NewRuntimeController(watcher *config.Watcher, logger *slog.Logger, obs observabilityx.Observability) (*RuntimeController, error) {
@@ -91,7 +93,7 @@ func (c *RuntimeController) reload(ctx context.Context, cfg config.Config) error
 		return fmt.Errorf("agent runtime context stopped: %w", err)
 	}
 
-	next, err := c.buildRuntime(cfg)
+	next, err := c.buildRuntime(ctx, cfg)
 	if err != nil {
 		return err
 	}
@@ -111,23 +113,45 @@ func (c *RuntimeController) reload(ctx context.Context, cfg config.Config) error
 		}
 	}
 
-	c.logger.Info("agent runtime started", "agent", cfg.Agent.Name, "server_url", cfg.Server.URL)
+	c.logger.Info("agent runtime started", "agent", cfg.Agent.Name, "server_url", next.serverURL)
 	return nil
 }
 
-func (c *RuntimeController) buildRuntime(cfg config.Config) (*runtimeInstance, error) {
+func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config) (*runtimeInstance, error) {
+	endpoint, err := c.resolveServerEndpoint(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Server.URL = endpoint.URL
 	client, err := agentclient.New(cfg, c.logger, c.obs)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create agent client")
 	}
 	return &runtimeInstance{
-		client: client,
+		client:    client,
+		serverURL: endpoint.URL,
 		runner: NewRunner(
 			cfg,
 			c.logger,
 			client,
 		),
 	}, nil
+}
+
+func (c *RuntimeController) resolveServerEndpoint(ctx context.Context, cfg config.Config) (servicediscovery.ServerEndpoint, error) {
+	if cfg.Server.URL != "" {
+		return servicediscovery.ServerEndpoint{URL: cfg.Server.URL, Source: "static"}, nil
+	}
+	endpoint, err := servicediscovery.ResolveMDNSServer(ctx, servicediscovery.MDNSResolveConfig{
+		Service:       cfg.Server.MDNS.Service,
+		Domain:        cfg.Server.MDNS.Domain,
+		Timeout:       cfg.Server.MDNS.Timeout,
+		DefaultScheme: cfg.Server.MDNS.DefaultScheme,
+	}, c.logger)
+	if err != nil {
+		return servicediscovery.ServerEndpoint{}, fmt.Errorf("resolve server URL: %w", err)
+	}
+	return endpoint, nil
 }
 
 func (c *RuntimeController) stopRuntime(ctx context.Context) error {

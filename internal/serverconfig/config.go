@@ -18,6 +18,14 @@ type Config struct {
 		Addr           string `mapstructure:"addr"           validate:"required"`
 		BodyLimitBytes int    `mapstructure:"bodylimitbytes"`
 	} `mapstructure:"http"`
+	MDNS struct {
+		Enabled  bool   `mapstructure:"enabled"`
+		Service  string `mapstructure:"service"  validate:"required"`
+		Domain   string `mapstructure:"domain"   validate:"required"`
+		Instance string `mapstructure:"instance" validate:"required"`
+		Scheme   string `mapstructure:"scheme"   validate:"required"`
+		Port     int    `mapstructure:"port"`
+	} `mapstructure:"mdns"`
 	Web struct {
 		Enabled bool   `mapstructure:"enabled"`
 		Root    string `mapstructure:"root"    validate:"required"`
@@ -115,6 +123,14 @@ type defaultConfigValues struct {
 		Addr           string `json:"addr"`
 		BodyLimitBytes int    `json:"bodylimitbytes"`
 	} `json:"http"`
+	MDNS struct {
+		Enabled  bool   `json:"enabled"`
+		Service  string `json:"service"`
+		Domain   string `json:"domain"`
+		Instance string `json:"instance"`
+		Scheme   string `json:"scheme"`
+		Port     int    `json:"port"`
+	} `json:"mdns"`
 	Web struct {
 		Root string `json:"root"`
 	} `json:"web"`
@@ -195,6 +211,12 @@ func defaultConfig() defaultConfigValues {
 	cfg.App.Env = "development"
 	cfg.HTTP.Addr = ":8080"
 	cfg.HTTP.BodyLimitBytes = 4 * 1024 * 1024
+	cfg.MDNS.Enabled = true
+	cfg.MDNS.Service = "orivis"
+	cfg.MDNS.Domain = "local."
+	cfg.MDNS.Instance = "orivis-server"
+	cfg.MDNS.Scheme = "http"
+	cfg.MDNS.Port = 0
 	cfg.Web.Root = "web/dist"
 	cfg.Log.Level = "info"
 	cfg.DB.Driver = "sqlite"

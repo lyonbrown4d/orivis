@@ -16,7 +16,13 @@ import (
 
 type Config struct {
 	Server struct {
-		URL string `mapstructure:"url" validate:"required,url"`
+		URL  string `mapstructure:"url" validate:"omitempty,url"`
+		MDNS struct {
+			Service       string        `mapstructure:"service"`
+			Domain        string        `mapstructure:"domain"`
+			Timeout       time.Duration `mapstructure:"timeout"`
+			DefaultScheme string        `mapstructure:"defaultscheme"`
+		} `mapstructure:"mdns"`
 	} `mapstructure:"server"`
 	Agent struct {
 		Name         string   `mapstructure:"name"         validate:"required"`
@@ -103,7 +109,13 @@ func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Opti
 
 type defaultConfigValues struct {
 	Server struct {
-		URL string `json:"url"`
+		URL  string `json:"url"`
+		MDNS struct {
+			Service       string        `json:"service"`
+			Domain        string        `json:"domain"`
+			Timeout       time.Duration `json:"timeout"`
+			DefaultScheme string        `json:"defaultscheme"`
+		} `json:"mdns"`
 	} `json:"server"`
 	Agent struct {
 		Name         string   `json:"name"`
@@ -173,7 +185,11 @@ func configFileParserOptions() []configx.Option {
 
 func defaultConfig() defaultConfigValues {
 	var cfg defaultConfigValues
-	cfg.Server.URL = "http://127.0.0.1:8080"
+	cfg.Server.URL = ""
+	cfg.Server.MDNS.Service = "orivis"
+	cfg.Server.MDNS.Domain = "local."
+	cfg.Server.MDNS.Timeout = 5 * time.Second
+	cfg.Server.MDNS.DefaultScheme = "http"
 	cfg.Agent.Name = "local-agent"
 	cfg.Agent.Region = "local"
 	cfg.Agent.Environments = []string{}

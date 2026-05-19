@@ -22,8 +22,11 @@ func TestLoadDefaults(t *testing.T) {
 
 func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	t.Helper()
-	if cfg.Server.URL != "http://127.0.0.1:8080" {
-		t.Fatalf("expected default server URL, got %q", cfg.Server.URL)
+	if cfg.Server.URL != "" {
+		t.Fatalf("expected empty default server URL for mDNS fallback, got %q", cfg.Server.URL)
+	}
+	if cfg.Server.MDNS.Service != "orivis" || cfg.Server.MDNS.Domain != "local." || cfg.Server.MDNS.Timeout != 5*time.Second {
+		t.Fatalf("unexpected default server mDNS config: %#v", cfg.Server.MDNS)
 	}
 	if cfg.Agent.Name != "local-agent" || cfg.Agent.Region != "local" {
 		t.Fatalf("unexpected default agent config: %#v", cfg.Agent)
@@ -73,6 +76,10 @@ func isolateOrivisEnv(t *testing.T) {
 	t.Helper()
 	keys := []string{
 		"ORIVIS_SERVER__URL",
+		"ORIVIS_SERVER__MDNS__SERVICE",
+		"ORIVIS_SERVER__MDNS__DOMAIN",
+		"ORIVIS_SERVER__MDNS__TIMEOUT",
+		"ORIVIS_SERVER__MDNS__DEFAULTSCHEME",
 		"ORIVIS_AGENT__NAME",
 		"ORIVIS_AGENT__TOKEN",
 		"ORIVIS_AGENT__REGION",
