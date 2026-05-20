@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,10 +16,23 @@ import (
 
 func TestOpenRejectsUnsupportedDriver(t *testing.T) {
 	cfg := config.Config{}
-	cfg.DB.Driver = "postgres"
+	cfg.DB.Driver = "oracle"
 	_, err := store.Open(cfg, testLogger())
 	if err == nil {
 		t.Fatal("expected unsupported driver error")
+	}
+}
+
+func TestOpenRejectsLegacyPostgresAlias(t *testing.T) {
+	cfg := config.Config{}
+	cfg.DB.Driver = "postgres"
+	cfg.DB.DSN = "postgres://127.0.0.1:5432/orivis?sslmode=disable"
+	_, err := store.Open(cfg, testLogger())
+	if err == nil {
+		t.Fatal("expected legacy driver error for postgres")
+	}
+	if !strings.Contains(err.Error(), "supported drivers are sqlite, mysql, pgx") {
+		t.Fatalf("expected supported drivers guidance in error, got %v", err)
 	}
 }
 
