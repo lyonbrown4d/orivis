@@ -85,8 +85,9 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 	if d.logger != nil {
 		d.logger.Info("discovering docker containers", "count", len(result.Items))
 	}
+	containers := d.enrichContainers(ctx, result.Items)
 	parsed, err := discoverByItems(
-		result.Items,
+		containers,
 		"docker_container",
 		d.logger,
 		d.defaultEnvironment,
@@ -97,6 +98,76 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 		return nil, err
 	}
 	return parsed, nil
+}
+
+func (d *DockerDiscoverer) enrichContainers(ctx context.Context, items []container.Summary) []container.Summary {
+	stats := dockerContainerEnrichmentStats{
+		scanned: len(items),
+	}
+	portsNeeded := collectionlist.NewListWithCapacity[container.Summary](len(items))
+	for i := range items {
+		item := items[i]
+		enriched := d.enrichContainerPortsFromEngine(ctx, item, &stats)
+		portsNeeded.Add(enriched)
+	}
+	if d.logger != nil {
+		d.logger.Info(
+			"docker container port metadata enrichment",
+			"scanned", stats.scanned,
+			"skipped_with_ports", stats.skippedWithPorts,
+			"inspected", stats.inspected,
+			"inspect_failed", stats.inspectFailed,
+			"inspect_no_config", stats.inspectNoConfig,
+			"enriched_with_ports", stats.enrichedWithPorts,
+			"no_id", stats.noID,
+		)
+	}
+	return portsNeeded.Values()
+}
+
+type dockerContainerEnrichmentStats struct {
+	scanned           int
+	noID              int
+	skippedWithPorts  int
+	inspected         int
+	inspectFailed     int
+	inspectNoConfig   int
+	enrichedWithPorts int
+}
+
+func (d *DockerDiscoverer) enrichContainerPortsFromEngine(ctx context.Context, item container.Summary, stats *dockerContainerEnrichmentStats) container.Summary {
+	if len(ContainerPorts(item)) > 0 {
+		stats.skippedWithPorts++
+		return item
+	}
+	stats.inspected++
+	if d.client == nil {
+		return item
+	}
+	containerID := strings.TrimSpace(item.ID)
+	if containerID == "" {
+		stats.noID++
+		return item
+	}
+
+	inspect, err := d.client.ContainerInspect(ctx, containerID, dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		stats.inspectFailed++
+		if d.logger != nil {
+			d.logger.Warn("inspect docker container failed", "container_id", shortDockerID(containerID), "error", err)
+		}
+		return item
+	}
+	if inspect.Container.Config == nil {
+		stats.inspectNoConfig++
+		return item
+	}
+	beforeLen := len(item.Ports)
+	enriched := enrichContainerPortsFromInspect(item, inspect.Container.Config.ExposedPorts)
+	if len(enriched.Ports) > beforeLen {
+		stats.enrichedWithPorts++
+	}
+	return enriched
 }
 
 func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
