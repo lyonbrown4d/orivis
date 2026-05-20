@@ -21,6 +21,7 @@ func (r *Runner) configureDiscovery() error {
 		discoverer, err := agentdiscovery.NewDockerDiscoverer(agentdiscovery.DockerOptions{
 			Mode:               r.cfg.Discovery.Docker.Mode,
 			DefaultEnvironment: defaultDiscoveryEnvironment(r.cfg.Agent.Environments),
+			Logger:             r.logger,
 		})
 		if err != nil {
 			return oops.Wrapf(err, "create Docker discoverer")

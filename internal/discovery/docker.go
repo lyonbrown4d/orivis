@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
@@ -21,12 +22,14 @@ const (
 type DockerOptions struct {
 	Mode               string
 	DefaultEnvironment string
+	Logger             *slog.Logger
 }
 
 type DockerDiscoverer struct {
 	client             *dockerclient.Client
 	mode               string
 	defaultEnvironment string
+	logger             *slog.Logger
 }
 
 func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
@@ -44,6 +47,7 @@ func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
 		client:             client,
 		mode:               mode,
 		defaultEnvironment: strings.TrimSpace(opts.DefaultEnvironment),
+		logger:             opts.Logger,
 	}, nil
 }
 
@@ -55,6 +59,9 @@ func (d *DockerDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDiscov
 	mode, err := d.discoveryMode(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if d.logger != nil {
+		d.logger.Info("docker discovery mode resolved", "configured", d.mode, "resolved", mode)
 	}
 	switch mode {
 	case DockerModeContainer:
@@ -102,6 +109,9 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 	if err != nil {
 		return nil, fmt.Errorf("list Docker containers: %w", err)
 	}
+	if d.logger != nil {
+		d.logger.Info("discovering docker containers", "count", len(result))
+	}
 
 	monitors, err := collectionlist.ReduceErrList(
 		collectionlist.NewList(result.Items...),
@@ -113,13 +123,32 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 	if err != nil {
 		return nil, fmt.Errorf("parse Docker container labels: %w", err)
 	}
-	return monitors.Values(), nil
+	parsed := monitors.Values()
+	if d.logger != nil {
+		d.logger.Info("docker container monitors discovered", "count", len(parsed))
+		for _, monitor := range parsed {
+			d.logger.Info(
+				"docker monitor parsed",
+				"source_key", monitor.SourceKey,
+				"monitor_name", monitor.Name,
+				"monitor_type", monitor.Type,
+				"monitor_target", monitor.Target,
+				"source", "docker_container",
+				"environment", monitor.EnvironmentCode,
+				"group", monitor.GroupName,
+			)
+		}
+	}
+	return parsed, nil
 }
 
 func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
 	result, err := d.client.ServiceList(ctx, dockerclient.ServiceListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("list Docker services: %w", err)
+	}
+	if d.logger != nil {
+		d.logger.Info("discovering docker services", "count", len(result))
 	}
 
 	monitors, err := collectionlist.ReduceErrList(
@@ -132,7 +161,23 @@ func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.Age
 	if err != nil {
 		return nil, fmt.Errorf("parse Docker service labels: %w", err)
 	}
-	return monitors.Values(), nil
+	parsed := monitors.Values()
+	if d.logger != nil {
+		d.logger.Info("docker service monitors discovered", "count", len(parsed))
+		for _, monitor := range parsed {
+			d.logger.Info(
+				"docker monitor parsed",
+				"source_key", monitor.SourceKey,
+				"monitor_name", monitor.Name,
+				"monitor_type", monitor.Type,
+				"monitor_target", monitor.Target,
+				"source", "docker_swarm_service",
+				"environment", monitor.EnvironmentCode,
+				"group", monitor.GroupName,
+			)
+		}
+	}
+	return parsed, nil
 }
 
 func collectDockerLabelMonitors(

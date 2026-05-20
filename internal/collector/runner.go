@@ -128,6 +128,17 @@ func (r *Runner) syncTasks(ctx context.Context) {
 		return
 	}
 	r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
+	for _, task := range tasks.Tasks {
+		r.logger.Info(
+			"agent pulled task",
+			"task_id", task.ID,
+			"monitor_id", task.MonitorID,
+			"monitor_type", task.Type,
+			"monitor_target", task.Target,
+			"interval_seconds", task.IntervalSeconds,
+			"timeout_seconds", task.TimeoutSeconds,
+		)
+	}
 	r.reconcileTasks(ctx, tasks.Tasks)
 	r.logger.Debug("agent sync cycle completed", "duration", time.Since(start), "task_count", len(tasks.Tasks))
 }
@@ -188,6 +199,20 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 		return oops.Wrapf(err, "discover monitors")
 	}
 	r.logger.Debug("agent monitor discovery completed", "count", len(monitors))
+	for _, monitor := range monitors {
+		r.logger.Info(
+			"agent discovered monitor",
+			"source_key", monitor.SourceKey,
+			"monitor_name", monitor.Name,
+			"monitor_type", monitor.Type,
+			"monitor_target", monitor.Target,
+			"group_name", monitor.GroupName,
+			"environment_code", monitor.EnvironmentCode,
+			"interval_seconds", monitor.IntervalSeconds,
+			"timeout_seconds", monitor.TimeoutSeconds,
+			"retry_count", monitor.RetryCount,
+		)
+	}
 	if len(monitors) == 0 {
 		return nil
 	}
@@ -222,9 +247,11 @@ func (r *Runner) reconcileTask(ctx context.Context, task protocol.AgentTask) {
 	signature := taskSignature(task)
 	current, ok := r.tasks.Get(task.MonitorID)
 	if ok && current.signature == signature {
+		r.logger.Debug("agent task unchanged", "monitor_id", task.MonitorID)
 		return
 	}
 	if ok {
+		r.logger.Info("agent task signature changed, rescheduling", "monitor_id", task.MonitorID)
 		r.removeTask(task.MonitorID)
 	}
 	if err := r.scheduleTask(ctx, task, signature); err != nil {
@@ -265,5 +292,6 @@ func (r *Runner) removeTask(monitorID string) {
 	if err := r.sched.RemoveByTag(taskTag(monitorID)); err != nil {
 		r.logger.Warn("remove agent task failed", "monitor_id", monitorID, "error", err)
 	}
+	r.logger.Info("agent task removed", "monitor_id", monitorID)
 	r.tasks.Delete(monitorID)
 }
