@@ -69,6 +69,32 @@ func TestBadgerMemoryResultBuffer(t *testing.T) {
 	}
 }
 
+func TestBadgerResultBufferCapacityShrink(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-buffer.badger")
+	buffer, err := collector.NewPersistentResultBuffer(path, 3)
+	if err != nil {
+		t.Fatalf("new persistent result buffer: %v", err)
+	}
+	assertPush(t, buffer, "first", false, 1)
+	assertPush(t, buffer, "second", false, 2)
+	assertPush(t, buffer, "third", false, 3)
+	if closeErr := buffer.Close(); closeErr != nil {
+		t.Fatalf("close badger result buffer: %v", closeErr)
+	}
+
+	reopened, err := collector.NewPersistentResultBuffer(path, 1)
+	if err != nil {
+		t.Fatalf("reopen persistent result buffer: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := reopened.Close(); err != nil {
+			t.Errorf("close reopened badger result buffer: %v", err)
+		}
+	})
+	assertPush(t, reopened, "fourth", true, 1)
+	assertBufferedBatch(t, reopened, []string{"fourth"})
+}
+
 func assertPush(t *testing.T, buffer collector.ResultQueue, monitorID string, droppedOldest bool, size int) {
 	t.Helper()
 	result := buffer.Push(bufferedResult(monitorID))

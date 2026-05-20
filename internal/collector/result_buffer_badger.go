@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,11 +22,17 @@ const resultBufferNamespace = "agent-results"
 type badgerResultBuffer struct {
 	mu        sync.Mutex
 	max       int
+	size      int
+	next      uint64
 	db        *badgerx.DB
 	namespace *badgerx.Namespace[uint64, protocol.AgentResultRequest]
 }
 
 func NewPersistentResultBuffer(path string, capacity int) (*badgerResultBuffer, error) {
+	return newPersistentResultBuffer(context.Background(), path, capacity)
+}
+
+func newPersistentResultBuffer(ctx context.Context, path string, capacity int) (*badgerResultBuffer, error) {
 	if path == "" {
 		return nil, fmt.Errorf("%w: result buffer path is required", oops.New("invalid buffer config"))
 	}
@@ -33,15 +40,19 @@ func NewPersistentResultBuffer(path string, capacity int) (*badgerResultBuffer, 
 		return nil, oops.Wrapf(err, "create result buffer directory")
 	}
 	options := badger.DefaultOptions(path).WithLogger(nil)
-	return newBadgerResultBuffer(options, capacity)
+	return newBadgerResultBuffer(ctx, options, capacity)
 }
 
 func NewMemoryBadgerResultBuffer(capacity int) (*badgerResultBuffer, error) {
-	options := badger.DefaultOptions("").WithInMemory(true).WithLogger(nil)
-	return newBadgerResultBuffer(options, capacity)
+	return newMemoryBadgerResultBuffer(context.Background(), capacity)
 }
 
-func newBadgerResultBuffer(options badger.Options, capacity int) (*badgerResultBuffer, error) {
+func newMemoryBadgerResultBuffer(ctx context.Context, capacity int) (*badgerResultBuffer, error) {
+	options := badger.DefaultOptions("").WithInMemory(true).WithLogger(nil)
+	return newBadgerResultBuffer(ctx, options, capacity)
+}
+
+func newBadgerResultBuffer(ctx context.Context, options badger.Options, capacity int) (*badgerResultBuffer, error) {
 	if capacity < 0 {
 		capacity = 0
 	}
@@ -55,8 +66,17 @@ func newBadgerResultBuffer(options badger.Options, capacity int) (*badgerResultB
 		keycodec.Uint64BE(),
 		codec.JSON[protocol.AgentResultRequest](),
 	)
+	size, next, err := seedBadgerResultBuffer(ctx, namespace)
+	if err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
+		return nil, err
+	}
 	return &badgerResultBuffer{
 		max:       capacity,
+		size:      size,
+		next:      next,
 		db:        db,
 		namespace: namespace,
 	}, nil
@@ -71,30 +91,37 @@ func (b *badgerResultBuffer) Push(req protocol.AgentResultRequest) ResultQueuePu
 	}
 
 	ctx := context.Background()
-	entries, err := b.namespace.List(ctx)
-	if err != nil {
-		return ResultQueuePush{err: oops.Wrapf(err, "list badger result buffer")}
-	}
-
-	deleteCount := max(0, len(entries)-b.max+1)
+	droppedOldest := false
+	deleteCount := max(0, b.size-b.max+1)
 	if deleteCount > 0 {
-		keys := make([]uint64, 0, deleteCount)
-		for _, entry := range entries[:deleteCount] {
-			keys = append(keys, entry.Key)
+		entries, err := b.namespace.List(ctx, badgerx.WithLimit[uint64](deleteCount))
+		if err != nil {
+			return ResultQueuePush{err: oops.Wrapf(err, "read badger result buffer trim keys")}
 		}
-		if err := b.namespace.DeleteMany(ctx, keys...); err != nil {
-			return ResultQueuePush{err: oops.Wrapf(err, "trim badger result buffer")}
+		keys := collectionlist.MapList(
+			collectionlist.NewList(entries...),
+			func(_ int, entry badgerx.Entry[uint64, protocol.AgentResultRequest]) uint64 {
+				return entry.Key
+			},
+		).Values()
+		if len(keys) > 0 {
+			if err := b.namespace.DeleteMany(ctx, keys...); err != nil {
+				return ResultQueuePush{err: oops.Wrapf(err, "trim badger result buffer")}
+			}
+			b.size = max(0, b.size-len(keys))
+			droppedOldest = true
 		}
 	}
 
-	key := nextBadgerResultKey(entries)
-	if err := b.namespace.Set(ctx, key, req); err != nil {
+	if err := b.namespace.Set(ctx, b.next, req); err != nil {
 		return ResultQueuePush{err: oops.Wrapf(err, "write badger result buffer")}
 	}
+	b.next++
+	b.size++
 	return ResultQueuePush{
-		size:          len(entries) - deleteCount + 1,
+		size:          b.size,
 		buffered:      true,
-		droppedOldest: deleteCount > 0,
+		droppedOldest: droppedOldest,
 	}
 }
 
@@ -144,6 +171,9 @@ func (b *badgerResultBuffer) Drop() error {
 	if err := b.namespace.Delete(ctx, entry.Key); err != nil {
 		return oops.Wrapf(err, "drop badger result buffer head")
 	}
+	if b.size > 0 {
+		b.size--
+	}
 	return nil
 }
 
@@ -172,6 +202,7 @@ func (b *badgerResultBuffer) DropBatch(count int) error {
 	if err := b.namespace.DeleteMany(ctx, keys...); err != nil {
 		return oops.Wrapf(err, "drop badger result buffer batch")
 	}
+	b.size = max(0, b.size-len(keys))
 	return nil
 }
 
@@ -179,11 +210,7 @@ func (b *badgerResultBuffer) Len() int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	keys, err := b.namespace.Keys(context.Background())
-	if err != nil {
-		return 0
-	}
-	return len(keys)
+	return b.size
 }
 
 func (b *badgerResultBuffer) Close() error {
@@ -196,9 +223,22 @@ func (b *badgerResultBuffer) Close() error {
 	return nil
 }
 
-func nextBadgerResultKey(entries []badgerx.Entry[uint64, protocol.AgentResultRequest]) uint64 {
-	if len(entries) == 0 {
-		return 1
+func seedBadgerResultBuffer(
+	ctx context.Context,
+	namespace *badgerx.Namespace[uint64, protocol.AgentResultRequest],
+) (int, uint64, error) {
+	keys, err := namespace.Keys(ctx)
+	if err != nil {
+		return 0, 0, oops.Wrapf(err, "seed badger result buffer size")
 	}
-	return entries[len(entries)-1].Key + 1
+
+	next := uint64(1)
+	tail, err := namespace.Keys(ctx, badgerx.WithReverse[uint64](true), badgerx.WithLimit[uint64](1))
+	if err != nil {
+		return 0, 0, oops.Wrapf(err, "seed badger result buffer tail")
+	}
+	if len(tail) > 0 {
+		next = tail[0] + 1
+	}
+	return len(keys), next, nil
 }

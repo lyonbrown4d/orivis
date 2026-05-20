@@ -137,7 +137,7 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create monitor discoverer")
 	}
-	results, err := NewResultQueue(cfg)
+	results, err := NewResultQueue(ctx, cfg)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create result queue")
 	}

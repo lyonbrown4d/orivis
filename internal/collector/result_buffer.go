@@ -1,6 +1,8 @@
 package collector
 
 import (
+	"context"
+
 	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 )
@@ -34,22 +36,22 @@ func (p ResultQueuePush) DroppedOldest() bool {
 	return p.droppedOldest
 }
 
-func newResultQueue(driver, path string, capacity int) (ResultQueue, error) {
+func newResultQueue(ctx context.Context, driver, path string, capacity int) (ResultQueue, error) {
 	switch driver {
 	case "persistent":
-		return NewPersistentResultBuffer(path, capacity)
+		return newPersistentResultBuffer(ctx, path, capacity)
 	case "memory":
-		return NewMemoryBadgerResultBuffer(capacity)
+		return newMemoryBadgerResultBuffer(ctx, capacity)
 	default:
-		return NewMemoryBadgerResultBuffer(capacity)
+		return newMemoryBadgerResultBuffer(ctx, capacity)
 	}
 }
 
-func NewResultQueue(cfg config.Config) (ResultQueue, error) {
+func NewResultQueue(ctx context.Context, cfg config.Config) (ResultQueue, error) {
 	if !cfg.Buffer.Enabled {
 		return noopResultQueue{}, nil
 	}
-	return newResultQueue(cfg.Buffer.Driver, cfg.Buffer.Path, cfg.Buffer.Capacity)
+	return newResultQueue(ctx, cfg.Buffer.Driver, cfg.Buffer.Path, cfg.Buffer.Capacity)
 }
 
 type noopResultQueue struct{}
