@@ -35,6 +35,7 @@ require (
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/nats-io/nats.go v1.52.0
+	github.com/panjf2000/ants/v2 v2.12.0
 	github.com/prometheus-community/pro-bing v0.8.0
 	github.com/rabbitmq/amqp091-go v1.11.0
 	github.com/redis/go-redis/v9 v9.19.0
@@ -145,7 +146,6 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/panjf2000/ants/v2 v2.12.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pjbgf/sha1cd v0.3.2 // indirect

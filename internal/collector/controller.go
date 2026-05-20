@@ -11,13 +11,15 @@ import (
 	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
 	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/servicediscovery"
+	"github.com/panjf2000/ants/v2"
 	"github.com/samber/oops"
 )
 
 type RuntimeController struct {
-	watcher *config.Watcher
-	logger  *slog.Logger
-	obs     observabilityx.Observability
+	watcher  *config.Watcher
+	logger   *slog.Logger
+	obs      observabilityx.Observability
+	taskPool *ants.Pool
 
 	mu      sync.Mutex
 	cancel  context.CancelFunc
@@ -30,15 +32,19 @@ type runtimeInstance struct {
 	serverURL string
 }
 
-func NewRuntimeController(watcher *config.Watcher, logger *slog.Logger, obs observabilityx.Observability) (*RuntimeController, error) {
+func NewRuntimeController(watcher *config.Watcher, logger *slog.Logger, obs observabilityx.Observability, taskPool *ants.Pool) (*RuntimeController, error) {
 	if watcher == nil {
 		return nil, errors.New("agent config watcher is required")
 	}
+	if taskPool == nil {
+		return nil, errors.New("agent task pool is required")
+	}
 	obs = observabilityx.Normalize(obs, logger)
 	return &RuntimeController{
-		watcher: watcher,
-		logger:  logger,
-		obs:     obs,
+		watcher:  watcher,
+		logger:   logger,
+		obs:      obs,
+		taskPool: taskPool,
 	}, nil
 }
 
@@ -134,6 +140,7 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 			cfg,
 			c.logger,
 			client,
+			c.taskPool,
 		),
 	}, nil
 }

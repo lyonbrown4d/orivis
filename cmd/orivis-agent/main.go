@@ -16,7 +16,9 @@ import (
 	agentconfig "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/collector"
+	"github.com/lyonbrown4d/orivis/internal/concurrency"
 	"github.com/lyonbrown4d/orivis/internal/observability"
+	"github.com/panjf2000/ants/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -49,6 +51,7 @@ func main() {
 	cmd.Flags().String("runtime", "", "agent runtime")
 	cmd.Flags().Duration("poll-interval", 0, "task polling interval")
 	cmd.Flags().Duration("poll-jitter", 0, "maximum initial probe schedule jitter")
+	cmd.Flags().Int("poll-workers", 0, "maximum concurrent probe workers")
 	cmd.Flags().Bool("buffer-enabled", false, "enable bounded buffering for failed result reports")
 	cmd.Flags().String("buffer-driver", "", "buffer driver: memory or file")
 	cmd.Flags().String("buffer-path", "", "file buffer JSONL path")
@@ -114,11 +117,12 @@ func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 			dix.Provider1(observability.NewNop),
 		),
 	)
+	concurrencyModule := newAgentConcurrencyModule(configModule, loggingModule)
 
 	collectorModule := dix.NewModule("collector",
-		dix.WithModuleImports(configModule, loggingModule, observabilityModule),
+		dix.WithModuleImports(configModule, loggingModule, observabilityModule, concurrencyModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr3(collector.NewRuntimeController),
+			dix.ProviderErr4(collector.NewRuntimeController),
 		),
 		dix.WithModuleHooks(
 			dix.OnStart[*collector.RuntimeController](func(ctx context.Context, controller *collector.RuntimeController) error {
@@ -137,5 +141,22 @@ func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.WithLifecycleConcurrency(4),
 		dix.WithRecentEvents(256),
 		dix.WithModules(collectorModule),
+	)
+}
+
+func newAgentConcurrencyModule(configModule, loggingModule dix.Module) dix.Module {
+	return dix.NewModule("concurrency",
+		dix.WithModuleImports(configModule, loggingModule),
+		dix.WithModuleProviders(
+			dix.ProviderErr2(func(cfg agentconfig.Config, _ *slog.Logger) (*ants.Pool, error) {
+				return concurrency.NewWorkerPool(cfg.Poll.Workers)
+			}),
+		),
+		dix.WithModuleHooks(
+			dix.OnStop[*ants.Pool](func(_ context.Context, pool *ants.Pool) error {
+				pool.Release()
+				return nil
+			}, dix.LifecycleName("close-agent-task-pool")),
+		),
 	)
 }

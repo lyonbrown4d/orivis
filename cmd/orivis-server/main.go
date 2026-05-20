@@ -103,6 +103,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 	)
 
 	eventModule := newServerEventModule(loggingModule)
+	concurrencyModule := newServerConcurrencyModule(configModule, loggingModule)
 	cacheModule := newServerCacheModule(configModule, loggingModule)
 	observabilityModule := newServerObservabilityModule(configModule, loggingModule)
 	ingestModule := newServerIngestModule(configModule, loggingModule, storeModule, eventModule, cacheModule, observabilityModule)
@@ -135,7 +136,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 		dix.WithVersion(buildinfo.Version),
 		dix.WithAppDescription("distributed availability observability platform"),
 		dix.WithRunStopTimeout(10*time.Second),
-		dix.WithModules(httpModule, mdnsModule, retentionModule, notificationModule),
+		dix.WithModules(httpModule, mdnsModule, retentionModule, notificationModule, concurrencyModule),
 	)
 }
 
