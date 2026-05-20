@@ -54,7 +54,7 @@ func assertDefaultTransportConfig(t *testing.T, cfg config.Config) {
 
 func assertDefaultDiscoveryConfig(t *testing.T, cfg config.Config) {
 	t.Helper()
-	if cfg.Discovery.Provider != "" || cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "auto" {
+	if cfg.Discovery.Provider != "" || cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "" {
 		t.Fatalf("unexpected Docker discovery defaults: %#v", cfg.Discovery.Docker)
 	}
 	if !cfg.Discovery.Static.Enabled || len(cfg.Discovery.Static.Monitors) != 0 {
@@ -162,6 +162,7 @@ func TestLoadAgentEnvironments(t *testing.T) {
 func TestLoadDockerDiscovery(t *testing.T) {
 	isolateOrivisEnv(t)
 	t.Setenv("ORIVIS_DISCOVERY__PROVIDER", "docker")
+	t.Setenv("ORIVIS_DISCOVERY__DOCKER__MODE", "container")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -171,11 +172,21 @@ func TestLoadDockerDiscovery(t *testing.T) {
 	if cfg.Discovery.Provider != "docker" || !cfg.Discovery.Docker.Enabled {
 		t.Fatal("expected Docker discovery to be enabled")
 	}
-	if cfg.Discovery.Docker.Mode != "auto" {
+	if cfg.Discovery.Docker.Mode != "container" {
 		t.Fatalf("expected Docker discovery mode from environment, got %q", cfg.Discovery.Docker.Mode)
 	}
 	if cfg.Runtime != "docker" {
 		t.Fatalf("expected Docker provider to set runtime, got %q", cfg.Runtime)
+	}
+}
+
+func TestLoadDockerDiscoveryRequiresMode(t *testing.T) {
+	isolateOrivisEnv(t)
+	t.Setenv("ORIVIS_DISCOVERY__PROVIDER", "docker")
+
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected load to fail when docker mode is missing")
 	}
 }
 

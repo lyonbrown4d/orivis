@@ -85,7 +85,7 @@ func assertHCLTransport(t *testing.T, cfg config.Config) {
 
 func assertHCLAgentDiscovery(t *testing.T, cfg config.Config) {
 	t.Helper()
-	if cfg.Discovery.Provider != "docker" || !cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "auto" {
+	if cfg.Discovery.Provider != "docker" || !cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "container" {
 		t.Fatalf("unexpected HCL Docker discovery config: %#v", cfg.Discovery.Docker)
 	}
 	if len(cfg.Discovery.Static.Monitors) != 2 {
@@ -143,6 +143,9 @@ log {
 
 discovery {
   provider = "docker"
+  docker {
+    mode = "container"
+  }
 
   static {
     enabled = true

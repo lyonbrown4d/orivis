@@ -67,7 +67,7 @@ func main() {
 	cmd.Flags().StringSlice("discovery-static-hcl-files", nil, "static probe HCL files")
 	cmd.Flags().String("discovery-provider", "", "discovery provider, for example docker")
 	cmd.Flags().Bool("discovery-docker-enabled", false, "enable Docker label discovery (legacy)")
-	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode override: auto, container, or swarm")
+	cmd.Flags().String("discovery-docker-mode", "", "Docker discovery mode override: container, or swarm")
 	cmd.Flags().String("log-level", "", "log level")
 
 	if err := cmd.Execute(); err != nil {

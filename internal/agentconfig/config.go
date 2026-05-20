@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -213,7 +214,6 @@ func defaultConfig() defaultConfigValues {
 	cfg.Transport.GzipResults = true
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
-	cfg.Discovery.Docker.Mode = discovery.DockerModeAuto
 	cfg.Log.Level = "info"
 	return cfg
 }
@@ -237,19 +237,31 @@ func normalizeBufferConfig(cfg *Config) error {
 
 func normalizeDiscoveryConfig(cfg *Config) error {
 	cfg.Discovery.Provider = strings.ToLower(strings.TrimSpace(cfg.Discovery.Provider))
+	cfg.Discovery.Docker.Mode = strings.ToLower(strings.TrimSpace(cfg.Discovery.Docker.Mode))
+
 	switch cfg.Discovery.Provider {
-	case "":
 	case "docker":
-		cfg.Discovery.Docker.Enabled = true
-		if runtime := strings.TrimSpace(cfg.Runtime); runtime == "" || strings.EqualFold(runtime, "host") {
-			cfg.Runtime = "docker"
+		return normalizeDockerDiscovery(cfg)
+	case "":
+		if !cfg.Discovery.Docker.Enabled {
+			return nil
 		}
+		if cfg.Discovery.Docker.Mode == "" {
+			return errors.New("discovery provider must be set when docker discovery is enabled")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported discovery provider %q", cfg.Discovery.Provider)
 	}
-	cfg.Discovery.Docker.Mode = strings.ToLower(strings.TrimSpace(cfg.Discovery.Docker.Mode))
+}
+
+func normalizeDockerDiscovery(cfg *Config) error {
+	cfg.Discovery.Docker.Enabled = true
+	if runtime := strings.TrimSpace(cfg.Runtime); runtime == "" || strings.EqualFold(runtime, "host") {
+		cfg.Runtime = "docker"
+	}
 	if cfg.Discovery.Docker.Mode == "" {
-		cfg.Discovery.Docker.Mode = discovery.DockerModeAuto
+		return errors.New("discovery docker mode is required when provider is docker")
 	}
 	return nil
 }

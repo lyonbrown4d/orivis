@@ -158,7 +158,7 @@ ORIVIS_DB__DSN=file:orivis.db
 | `ORIVIS_TRANSPORT__GZIPRESULTS` | `true` | Gzip result report request bodies. |
 | `ORIVIS_TRANSPORT__RETRYATTEMPTS` | `3` | Agent HTTP retry attempts for transient failures and server backpressure. |
 | `ORIVIS_DISCOVERY__PROVIDER` | empty | Set to `docker` to enable Docker, Docker Compose, or Docker Swarm label discovery. |
-| `ORIVIS_DISCOVERY__DOCKER__MODE` | `auto` | Advanced Docker discovery override: `auto`, `container`, or `swarm`. |
+| `ORIVIS_DISCOVERY__DOCKER__MODE` | `container` | Docker discovery mode override: `container` or `swarm` (required when provider is docker). |
 
 ## Security
 
@@ -226,7 +226,8 @@ Enable Docker, Docker Compose, or Docker Swarm label discovery:
 ORIVIS_DISCOVERY__PROVIDER=docker
 ```
 
-`auto` mode uses container labels for standalone Docker and Docker Compose. On Swarm managers it uses service labels from `deploy.labels`; on Swarm workers it falls back to local container labels.
+When provider is docker, set mode to either `container` or `swarm`.
+`container` uses local container labels. `swarm` uses Swarm service labels.
 
 Agent HCL example:
 

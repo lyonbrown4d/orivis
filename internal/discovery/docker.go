@@ -9,12 +9,10 @@ import (
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/swarm"
 	dockerclient "github.com/moby/moby/client"
 )
 
 const (
-	DockerModeAuto      = "auto"
 	DockerModeContainer = "container"
 	DockerModeSwarm     = "swarm"
 )
@@ -56,42 +54,17 @@ func (d *DockerDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDiscov
 		return nil, nil
 	}
 
-	mode, err := d.discoveryMode(ctx)
-	if err != nil {
-		return nil, err
-	}
 	if d.logger != nil {
-		d.logger.Info("docker discovery mode resolved", "configured", d.mode, "resolved", mode)
+		d.logger.Info("docker discovery mode", "mode", d.mode)
 	}
-	switch mode {
+	switch d.mode {
 	case DockerModeContainer:
 		return d.discoverContainers(ctx)
 	case DockerModeSwarm:
 		return d.discoverServices(ctx)
 	default:
-		return nil, fmt.Errorf("unsupported Docker discovery mode %q", mode)
+		return nil, fmt.Errorf("unsupported Docker discovery mode %q", d.mode)
 	}
-}
-
-func (d *DockerDiscoverer) discoveryMode(ctx context.Context) (string, error) {
-	if d.mode != DockerModeAuto {
-		return d.mode, nil
-	}
-	ping, err := d.client.Ping(ctx, dockerclient.PingOptions{})
-	if err != nil {
-		return "", fmt.Errorf("inspect Docker daemon: %w", err)
-	}
-	if swarmServiceDiscoveryAvailable(ping.SwarmStatus) {
-		return DockerModeSwarm, nil
-	}
-	return DockerModeContainer, nil
-}
-
-func swarmServiceDiscoveryAvailable(status *dockerclient.SwarmStatus) bool {
-	if status == nil {
-		return false
-	}
-	return status.NodeState == swarm.LocalNodeStateActive && status.ControlAvailable
 }
 
 func (d *DockerDiscoverer) Close(context.Context) error {
@@ -206,8 +179,6 @@ func collectDockerLabelMonitors(
 
 func normalizeDockerMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", DockerModeAuto:
-		return DockerModeAuto
 	case DockerModeContainer:
 		return DockerModeContainer
 	case DockerModeSwarm:
