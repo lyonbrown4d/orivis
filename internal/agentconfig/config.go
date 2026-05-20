@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -163,14 +164,14 @@ func configFileParserOptions() []configx.Option {
 func normalizeBufferConfig(cfg *Config) error {
 	cfg.Buffer.Driver = strings.ToLower(strings.TrimSpace(cfg.Buffer.Driver))
 	if cfg.Buffer.Driver == "" {
-		cfg.Buffer.Driver = "memory"
+		cfg.Buffer.Driver = "persistent"
 	}
 	cfg.Buffer.Path = strings.TrimSpace(cfg.Buffer.Path)
-	if cfg.Buffer.Path == "" {
-		cfg.Buffer.Path = "orivis-agent-buffer.jsonl"
+	if cfg.Buffer.Path == "" && cfg.Buffer.Driver == "persistent" {
+		cfg.Buffer.Path = filepath.Join(os.TempDir(), "orivis-agent-buffer")
 	}
 	switch cfg.Buffer.Driver {
-	case "memory", "file":
+	case "memory", "persistent":
 		return nil
 	default:
 		return fmt.Errorf("unsupported buffer driver %q", cfg.Buffer.Driver)

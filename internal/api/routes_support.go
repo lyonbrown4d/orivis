@@ -50,6 +50,14 @@ type agentResultsInput struct {
 	Body protocol.AgentResultRequest `json:"body"`
 }
 
+type agentResultsBatchInput struct {
+	Body protocol.AgentResultBatchRequest `json:"body"`
+}
+
+type agentResultsBatchOutput struct {
+	Body protocol.AgentResultBatchResponse `json:"body"`
+}
+
 func (e *agentEndpoint) verifyBootstrapToken(token string) error {
 	expected := strings.TrimSpace(e.cfg.Auth.Agent.Token)
 	if expected == "" {

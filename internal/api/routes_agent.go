@@ -20,6 +20,7 @@ func (e *agentEndpoint) Register(registrar httpx.Registrar) {
 	httpx.MustGroupGet(scope, "api/agent/tasks", e.tasks)
 	httpx.MustGroupPost(scope, "api/agent/monitors", e.syncMonitors)
 	httpx.MustGroupPost(scope, "api/agent/results", e.reportResult)
+	httpx.MustGroupPost(scope, "api/agent/results/batch", e.reportResultsBatch)
 }
 
 func (e *agentEndpoint) registerAgent(ctx context.Context, input *agentRegisterInput) (*agentRegisterOutput, error) {
@@ -195,6 +196,48 @@ func (e *agentEndpoint) reportResult(ctx context.Context, input *agentResultsInp
 	}
 
 	return newStatusOutput("accepted"), nil
+}
+
+func (e *agentEndpoint) reportResultsBatch(ctx context.Context, input *agentResultsBatchInput) (*agentResultsBatchOutput, error) {
+	if e.store == nil || e.store.AgentStore() == nil || e.store.ResultStore() == nil {
+		return nil, huma.Error500InternalServerError("agent result stores are not available")
+	}
+
+	agent, err := e.store.AgentStore().Authenticate(ctx, input.Body.AgentID, input.Body.Token)
+	if err != nil {
+		return nil, apiError(err)
+	}
+
+	results := collectionlist.NewList(input.Body.Results...)
+	accepted, err := collectionlist.ReduceErrList(
+		results,
+		0,
+		func(count int, _ int, result protocol.AgentResult) (int, error) {
+			if recordErr := e.recordProbeResult(ctx, agentResultParams(agent, result)); recordErr != nil {
+				return count, recordErr
+			}
+			return count + 1, nil
+		},
+	)
+	if err != nil {
+		return nil, apiError(err)
+	}
+
+	out := &agentResultsBatchOutput{}
+	out.Body.Accepted = accepted
+	return out, nil
+}
+
+func agentResultParams(agent model.Agent, result protocol.AgentResult) store.RecordProbeResultParams {
+	return store.RecordProbeResultParams{
+		Agent:        agent,
+		MonitorID:    result.MonitorID,
+		Status:       modelStatus(result.Status),
+		Latency:      time.Duration(result.LatencyMS) * time.Millisecond,
+		ErrorMessage: result.ErrorMessage,
+		CheckedAt:    result.CheckedAt,
+		RawDetail:    result.RawDetail,
+	}
 }
 
 func (e *agentEndpoint) recordProbeResult(ctx context.Context, params store.RecordProbeResultParams) error {

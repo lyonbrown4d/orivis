@@ -73,14 +73,35 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 		LatencyMS: 42,
 		CheckedAt: time.Now().UTC(),
 	}, http.StatusOK)
+	batchResp := postJSON[protocol.AgentResultBatchResponse](t, handler, "/api/agent/results/batch", protocol.AgentResultBatchRequest{
+		AgentID: agent.ID,
+		Token:   "agent-token",
+		Results: []protocol.AgentResult{
+			{
+				MonitorID: monitor.ID,
+				Status:    string(model.StatusUp),
+				LatencyMS: 48,
+				CheckedAt: time.Now().UTC(),
+			},
+			{
+				MonitorID: monitor.ID,
+				Status:    string(model.StatusDown),
+				LatencyMS: 500,
+				CheckedAt: time.Now().UTC(),
+			},
+		},
+	}, http.StatusOK)
+	if batchResp.Accepted != 2 {
+		t.Fatalf("expected two accepted batch results, got %d", batchResp.Accepted)
+	}
 
 	var count int
 	err := storage.DB.QueryRowContext(ctx, "SELECT COUNT(1) FROM probe_results WHERE monitor_id = ? AND agent_id = ?", monitor.ID, agent.ID).Scan(&count)
 	if err != nil {
 		t.Fatalf("count probe results: %v", err)
 	}
-	if count != 2 {
-		t.Fatalf("expected two probe results, got %d", count)
+	if count != 4 {
+		t.Fatalf("expected four probe results, got %d", count)
 	}
 }
 

@@ -42,10 +42,15 @@ func (r *Runner) Start(ctx context.Context) error {
 		stop()
 		return oops.Wrapf(err, "schedule agent sync")
 	}
+	if err := r.scheduleResultFlush(runCtx, scheduler); err != nil {
+		stop()
+		return err
+	}
 	r.sched = scheduler
 	scheduler.StartAsync()
 	r.logger.Info("agent sync scheduler started", "interval", r.cfg.Poll.Interval)
 	go r.syncTasks(runCtx)
+	go r.flushBufferedResults(runCtx)
 	return nil
 }
 
@@ -59,6 +64,11 @@ func (r *Runner) Stop(ctx context.Context) error {
 	if r.discovery != nil {
 		if err := r.discovery.Close(ctx); err != nil {
 			r.logger.Warn("close monitor discovery failed", "error", err)
+		}
+	}
+	if r.results != nil {
+		if err := r.results.Close(); err != nil {
+			r.logger.Warn("close result buffer failed", "error", err)
 		}
 	}
 	r.logger.Info("stopped agent")
@@ -77,7 +87,6 @@ func (r *Runner) syncTasks(ctx context.Context) {
 		r.logger.Warn("agent heartbeat failed", "error", err)
 		return
 	}
-	r.flushBufferedResults(ctx)
 	if err := r.syncDiscoveredMonitors(ctx); err != nil {
 		r.logger.Warn("agent monitor discovery sync failed", "error", err)
 	}
@@ -101,6 +110,27 @@ func (r *Runner) syncTasks(ctx context.Context) {
 	}
 	r.reconcileTasks(ctx, tasks.Tasks)
 	r.logger.Debug("agent sync cycle completed", "duration", time.Since(start), "task_count", len(tasks.Tasks))
+}
+
+func (r *Runner) scheduleResultFlush(ctx context.Context, scheduler *gocron.Scheduler) error {
+	if !r.cfg.Buffer.Enabled {
+		return nil
+	}
+	interval := resultFlushInterval(r.cfg.Poll.Interval)
+	if _, err := scheduler.Every(interval).SingletonMode().Do(func() {
+		r.flushBufferedResults(ctx)
+	}); err != nil {
+		return oops.Wrapf(err, "schedule agent result flush")
+	}
+	r.logger.Info("agent result flush scheduler started", "interval", interval)
+	return nil
+}
+
+func resultFlushInterval(interval time.Duration) time.Duration {
+	if interval > 0 {
+		return interval
+	}
+	return 30 * time.Second
 }
 
 func (r *Runner) ensureRegistered(ctx context.Context) bool {

@@ -159,3 +159,26 @@ func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultReque
 	}
 	return nil
 }
+
+func (c *Client) ReportResults(ctx context.Context, req protocol.AgentResultBatchRequest) (protocol.AgentResultBatchResponse, error) {
+	var out protocol.AgentResultBatchResponse
+	body, err := c.resultBatchRequestBody(req)
+	if err != nil {
+		return out, err
+	}
+	resp, err := c.execute(ctx, func() *resty.Request {
+		request := c.HTTP.R().SetResult(&out)
+		if c.gzipResults {
+			request.SetHeader("Content-Encoding", "gzip")
+			request.SetHeader("Content-Type", "application/json")
+		}
+		return request.SetBody(body)
+	}, http.MethodPost, "/api/agent/results/batch")
+	if err != nil {
+		return out, wrapError(err, "execute report result batch request")
+	}
+	if resp.IsError() {
+		return out, errorf("report agent result batch: server returned %s: %s", resp.Status(), resp.String())
+	}
+	return out, nil
+}

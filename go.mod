@@ -19,7 +19,11 @@ require (
 	github.com/arcgolabs/kvx v0.3.0
 	github.com/arcgolabs/logx v0.1.2
 	github.com/arcgolabs/observabilityx v0.4.0
+	github.com/arcgolabs/storx/badgerx v0.5.0
+	github.com/arcgolabs/storx/codec v0.1.0
+	github.com/arcgolabs/storx/keycodec v0.2.0
 	github.com/danielgtaylor/huma/v2 v2.37.3
+	github.com/dgraph-io/badger/v4 v4.9.1
 	github.com/go-co-op/gocron v1.37.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/gofiber/fiber/v2 v2.52.13
@@ -67,6 +71,8 @@ require (
 	github.com/arcgolabs/httpx/adapter/std v0.1.6 // indirect
 	github.com/arcgolabs/pkg/option v0.0.3 // indirect
 	github.com/arcgolabs/plano v0.8.0 // indirect
+	github.com/arcgolabs/storx v0.2.0 // indirect
+	github.com/arcgolabs/storx/observer v0.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bmatcuk/doublestar v1.3.4 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
@@ -81,6 +87,7 @@ require (
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
+	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/go-connections v0.7.0 // indirect
@@ -105,6 +112,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
+	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect

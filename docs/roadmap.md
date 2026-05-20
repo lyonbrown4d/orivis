@@ -75,7 +75,7 @@ Discussion points:
 
 ### Agent offline buffering
 
-Status: initial implementation completed. Agents now keep a bounded FIFO buffer for failed result reports and drain it after server connectivity returns. The default driver is memory; `buffer.driver=file` enables a JSONL file-backed spool.
+Status: initial implementation completed. Agents now keep a bounded FIFO buffer for result reports, enqueue probe results before contacting the server, and drain the queue through a dedicated flush scheduler. The default mode is persistent local buffering in the OS temporary directory; `buffer.driver=memory` uses ephemeral in-memory buffering. Both modes are backed internally by `storx/badgerx`.
 
 - Add bounded local buffering when the server is unavailable.
 - First implementation can be memory-only.

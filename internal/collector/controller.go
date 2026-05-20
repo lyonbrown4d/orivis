@@ -137,6 +137,10 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create monitor discoverer")
 	}
+	results, err := NewResultQueue(cfg)
+	if err != nil {
+		return nil, oops.Wrapf(err, "create result queue")
+	}
 	return &runtimeInstance{
 		client:    client,
 		serverURL: endpoint.URL,
@@ -146,7 +150,7 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 			client,
 			c.taskPool,
 			discovery,
-			NewResultQueue(cfg),
+			results,
 		),
 	}, nil
 }

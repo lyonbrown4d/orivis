@@ -10,12 +10,20 @@ import (
 )
 
 func (c *Client) resultRequestBody(req protocol.AgentResultRequest) (any, error) {
+	return c.jsonRequestBody(req, "gzip result request")
+}
+
+func (c *Client) resultBatchRequestBody(req protocol.AgentResultBatchRequest) (any, error) {
+	return c.jsonRequestBody(req, "gzip result batch request")
+}
+
+func (c *Client) jsonRequestBody(req any, op string) (any, error) {
 	if !c.gzipResults {
 		return req, nil
 	}
 	body, err := gzipJSON(req)
 	if err != nil {
-		return nil, wrapError(err, "gzip result request")
+		return nil, wrapError(err, op)
 	}
 	return body, nil
 }

@@ -76,8 +76,8 @@ func defaultConfig() defaultConfigValues {
 		cfg.Poll.Workers = 1
 	}
 	cfg.Buffer.Enabled = true
-	cfg.Buffer.Driver = "memory"
-	cfg.Buffer.Path = "orivis-agent-buffer.jsonl"
+	cfg.Buffer.Driver = "persistent"
+	cfg.Buffer.Path = ""
 	cfg.Buffer.Capacity = 1024
 	cfg.Transport.RequestTimeout = 10 * time.Second
 	cfg.Transport.MaxIdleConns = 100

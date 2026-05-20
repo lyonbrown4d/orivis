@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ func assertDefaultBufferConfig(t *testing.T, cfg config.Config) {
 	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 1024 {
 		t.Fatalf("unexpected buffer defaults: %#v", cfg.Buffer)
 	}
-	if cfg.Buffer.Driver != "memory" || cfg.Buffer.Path != "orivis-agent-buffer.jsonl" {
+	if cfg.Buffer.Driver != "persistent" || cfg.Buffer.Path != filepath.Join(os.TempDir(), "orivis-agent-buffer") {
 		t.Fatalf("unexpected buffer storage defaults: %#v", cfg.Buffer)
 	}
 }

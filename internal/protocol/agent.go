@@ -83,3 +83,33 @@ type AgentResultRequest struct {
 	CheckedAt    time.Time `json:"checked_at,omitzero"`
 	RawDetail    []byte    `json:"raw_detail,omitempty"`
 }
+
+type AgentResult struct {
+	MonitorID    string    `json:"monitor_id"              validate:"required"`
+	Status       string    `json:"status"                  validate:"required"`
+	LatencyMS    int64     `json:"latency_ms,omitempty"`
+	ErrorMessage string    `json:"error_message,omitempty"`
+	CheckedAt    time.Time `json:"checked_at,omitzero"`
+	RawDetail    []byte    `json:"raw_detail,omitempty"`
+}
+
+type AgentResultBatchRequest struct {
+	AgentID string        `json:"agent_id"        validate:"required"`
+	Token   string        `json:"token,omitempty"`
+	Results []AgentResult `json:"results"         validate:"required,min=1"`
+}
+
+type AgentResultBatchResponse struct {
+	Accepted int `json:"accepted"`
+}
+
+func AgentResultFromRequest(req AgentResultRequest) AgentResult {
+	return AgentResult{
+		MonitorID:    req.MonitorID,
+		Status:       req.Status,
+		LatencyMS:    req.LatencyMS,
+		ErrorMessage: req.ErrorMessage,
+		CheckedAt:    req.CheckedAt,
+		RawDetail:    req.RawDetail,
+	}
+}
