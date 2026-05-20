@@ -103,6 +103,35 @@ func TestMonitorTasksAndProbeResults(t *testing.T) {
 	assertProbeResult(t, result, agent, monitor.ID)
 }
 
+func TestMonitorAssignmentIsIdempotent(t *testing.T) {
+	storage := newTestStore(t)
+	agent := registerTestAgent(t, storage, "agent-assign-01", []string{"dev"})
+	monitor := createTestMonitor(t, storage, agent, "API health")
+
+	monitorIDs := []string{monitor.ID, monitor.ID, "", "   "}
+	if err := storage.MonitorStore().AssignMonitors(context.Background(), monitorIDs); err != nil {
+		t.Fatalf("assign monitors first pass: %v", err)
+	}
+	firstOwner := queryMonitorOwnerAgentID(t, storage, monitor.ID)
+	if firstOwner == "" {
+		t.Fatal("expected monitor owner on first assignment")
+	}
+	if got := queryMonitorOwnerCount(t, storage, monitor.ID); got != 1 {
+		t.Fatalf("expected one owner row after first assignment, got %d", got)
+	}
+
+	if err := storage.MonitorStore().AssignMonitors(context.Background(), monitorIDs); err != nil {
+		t.Fatalf("assign monitors second pass: %v", err)
+	}
+	secondOwner := queryMonitorOwnerAgentID(t, storage, monitor.ID)
+	if secondOwner != firstOwner {
+		t.Fatalf("expected owner %q to remain unchanged, got %q", firstOwner, secondOwner)
+	}
+	if got := queryMonitorOwnerCount(t, storage, monitor.ID); got != 1 {
+		t.Fatalf("expected one owner row after second assignment, got %d", got)
+	}
+}
+
 func TestNotificationDeliveryHistory(t *testing.T) {
 	storage := newTestStore(t)
 	now := time.Now().UTC()

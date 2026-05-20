@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/arcgolabs/dbx"
 	"github.com/arcgolabs/dbx/querydsl"
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
@@ -16,6 +17,7 @@ type MonitorStore interface {
 	Create(ctx context.Context, params CreateMonitorParams) (model.Monitor, error)
 	UpsertDiscovered(ctx context.Context, params UpsertDiscoveredMonitorParams) (model.Monitor, error)
 	AssignAgent(ctx context.Context, monitorID, agentID string) error
+	AssignMonitors(ctx context.Context, monitorIDs []string) error
 	ListAssignedEnabled(ctx context.Context, agentID string) ([]model.Monitor, error)
 	Get(ctx context.Context, id string) (model.Monitor, error)
 }
@@ -86,6 +88,29 @@ func (s *monitorStore) AssignAgent(ctx context.Context, monitorID, agentID strin
 	if err != nil {
 		return fmt.Errorf("assign monitor agent: %w", err)
 	}
+	return nil
+}
+
+func (s *monitorStore) AssignMonitors(ctx context.Context, monitorIDs []string) error {
+	if len(monitorIDs) == 0 {
+		return nil
+	}
+
+	agentIDs, err := s.listAgentIDsForMonitorAssignment(ctx)
+	if err != nil {
+		return fmt.Errorf("list assignment agents: %w", err)
+	}
+	if len(agentIDs) == 0 {
+		return fmt.Errorf("%w: no available agents", ErrNotFound)
+	}
+
+	normalized := s.normalizeMonitorIDs(monitorIDs)
+	for _, monitorID := range normalized {
+		if err := s.assignMonitorIfUnassigned(ctx, monitorID, agentIDs); err != nil {
+			return fmt.Errorf("assign monitor %s: %w", monitorID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -198,4 +223,26 @@ func (s *monitorStore) getMonitor(ctx context.Context, id string) (model.Monitor
 		return model.Monitor{}, fmt.Errorf("get monitor: %w", err)
 	}
 	return record.model()
+}
+
+func (s *monitorStore) assignMonitorOwner(ctx context.Context, monitorID, agentID string) error {
+	schema := monitorAgentsSchema
+	row := monitorAgentRow{
+		MonitorID: monitorID,
+		AgentID:   agentID,
+	}
+
+	err := s.repositories.monitorAgents.InTx(ctx, nil, func(_ *dbx.Tx, txRepo *repository.Base[monitorAgentRow, monitorAgentSchema]) error {
+		if _, deleteErr := txRepo.Delete(ctx, querydsl.DeleteFrom(schema).Where(schema.MonitorID.Eq(monitorID))); deleteErr != nil {
+			return fmt.Errorf("clear existing monitor owner: %w", deleteErr)
+		}
+		if createErr := txRepo.Create(ctx, &row); createErr != nil {
+			return fmt.Errorf("set monitor owner: %w", createErr)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("assign monitor owner: %w", err)
+	}
+	return nil
 }

@@ -124,26 +124,34 @@ func (e *agentEndpoint) syncMonitors(ctx context.Context, input *agentMonitorSyn
 }
 
 func (e *agentEndpoint) syncAgentMonitors(ctx context.Context, agent model.Agent, monitors []protocol.AgentDiscoveredMonitor) (int, error) {
-	synced, err := collectionlist.ReduceErrList(
+	monitorIDs, err := collectionlist.ReduceErrList(
 		collectionlist.NewList(monitors...),
-		0,
-		func(count int, _ int, monitor protocol.AgentDiscoveredMonitor) (int, error) {
-			if err := e.syncAgentMonitor(ctx, agent, monitor); err != nil {
-				return count, err
+		[]string{},
+		func(ids []string, _ int, monitor protocol.AgentDiscoveredMonitor) ([]string, error) {
+			monitorID, err := e.syncAgentMonitor(ctx, agent, monitor)
+			if err != nil {
+				return nil, err
 			}
-			return count + 1, nil
+			return append(ids, monitorID), nil
 		},
 	)
 	if err != nil {
 		return 0, fmt.Errorf("sync agent monitors: %w", err)
 	}
-	return synced, nil
+
+	if len(monitorIDs) > 0 {
+		if err := e.store.MonitorStore().AssignMonitors(ctx, monitorIDs); err != nil {
+			return 0, fmt.Errorf("assign monitors: %w", err)
+		}
+	}
+
+	return len(monitorIDs), nil
 }
 
-func (e *agentEndpoint) syncAgentMonitor(ctx context.Context, agent model.Agent, discovered protocol.AgentDiscoveredMonitor) error {
+func (e *agentEndpoint) syncAgentMonitor(ctx context.Context, agent model.Agent, discovered protocol.AgentDiscoveredMonitor) (string, error) {
 	environmentID, err := e.store.EnvironmentIDForAgent(ctx, agent, discovered.EnvironmentCode)
 	if err != nil {
-		return fmt.Errorf("resolve discovered monitor environment: %w", err)
+		return "", fmt.Errorf("resolve discovered monitor environment: %w", err)
 	}
 	monitor, err := e.store.MonitorStore().UpsertDiscovered(ctx, store.UpsertDiscoveredMonitorParams{
 		SourceKey:         discovered.SourceKey,
@@ -159,12 +167,9 @@ func (e *agentEndpoint) syncAgentMonitor(ctx context.Context, agent model.Agent,
 		AggregationPolicy: model.AggregationPolicy(normalizeProtocolString(discovered.AggregationPolicy)),
 	})
 	if err != nil {
-		return fmt.Errorf("upsert discovered monitor: %w", err)
+		return "", fmt.Errorf("upsert discovered monitor: %w", err)
 	}
-	if err := e.store.MonitorStore().AssignAgent(ctx, monitor.ID, agent.ID); err != nil {
-		return fmt.Errorf("assign discovered monitor: %w", err)
-	}
-	return nil
+	return monitor.ID, nil
 }
 
 func (e *agentEndpoint) reportResult(ctx context.Context, input *agentResultsInput) (*statusOutput, error) {
