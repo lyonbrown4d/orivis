@@ -119,6 +119,7 @@ func (d *DockerDiscoverer) enrichContainers(ctx context.Context, items []contain
 			"inspect_failed", stats.inspectFailed,
 			"inspect_no_config", stats.inspectNoConfig,
 			"enriched_with_ports", stats.enrichedWithPorts,
+			"image_backfilled", stats.imageBackfilled,
 			"no_id", stats.noID,
 		)
 	}
@@ -133,6 +134,7 @@ type dockerContainerEnrichmentStats struct {
 	inspectFailed     int
 	inspectNoConfig   int
 	enrichedWithPorts int
+	imageBackfilled   int
 }
 
 func (d *DockerDiscoverer) enrichContainerPortsFromEngine(ctx context.Context, item container.Summary, stats *dockerContainerEnrichmentStats) container.Summary {
@@ -141,33 +143,48 @@ func (d *DockerDiscoverer) enrichContainerPortsFromEngine(ctx context.Context, i
 		return item
 	}
 	stats.inspected++
-	if d.client == nil {
-		return item
-	}
-	containerID := strings.TrimSpace(item.ID)
-	if containerID == "" {
-		stats.noID++
+	config, ok := d.inspectContainerForEnrichment(ctx, item.ID, stats)
+	if !ok {
 		return item
 	}
 
-	inspect, err := d.client.ContainerInspect(ctx, containerID, dockerclient.ContainerInspectOptions{})
+	beforeLen := len(item.Ports)
+	enriched := enrichContainerPortsFromInspect(item, config.ExposedPorts)
+	if strings.TrimSpace(enriched.Image) == "" {
+		enriched.Image = config.Image
+		if strings.TrimSpace(enriched.Image) != "" {
+			stats.imageBackfilled++
+		}
+	}
+	if len(enriched.Ports) > beforeLen {
+		stats.enrichedWithPorts++
+	}
+	return enriched
+}
+
+func (d *DockerDiscoverer) inspectContainerForEnrichment(ctx context.Context, containerID string, stats *dockerContainerEnrichmentStats) (container.Config, bool) {
+	if d == nil || d.client == nil {
+		return container.Config{}, false
+	}
+	containerID = strings.TrimSpace(containerID)
+	if containerID == "" {
+		stats.noID++
+		return container.Config{}, false
+	}
+
+	result, err := d.client.ContainerInspect(ctx, containerID, dockerclient.ContainerInspectOptions{})
 	if err != nil {
 		stats.inspectFailed++
 		if d.logger != nil {
 			d.logger.Warn("inspect docker container failed", "container_id", shortDockerID(containerID), "error", err)
 		}
-		return item
+		return container.Config{}, false
 	}
-	if inspect.Container.Config == nil {
+	if result.Container.Config == nil {
 		stats.inspectNoConfig++
-		return item
+		return container.Config{}, false
 	}
-	beforeLen := len(item.Ports)
-	enriched := enrichContainerPortsFromInspect(item, inspect.Container.Config.ExposedPorts)
-	if len(enriched.Ports) > beforeLen {
-		stats.enrichedWithPorts++
-	}
-	return enriched
+	return *result.Container.Config, true
 }
 
 func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
