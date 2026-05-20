@@ -14,7 +14,7 @@ The default storage backend is SQLite. The default configuration is zero-config 
 Orivis is suitable for `v0.1-alpha` testing. The core loop is implemented:
 
 ```text
-agent discovery -> server sync -> task pull -> probe check -> result report -> eventx ingest -> sqlite -> dashboard
+agent discovery -> server sync -> task pull -> probe check -> result report -> eventx ingest -> database -> dashboard
 ```
 
 ## Quick start with Docker Compose
@@ -129,8 +129,14 @@ ORIVIS_DB__DSN=file:orivis.db
 | `ORIVIS_APP__ENV` | `development` | Runtime environment. |
 | `ORIVIS_HTTP__ADDR` | `:8080` | Server listen address. |
 | `ORIVIS_LOG__LEVEL` | `info` | Log level. |
-| `ORIVIS_DB__DRIVER` | `sqlite` | Storage driver. |
-| `ORIVIS_DB__DSN` | `file:orivis?mode=memory&cache=shared` | SQLite DSN. Use a file DSN for persistence. |
+| `ORIVIS_DB__DRIVER` | `sqlite` | Storage driver: `sqlite`, `mysql`, `pgx`. |
+| `ORIVIS_DB__DSN` | `file:orivis?mode=memory&cache=shared` | DSN for the selected driver (`postgres://...`, `mysql://...`, etc.). |
+| `ORIVIS_CACHE__DRIVER` | `memory` | Cache driver: `memory`, `redis`. |
+| `ORIVIS_CACHE__PREFIX` | `orivis` | Prefix for all cache keys. |
+| `ORIVIS_CACHE__REDIS__ADDR` | empty | Redis endpoint for `cache.driver=redis` (for example `127.0.0.1:6379`). |
+| `ORIVIS_CACHE__REDIS__DB` | `0` | Redis DB index. |
+| `ORIVIS_CACHE__REDIS__PASSWORD` | empty | Redis password for secure deployments. |
+| `ORIVIS_CACHE__REDIS__TLS` | `false` | Use TLS when connecting to Redis. |
 | `ORIVIS_INGEST__QUEUESIZE` | `4096` | Async ingest queue size. |
 | `ORIVIS_INGEST__BATCHSIZE` | `100` | Async ingest flush batch size. |
 | `ORIVIS_INGEST__FLUSHINTERVAL` | `1s` | Async ingest periodic flush interval. |
