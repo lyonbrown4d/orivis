@@ -128,7 +128,8 @@ func (r *Runner) syncTasks(ctx context.Context) {
 		return
 	}
 	r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
-	for _, task := range tasks.Tasks {
+	for i := range tasks.Tasks {
+		task := tasks.Tasks[i]
 		r.logger.Info(
 			"agent pulled task",
 			"task_id", task.ID,
@@ -199,7 +200,8 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 		return oops.Wrapf(err, "discover monitors")
 	}
 	r.logger.Debug("agent monitor discovery completed", "count", len(monitors))
-	for _, monitor := range monitors {
+	for i := range monitors {
+		monitor := &monitors[i]
 		r.logger.Info(
 			"agent discovered monitor",
 			"source_key", monitor.SourceKey,

@@ -112,32 +112,16 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 	if d.logger != nil {
 		d.logger.Info("discovering docker containers", "count", len(result.Items))
 	}
-
-	monitors, err := collectionlist.ReduceErrList(
-		collectionlist.NewList(result.Items...),
-		collectionlist.NewList[protocol.AgentDiscoveredMonitor](),
-		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item container.Summary) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
-			return collectDockerLabelMonitors(out, ContainerLabelSource(item), d.defaultEnvironment)
-		},
+	parsed, err := discoverByItems(
+		result.Items,
+		"docker_container",
+		d.logger,
+		d.defaultEnvironment,
+		ContainerLabelSource,
+		"list Docker containers",
 	)
 	if err != nil {
-		return nil, fmt.Errorf("parse Docker container labels: %w", err)
-	}
-	parsed := monitors.Values()
-	if d.logger != nil {
-		d.logger.Info("docker container monitors discovered", "count", len(parsed))
-		for _, monitor := range parsed {
-			d.logger.Info(
-				"docker monitor parsed",
-				"source_key", monitor.SourceKey,
-				"monitor_name", monitor.Name,
-				"monitor_type", monitor.Type,
-				"monitor_target", monitor.Target,
-				"source", "docker_container",
-				"environment", monitor.EnvironmentCode,
-				"group", monitor.GroupName,
-			)
-		}
+		return nil, err
 	}
 	return parsed, nil
 }
@@ -150,28 +134,54 @@ func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.Age
 	if d.logger != nil {
 		d.logger.Info("discovering docker services", "count", len(result.Items))
 	}
+	parsed, err := discoverByItems(
+		result.Items,
+		"docker_swarm_service",
+		d.logger,
+		d.defaultEnvironment,
+		ServiceLabelSource,
+		"list Docker services",
+	)
+	if err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
 
+func discoverByItems[T any](
+	items []T,
+	source string,
+	logger *slog.Logger,
+	defaultEnvironment string,
+	toSource func(T) LabelSource,
+	parseErrPrefix string,
+) ([]protocol.AgentDiscoveredMonitor, error) {
 	monitors, err := collectionlist.ReduceErrList(
-		collectionlist.NewList(result.Items...),
+		collectionlist.NewList(items...),
 		collectionlist.NewList[protocol.AgentDiscoveredMonitor](),
-		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item swarm.Service) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
-			return collectDockerLabelMonitors(out, ServiceLabelSource(item), d.defaultEnvironment)
+		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item T) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
+			return collectDockerLabelMonitors(out, toSource(item), defaultEnvironment)
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("parse Docker service labels: %w", err)
+		return nil, fmt.Errorf("%s labels: %w", parseErrPrefix, err)
 	}
 	parsed := monitors.Values()
-	if d.logger != nil {
-		d.logger.Info("docker service monitors discovered", "count", len(parsed))
-		for _, monitor := range parsed {
-			d.logger.Info(
+	if logger != nil {
+		logger.Info(
+			fmt.Sprintf("docker %s monitors discovered", source),
+			"count", len(parsed),
+			"source", source,
+		)
+		for i := range parsed {
+			monitor := &parsed[i]
+			logger.Info(
 				"docker monitor parsed",
 				"source_key", monitor.SourceKey,
 				"monitor_name", monitor.Name,
 				"monitor_type", monitor.Type,
 				"monitor_target", monitor.Target,
-				"source", "docker_swarm_service",
+				"source", source,
 				"environment", monitor.EnvironmentCode,
 				"group", monitor.GroupName,
 			)
