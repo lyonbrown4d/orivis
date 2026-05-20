@@ -35,6 +35,32 @@ docker compose -f deployments/docker-compose/compose.yml up -d
 
 The server image already enables the bundled SPA and serves `/app/web`, so `ORIVIS_WEB__ENABLED` and `ORIVIS_WEB__ROOT` are intentionally not part of `server.env`.
 
+## Production database storage
+
+Orivis supports three storage drivers: `sqlite`, `mysql`, and `pgx` (for PostgreSQL).
+In `server.env`, set `ORIVIS_DB__DRIVER` and `ORIVIS_DB__DSN` directly.
+
+```env
+ORIVIS_DB__DRIVER=pgx
+ORIVIS_DB__DSN=postgres://orivis:orivis@postgres:5432/orivis?sslmode=disable
+```
+
+or
+
+```env
+ORIVIS_DB__DRIVER=mysql
+ORIVIS_DB__DSN=mysql://orivis:orivis@mysql:3306/orivis?parseTime=true
+```
+
+For sqlite in container:
+
+```env
+ORIVIS_DB__DRIVER=sqlite
+ORIVIS_DB__DSN=file:/data/orivis.db?cache=shared
+```
+
+`postgres`/`pg` driver aliases are no longer accepted; use `pgx` explicitly.
+
 The agent reads Docker labels and metadata through the Docker socket when `ORIVIS_DISCOVERY__PROVIDER=docker` is set. Standalone Docker and Docker Compose use container labels. Docker Swarm managers use service labels from `deploy.labels`; Swarm workers fall back to local container labels.
 
 Add labels to application containers or Swarm services that the agent can reach from its Docker network:

@@ -36,4 +36,9 @@ Before production use:
 
 - Change all tokens and passwords.
 - Create `/var/lib/orivis`.
+- Choose a storage driver in `orivis-server.env.example`:
+  - `ORIVIS_DB__DRIVER=pgx` with PostgreSQL DSN (recommended for production),
+  - `ORIVIS_DB__DRIVER=mysql` with MySQL DSN, or
+  - `ORIVIS_DB__DRIVER=sqlite` for local/single-node deployments.
+- `postgres` / `pg` are not accepted as storage driver names for server configuration; use `pgx`.
 - Run behind HTTPS.
