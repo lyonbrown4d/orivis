@@ -1,11 +1,13 @@
 package discovery
 
 import (
+	"slices"
 	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/api/types/swarm"
 )
 
@@ -18,6 +20,7 @@ func ContainerLabelSource(item container.Summary) LabelSource {
 		DefaultEnvironment: ContainerEnvironment(item),
 		DefaultGroup:       ContainerGroup(item),
 		TargetHost:         ContainerTargetHost(item),
+		ImageName:          dockerImageName(item.Image),
 		Ports:              ContainerPorts(item),
 	}
 }
@@ -99,6 +102,48 @@ func ContainerPorts(item container.Summary) []int {
 	}).Values()
 }
 
+func enrichContainerPortsFromInspect(item container.Summary, exposed network.PortSet) container.Summary {
+	if len(ContainerPorts(item)) > 0 {
+		return item
+	}
+	if len(exposed) == 0 {
+		return item
+	}
+
+	item.Ports = append(item.Ports, exposedPortsToSummaries(exposed)...)
+	return item
+}
+
+func exposedPortsToSummaries(exposed network.PortSet) []container.PortSummary {
+	seen := collectionset.NewSetWithCapacity[int](len(exposed))
+	raw := make([]uint16, 0, len(exposed))
+	for port := range exposed {
+		if strings.TrimSpace(string(port.Proto())) != "tcp" {
+			continue
+		}
+		value := port.Num()
+		if value == 0 {
+			continue
+		}
+		valueInt := int(value)
+		if seen.Contains(valueInt) {
+			continue
+		}
+		seen.Add(valueInt)
+		raw = append(raw, value)
+	}
+
+	slices.Sort(raw)
+	summaries := collectionlist.NewListWithCapacity[container.PortSummary](len(raw))
+	for _, value := range raw {
+		summaries.Add(container.PortSummary{
+			PrivatePort: value,
+			Type:        "tcp",
+		})
+	}
+	return summaries.Values()
+}
+
 // ServiceSourceKey returns the stable discovery source key for a Docker Swarm service.
 func ServiceSourceKey(item swarm.Service) string {
 	if namespace := strings.TrimSpace(item.Spec.Labels["com.docker.stack.namespace"]); namespace != "" {
@@ -118,6 +163,10 @@ func ServiceSourceKey(item swarm.Service) string {
 
 // ServiceLabelSource returns label parsing metadata for a Docker Swarm service.
 func ServiceLabelSource(item swarm.Service) LabelSource {
+	imageName := ""
+	if item.Spec.TaskTemplate.ContainerSpec != nil {
+		imageName = dockerImageName(item.Spec.TaskTemplate.ContainerSpec.Image)
+	}
 	return LabelSource{
 		SourceKey:          ServiceSourceKey(item),
 		Labels:             item.Spec.Labels,
@@ -125,8 +174,27 @@ func ServiceLabelSource(item swarm.Service) LabelSource {
 		DefaultEnvironment: ServiceEnvironment(item),
 		DefaultGroup:       ServiceGroup(item),
 		TargetHost:         ServiceTargetHost(item),
+		ImageName:          imageName,
 		Ports:              ServicePorts(item),
 	}
+}
+
+func dockerImageName(rawImage string) string {
+	image := strings.TrimSpace(rawImage)
+	if image == "" {
+		return ""
+	}
+
+	if at := strings.Index(image, "@"); at >= 0 {
+		image = image[:at]
+	}
+	if slash := strings.LastIndex(image, "/"); slash >= 0 {
+		image = image[slash+1:]
+	}
+	if colon := strings.LastIndex(image, ":"); colon >= 0 {
+		image = image[:colon]
+	}
+	return strings.TrimSpace(image)
 }
 
 // ServiceName returns the best user-facing monitor name for a Docker Swarm service.

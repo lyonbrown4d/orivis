@@ -135,6 +135,48 @@ func TestParseLabelsInfersTCPMonitorWhenOnlyEnabled(t *testing.T) {
 	}
 }
 
+func TestParseLabelsInfersHTTPMonitorFromImage(t *testing.T) {
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
+		SourceKey:   "docker:container:web",
+		Labels:      map[string]string{"orivis.enable": "true"},
+		DefaultName: "web",
+		TargetHost:  "web",
+		ImageName:   "nginx:1.27-alpine",
+		Ports:       []int{80, 8080},
+	})
+	if err != nil {
+		t.Fatalf("parse inferred labels: %v", err)
+	}
+	if len(monitors) != 1 {
+		t.Fatalf("expected one inferred monitor, got %#v", monitors)
+	}
+	monitor := monitors[0]
+	if monitor.Name != "web" || monitor.Type != "http" || monitor.Target != "http://web:80" {
+		t.Fatalf("unexpected inferred monitor: %#v", monitor)
+	}
+}
+
+func TestParseLabelsInfersKafkaMonitorFromImage(t *testing.T) {
+	monitors, err := discovery.ParseLabels(discovery.LabelSource{
+		SourceKey:   "docker:container:kafka",
+		Labels:      map[string]string{"orivis.enable": "true"},
+		DefaultName: "kafka",
+		TargetHost:  "kafka",
+		ImageName:   "bitnami/kafka:3.9.0",
+		Ports:       []int{29092, 9092},
+	})
+	if err != nil {
+		t.Fatalf("parse inferred labels: %v", err)
+	}
+	if len(monitors) != 1 {
+		t.Fatalf("expected one inferred monitor, got %#v", monitors)
+	}
+	monitor := monitors[0]
+	if monitor.Name != "kafka" || monitor.Type != "kafka" || monitor.Target != "kafka:9092" {
+		t.Fatalf("unexpected inferred monitor: %#v", monitor)
+	}
+}
+
 func TestParseLabelsDoesNotInferWithoutOrivisLabels(t *testing.T) {
 	monitors, err := discovery.ParseLabels(discovery.LabelSource{
 		SourceKey:   "docker:container:web",

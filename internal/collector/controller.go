@@ -133,6 +133,10 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create agent client")
 	}
+	discovery, err := NewMonitorDiscoverer(cfg, c.logger)
+	if err != nil {
+		return nil, oops.Wrapf(err, "create monitor discoverer")
+	}
 	return &runtimeInstance{
 		client:    client,
 		serverURL: endpoint.URL,
@@ -141,6 +145,8 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 			c.logger,
 			client,
 			c.taskPool,
+			discovery,
+			NewResultQueue(cfg),
 		),
 	}, nil
 }

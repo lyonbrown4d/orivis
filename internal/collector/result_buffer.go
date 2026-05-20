@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/samber/oops"
 )
@@ -42,6 +43,13 @@ func newResultQueue(driver, path string, capacity int) ResultQueue {
 		return NewFileResultBuffer(path, capacity)
 	}
 	return newMemoryResultBuffer(capacity)
+}
+
+func NewResultQueue(cfg config.Config) ResultQueue {
+	if !cfg.Buffer.Enabled {
+		return nil
+	}
+	return newResultQueue(cfg.Buffer.Driver, cfg.Buffer.Path, cfg.Buffer.Capacity)
 }
 
 type memoryResultBuffer struct {

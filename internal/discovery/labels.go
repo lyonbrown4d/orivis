@@ -27,6 +27,7 @@ type LabelSource struct {
 	DefaultEnvironment string
 	DefaultGroup       string
 	TargetHost         string
+	ImageName          string
 	Ports              []int
 }
 

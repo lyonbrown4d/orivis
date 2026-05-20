@@ -41,6 +41,7 @@ func TestContainerLabelSourceUsesComposeMetadata(t *testing.T) {
 			"com.docker.compose.service": "redis",
 			"orivis.enable":              "true",
 		},
+		Image: "bitnami/redis:7",
 		Ports: []container.PortSummary{{PrivatePort: 6379, Type: "tcp"}},
 	})
 	if source.SourceKey != "docker:compose:project:redis" {
@@ -48,6 +49,9 @@ func TestContainerLabelSourceUsesComposeMetadata(t *testing.T) {
 	}
 	if source.DefaultName != "redis" || source.DefaultEnvironment != "project" || source.TargetHost != "redis" {
 		t.Fatalf("unexpected source metadata: %#v", source)
+	}
+	if source.ImageName != "redis" {
+		t.Fatalf("unexpected image name: %#v", source)
 	}
 	if source.DefaultGroup != "project" {
 		t.Fatalf("unexpected source group: %#v", source)
@@ -85,6 +89,11 @@ func TestServiceLabelSourceUsesSwarmStackGroup(t *testing.T) {
 					"orivis.enable":              "true",
 				},
 			},
+			TaskTemplate: swarm.TaskSpec{
+				ContainerSpec: &swarm.ContainerSpec{
+					Image: "kafka:3.9",
+				},
+			},
 		},
 	})
 	if source.SourceKey != "docker:swarm:stack:web" {
@@ -92,5 +101,8 @@ func TestServiceLabelSourceUsesSwarmStackGroup(t *testing.T) {
 	}
 	if source.DefaultName != "web" || source.DefaultEnvironment != "stack" || source.DefaultGroup != "stack" {
 		t.Fatalf("unexpected source metadata: %#v", source)
+	}
+	if source.ImageName != "kafka" {
+		t.Fatalf("unexpected image name: %#v", source)
 	}
 }

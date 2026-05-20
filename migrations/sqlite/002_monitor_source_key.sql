@@ -1,3 +1,7 @@
-ALTER TABLE monitors ADD COLUMN source_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE monitors ADD COLUMN source_key TEXT;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_monitors_source_key ON monitors(source_key) WHERE source_key <> '';
+UPDATE monitors
+SET source_key = NULL
+WHERE source_key = '';
+
+CREATE UNIQUE INDEX idx_monitors_source_key ON monitors(source_key);

@@ -24,9 +24,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return fmt.Errorf("ensure migrations table: %w", err)
 	}
 
-	files, err := migrations.SQLite()
+	files, err := migrations.All()
 	if err != nil {
-		return fmt.Errorf("load sqlite migrations: %w", err)
+		return fmt.Errorf("load migrations: %w", err)
 	}
 	return s.applyPendingMigrations(ctx, files)
 }

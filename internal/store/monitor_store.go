@@ -25,6 +25,7 @@ type MonitorStore interface {
 type monitorStore struct {
 	repositories *Repositories
 	ids          IDGenerator
+	db           *dbx.DB
 }
 
 func (s *monitorStore) Create(ctx context.Context, params CreateMonitorParams) (model.Monitor, error) {
@@ -226,22 +227,31 @@ func (s *monitorStore) getMonitor(ctx context.Context, id string) (model.Monitor
 }
 
 func (s *monitorStore) assignMonitorOwner(ctx context.Context, monitorID, agentID string) error {
-	schema := monitorAgentsSchema
-	row := monitorAgentRow{
-		MonitorID: monitorID,
-		AgentID:   agentID,
+	if s == nil {
+		return fmt.Errorf("%w: monitor store is not available", ErrInvalidInput)
+	}
+	if strings.TrimSpace(monitorID) == "" {
+		return fmt.Errorf("%w: monitor id is required", ErrInvalidInput)
+	}
+	if strings.TrimSpace(agentID) == "" {
+		return fmt.Errorf("%w: agent id is required", ErrInvalidInput)
+	}
+	if s.db == nil {
+		return fmt.Errorf("%w: db is not available", ErrInvalidInput)
 	}
 
-	err := s.repositories.monitorAgents.InTx(ctx, nil, func(_ *dbx.Tx, txRepo *repository.Base[monitorAgentRow, monitorAgentSchema]) error {
-		if _, deleteErr := txRepo.Delete(ctx, querydsl.DeleteFrom(schema).Where(schema.MonitorID.Eq(monitorID))); deleteErr != nil {
-			return fmt.Errorf("clear existing monitor owner: %w", deleteErr)
-		}
-		if createErr := txRepo.Create(ctx, &row); createErr != nil {
-			return fmt.Errorf("set monitor owner: %w", createErr)
-		}
-		return nil
-	})
+	_, err := s.db.ExecContext(
+		ctx,
+		"INSERT INTO monitor_agents (monitor_id, agent_id) "+
+			"SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM monitor_agents WHERE monitor_id = ?)",
+		monitorID,
+		agentID,
+		monitorID,
+	)
 	if err != nil {
+		if isCodeEntityConflict(err) {
+			return nil
+		}
 		return fmt.Errorf("assign monitor owner: %w", err)
 	}
 	return nil

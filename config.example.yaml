@@ -11,6 +11,15 @@ db:
   driver: sqlite
   dsn: file:orivis?mode=memory&cache=shared
 
+cache:
+  driver: memory
+  prefix: orivis
+  # redis:
+  #   addr: redis:6379
+  #   password: ""
+  #   db: 0
+  #   tls: false
+
 ingest:
   queuesize: 4096
   batchsize: 100
@@ -49,6 +58,7 @@ runtime: host
 
 poll:
   interval: 30s
+  workers: 0
 
 discovery:
   static:

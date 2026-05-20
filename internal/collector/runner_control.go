@@ -28,10 +28,6 @@ func (r *Runner) Start(ctx context.Context) error {
 		"buffer_enabled", r.cfg.Buffer.Enabled,
 	)
 
-	if err := r.configureDiscovery(); err != nil {
-		return oops.Wrapf(err, "configure monitor discovery")
-	}
-
 	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
 	r.stop = stop
 
@@ -93,7 +89,7 @@ func (r *Runner) syncTasks(ctx context.Context) {
 	r.logger.Debug("agent tasks pulled", "count", len(tasks.Tasks))
 	for i := range tasks.Tasks {
 		task := tasks.Tasks[i]
-		r.logger.Info(
+		r.logger.Debug(
 			"agent pulled task",
 			"task_id", task.ID,
 			"monitor_id", task.MonitorID,
@@ -163,24 +159,17 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 		return oops.Wrapf(err, "discover monitors")
 	}
 	r.logger.Debug("agent monitor discovery completed", "count", len(monitors))
-	for i := range monitors {
-		monitor := &monitors[i]
-		r.logger.Info(
-			"agent discovered monitor",
-			"source_key", monitor.SourceKey,
-			"monitor_name", monitor.Name,
-			"monitor_type", monitor.Type,
-			"monitor_target", monitor.Target,
-			"group_name", monitor.GroupName,
-			"environment_code", monitor.EnvironmentCode,
-			"interval_seconds", monitor.IntervalSeconds,
-			"timeout_seconds", monitor.TimeoutSeconds,
-			"retry_count", monitor.RetryCount,
-		)
-	}
 	if len(monitors) == 0 {
+		r.rememberDiscoverySignature("", 0)
 		return nil
 	}
+
+	signature := discoverySignature(monitors)
+	if !r.shouldSyncDiscovery(signature, len(monitors)) {
+		r.logger.Debug("agent discovered monitors unchanged, skipping sync", "count", len(monitors), "signature", signature)
+		return nil
+	}
+
 	response, err := r.client.SyncMonitors(ctx, protocol.AgentMonitorSyncRequest{
 		AgentID:  r.agentID,
 		Token:    r.cfg.Agent.Token,
@@ -189,6 +178,7 @@ func (r *Runner) syncDiscoveredMonitors(ctx context.Context) error {
 	if err != nil {
 		return oops.Wrapf(err, "sync discovered monitors")
 	}
+	r.rememberDiscoverySignature(signature, len(monitors))
 	r.logger.Info("agent discovered monitors synced", "discovered", len(monitors), "synced", response.Synced)
 	return nil
 }

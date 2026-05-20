@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"sync"
+	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
@@ -17,6 +19,8 @@ const (
 	DockerModeSwarm     = "swarm"
 )
 
+const defaultContainerInspectCacheTTL = 30 * time.Second
+
 type DockerOptions struct {
 	Mode               string
 	DefaultEnvironment string
@@ -28,6 +32,14 @@ type DockerDiscoverer struct {
 	mode               string
 	defaultEnvironment string
 	logger             *slog.Logger
+	inspectCache       map[string]cachedDockerContainerConfig
+	inspectCacheTTL    time.Duration
+	inspectCacheMu     sync.RWMutex
+}
+
+type cachedDockerContainerConfig struct {
+	config    container.Config
+	expiresAt time.Time
 }
 
 func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
@@ -46,6 +58,8 @@ func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
 		mode:               mode,
 		defaultEnvironment: strings.TrimSpace(opts.DefaultEnvironment),
 		logger:             opts.Logger,
+		inspectCache:       make(map[string]cachedDockerContainerConfig),
+		inspectCacheTTL:    defaultContainerInspectCacheTTL,
 	}, nil
 }
 
@@ -101,6 +115,7 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 }
 
 func (d *DockerDiscoverer) enrichContainers(ctx context.Context, items []container.Summary) []container.Summary {
+	d.pruneContainerInspectCache(time.Now().UTC())
 	stats := dockerContainerEnrichmentStats{
 		scanned: len(items),
 	}
@@ -120,6 +135,9 @@ func (d *DockerDiscoverer) enrichContainers(ctx context.Context, items []contain
 			"inspect_no_config", stats.inspectNoConfig,
 			"enriched_with_ports", stats.enrichedWithPorts,
 			"image_backfilled", stats.imageBackfilled,
+			"cache_hits", stats.cacheHits,
+			"cache_misses", stats.cacheMisses,
+			"cache_expired", stats.cacheExpired,
 			"no_id", stats.noID,
 		)
 	}
@@ -135,6 +153,9 @@ type dockerContainerEnrichmentStats struct {
 	inspectNoConfig   int
 	enrichedWithPorts int
 	imageBackfilled   int
+	cacheHits         int
+	cacheMisses       int
+	cacheExpired      int
 }
 
 func (d *DockerDiscoverer) enrichContainerPortsFromEngine(ctx context.Context, item container.Summary, stats *dockerContainerEnrichmentStats) container.Summary {
@@ -172,6 +193,11 @@ func (d *DockerDiscoverer) inspectContainerForEnrichment(ctx context.Context, co
 		return container.Config{}, false
 	}
 
+	now := time.Now().UTC()
+	if config, ok := d.getCachedContainerConfig(containerID, now, stats); ok {
+		return config, true
+	}
+
 	result, err := d.client.ContainerInspect(ctx, containerID, dockerclient.ContainerInspectOptions{})
 	if err != nil {
 		stats.inspectFailed++
@@ -184,109 +210,55 @@ func (d *DockerDiscoverer) inspectContainerForEnrichment(ctx context.Context, co
 		stats.inspectNoConfig++
 		return container.Config{}, false
 	}
+	d.putCachedContainerConfig(containerID, now, *result.Container.Config)
 	return *result.Container.Config, true
 }
 
-func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
-	result, err := d.client.ServiceList(ctx, dockerclient.ServiceListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("list Docker services: %w", err)
+func (d *DockerDiscoverer) getCachedContainerConfig(containerID string, now time.Time, stats *dockerContainerEnrichmentStats) (container.Config, bool) {
+	if d == nil || d.inspectCacheTTL <= 0 {
+		return container.Config{}, false
 	}
-	if d.logger != nil {
-		d.logger.Info("discovering docker services", "count", len(result.Items))
+
+	d.inspectCacheMu.RLock()
+	entry, ok := d.inspectCache[containerID]
+	d.inspectCacheMu.RUnlock()
+	if !ok {
+		stats.cacheMisses++
+		return container.Config{}, false
 	}
-	parsed, err := discoverByItems(
-		result.Items,
-		"docker_swarm_service",
-		d.logger,
-		d.defaultEnvironment,
-		ServiceLabelSource,
-		"list Docker services",
-	)
-	if err != nil {
-		return nil, err
+	if now.After(entry.expiresAt) {
+		stats.cacheExpired++
+		d.inspectCacheMu.Lock()
+		delete(d.inspectCache, containerID)
+		d.inspectCacheMu.Unlock()
+		return container.Config{}, false
 	}
-	return parsed, nil
+	stats.cacheHits++
+	return entry.config, true
 }
 
-func discoverByItems[T any](
-	items []T,
-	source string,
-	logger *slog.Logger,
-	defaultEnvironment string,
-	toSource func(T) LabelSource,
-	parseErrPrefix string,
-) ([]protocol.AgentDiscoveredMonitor, error) {
-	monitors, err := collectionlist.ReduceErrList(
-		collectionlist.NewList(items...),
-		collectionlist.NewList[protocol.AgentDiscoveredMonitor](),
-		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item T) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
-			return collectDockerLabelMonitors(out, toSource(item), defaultEnvironment)
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("%s labels: %w", parseErrPrefix, err)
+func (d *DockerDiscoverer) putCachedContainerConfig(containerID string, now time.Time, config container.Config) {
+	if d == nil || d.inspectCacheTTL <= 0 {
+		return
 	}
-	parsed := monitors.Values()
-	if logger != nil {
-		logger.Info(
-			fmt.Sprintf("docker %s monitors discovered", source),
-			"count", len(parsed),
-			"source", source,
-		)
-		for i := range parsed {
-			monitor := &parsed[i]
-			logger.Info(
-				"docker monitor parsed",
-				"source_key", monitor.SourceKey,
-				"monitor_name", monitor.Name,
-				"monitor_type", monitor.Type,
-				"monitor_target", monitor.Target,
-				"source", source,
-				"environment", monitor.EnvironmentCode,
-				"group", monitor.GroupName,
-			)
+	d.inspectCacheMu.Lock()
+	d.inspectCache[containerID] = cachedDockerContainerConfig{
+		config:    config,
+		expiresAt: now.Add(d.inspectCacheTTL),
+	}
+	d.inspectCacheMu.Unlock()
+}
+
+func (d *DockerDiscoverer) pruneContainerInspectCache(now time.Time) {
+	if d == nil || d.inspectCacheTTL <= 0 {
+		return
+	}
+	d.inspectCacheMu.Lock()
+	for containerID := range d.inspectCache {
+		entry := d.inspectCache[containerID]
+		if now.After(entry.expiresAt) {
+			delete(d.inspectCache, containerID)
 		}
 	}
-	return parsed, nil
-}
-
-func collectDockerLabelMonitors(
-	out *collectionlist.List[protocol.AgentDiscoveredMonitor],
-	source LabelSource,
-	defaultEnvironment string,
-) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
-	source.DefaultEnvironment = firstNonEmpty(defaultEnvironment, source.DefaultEnvironment)
-	parsed, err := ParseLabels(source)
-	if err != nil {
-		return nil, err
-	}
-	out.Add(parsed...)
-	return out, nil
-}
-
-func normalizeDockerMode(mode string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case DockerModeContainer:
-		return DockerModeContainer
-	case DockerModeSwarm:
-		return DockerModeSwarm
-	default:
-		return ""
-	}
-}
-
-func containerRuntimeName(item container.Summary) string {
-	if len(item.Names) == 0 {
-		return ""
-	}
-	return strings.Trim(strings.TrimSpace(item.Names[0]), "/")
-}
-
-func shortDockerID(id string) string {
-	id = strings.TrimSpace(id)
-	if len(id) <= 12 {
-		return id
-	}
-	return id[:12]
+	d.inspectCacheMu.Unlock()
 }

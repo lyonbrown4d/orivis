@@ -9,24 +9,46 @@ import (
 
 func inferredMonitorFields(source LabelSource, fields map[string]string) (map[string]string, bool) {
 	out := cloneFields(fields)
-	monitorType := strings.ToLower(strings.TrimSpace(out["type"]))
+	ensureInferredType(source, out)
+	ensureInferredTarget(source, out)
+	ensureInferredName(source, out)
+	return out, isMonitorFieldsUsable(out)
+}
+
+func ensureInferredType(source LabelSource, out map[string]string) {
+	if strings.TrimSpace(out["type"]) != "" {
+		return
+	}
+	monitorType := inferMonitorTypeFromImage(source.ImageName)
 	if monitorType == "" {
 		monitorType = inferMonitorType(source.Ports)
-		if monitorType != "" {
-			out["type"] = monitorType
-		}
 	}
-	if strings.TrimSpace(out["target"]) == "" {
-		if target := inferMonitorTarget(monitorType, source.TargetHost, source.Ports); target != "" {
-			out["target"] = target
-		}
+	if monitorType != "" {
+		out["type"] = monitorType
 	}
-	if strings.TrimSpace(out["name"]) == "" {
-		if name := strings.TrimSpace(source.DefaultName); name != "" {
-			out["name"] = name
-		}
+}
+
+func ensureInferredTarget(source LabelSource, out map[string]string) {
+	if strings.TrimSpace(out["target"]) != "" {
+		return
 	}
-	return out, strings.TrimSpace(out["type"]) != "" || strings.TrimSpace(out["target"]) != ""
+	monitorType := strings.TrimSpace(out["type"])
+	if target := inferMonitorTarget(monitorType, source.TargetHost, source.Ports); target != "" {
+		out["target"] = target
+	}
+}
+
+func ensureInferredName(source LabelSource, out map[string]string) {
+	if strings.TrimSpace(out["name"]) != "" {
+		return
+	}
+	if name := strings.TrimSpace(source.DefaultName); name != "" {
+		out["name"] = name
+	}
+}
+
+func isMonitorFieldsUsable(out map[string]string) bool {
+	return strings.TrimSpace(out["type"]) != "" || strings.TrimSpace(out["target"]) != ""
 }
 
 func cloneFields(fields map[string]string) map[string]string {
@@ -38,6 +60,38 @@ func inferMonitorType(ports []int) string {
 		return ""
 	}
 	return "tcp"
+}
+
+func inferMonitorTypeFromImage(imageName string) string {
+	normalizedImage := strings.ToLower(strings.TrimSpace(imageName))
+	if normalizedImage == "" {
+		return ""
+	}
+	normalizedImage = dockerImageName(normalizedImage)
+	switch normalizedImage {
+	case "nginx", "caddy", "traefik", "haproxy", "apache", "httpd", "flask", "tomcat":
+		return "http"
+	}
+
+	if strings.Contains(normalizedImage, "kafka") {
+		return "kafka"
+	}
+	if strings.Contains(normalizedImage, "redis") {
+		return "redis"
+	}
+	if strings.Contains(normalizedImage, "rabbitmq") {
+		return "rabbitmq"
+	}
+	if strings.Contains(normalizedImage, "mongo") {
+		return "mongo"
+	}
+	if strings.Contains(normalizedImage, "mysql") {
+		return "mysql"
+	}
+	if strings.Contains(normalizedImage, "postgres") {
+		return "postgres"
+	}
+	return ""
 }
 
 func inferMonitorTarget(monitorType, host string, ports []int) string {
@@ -54,6 +108,8 @@ func inferMonitorTarget(monitorType, host string, ports []int) string {
 		return fmt.Sprintf("http://%s:%d", host, port)
 	case "redis":
 		return fmt.Sprintf("redis://%s:%d", host, port)
+	case "kafka", "mysql", "postgres", "mongo", "rabbitmq", "amqp", "postgresql":
+		return fmt.Sprintf("%s:%d", host, port)
 	case "tcp":
 		return fmt.Sprintf("%s:%d", host, port)
 	default:
@@ -78,8 +134,18 @@ func defaultMonitorPort(monitorType string) int {
 	switch monitorType {
 	case "http":
 		return 80
+	case "kafka":
+		return 9092
 	case "redis":
 		return 6379
+	case "mysql":
+		return 3306
+	case "postgres", "postgresql":
+		return 5432
+	case "mongo", "mongodb":
+		return 27017
+	case "rabbitmq", "amqp":
+		return 5672
 	default:
 		return 0
 	}
@@ -89,8 +155,18 @@ func preferredMonitorPorts(monitorType string) []int {
 	switch monitorType {
 	case "http":
 		return []int{80, 8080, 3000, 8000}
+	case "kafka":
+		return []int{9092, 19092}
 	case "redis":
 		return []int{6379}
+	case "mysql":
+		return []int{3306}
+	case "postgres", "postgresql":
+		return []int{5432}
+	case "mongo", "mongodb":
+		return []int{27017}
+	case "rabbitmq", "amqp":
+		return []int{5672}
 	default:
 		return nil
 	}

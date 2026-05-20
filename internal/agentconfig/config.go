@@ -3,10 +3,10 @@ package config
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
-	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/configx"
 	jsonparser "github.com/knadh/koanf/parsers/json"
 	tomlparser "github.com/knadh/koanf/parsers/toml/v2"
@@ -35,6 +35,7 @@ type Config struct {
 	Poll    struct {
 		Interval time.Duration `mapstructure:"interval" validate:"required"`
 		Jitter   time.Duration `mapstructure:"jitter"`
+		Workers  int           `mapstructure:"workers"`
 	} `mapstructure:"poll"`
 	Buffer struct {
 		Enabled  bool   `mapstructure:"enabled"`
@@ -84,6 +85,8 @@ func Load(opts ...configx.Option) (Config, error) {
 func finalizeConfig(cfg Config) (Config, error) {
 	cfg.Agent.Environments = normalizeStringSlice(cfg.Agent.Environments)
 	cfg.Discovery.Static.HCLFiles = normalizeStringSlice(cfg.Discovery.Static.HCLFiles)
+	cfg.Agent.Name = appendHostnameSuffix(cfg.Agent.Name)
+	normalizePollConfig(&cfg)
 	if err := normalizeBufferConfig(&cfg); err != nil {
 		return Config{}, err
 	}
@@ -99,6 +102,33 @@ func finalizeConfig(cfg Config) (Config, error) {
 	return cfg, nil
 }
 
+func appendHostnameSuffix(value string) string {
+	name := strings.TrimSpace(value)
+	if name == "" {
+		return name
+	}
+
+	host := strings.TrimSpace(os.Getenv("HOSTNAME"))
+	if host == "" {
+		hostName, err := os.Hostname()
+		if err == nil {
+			host = strings.TrimSpace(hostName)
+		}
+	}
+	if host == "" {
+		return name
+	}
+
+	host = strings.ToLower(host)
+	if strings.HasSuffix(name, "@"+host) {
+		return name
+	}
+	if strings.Contains(name, "@") {
+		return name
+	}
+	return name + "@" + host
+}
+
 func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
 	loadOptions := []configx.Option{configx.WithFlagSet(flags)}
 	if configFile != "" {
@@ -106,60 +136,6 @@ func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Opti
 	}
 	loadOptions = append(loadOptions, opts...)
 	return Load(loadOptions...)
-}
-
-type defaultConfigValues struct {
-	Server struct {
-		URL  string `json:"url"`
-		MDNS struct {
-			Service       string        `json:"service"`
-			Domain        string        `json:"domain"`
-			Timeout       time.Duration `json:"timeout"`
-			DefaultScheme string        `json:"defaultscheme"`
-		} `json:"mdns"`
-	} `json:"server"`
-	Agent struct {
-		Name         string   `json:"name"`
-		Region       string   `json:"region"`
-		Environments []string `json:"environments"`
-	} `json:"agent"`
-	Runtime string `json:"runtime"`
-	Poll    struct {
-		Interval time.Duration `json:"interval"`
-		Jitter   time.Duration `json:"jitter"`
-	} `json:"poll"`
-	Buffer struct {
-		Enabled  bool   `json:"enabled"`
-		Driver   string `json:"driver"`
-		Path     string `json:"path"`
-		Capacity int    `json:"capacity"`
-	} `json:"buffer"`
-	Transport struct {
-		RequestTimeout        time.Duration `json:"requesttimeout"`
-		MaxIdleConns          int           `json:"maxidleconns"`
-		MaxIdleConnsPerHost   int           `json:"maxidleconnsperhost"`
-		IdleConnTimeout       time.Duration `json:"idleconntimeout"`
-		TLSHandshakeTimeout   time.Duration `json:"tlshandshaketimeout"`
-		ResponseHeaderTimeout time.Duration `json:"responseheadertimeout"`
-		RetryAttempts         int           `json:"retryattempts"`
-		RetryBaseDelay        time.Duration `json:"retrybasedelay"`
-		RetryMaxDelay         time.Duration `json:"retrymaxdelay"`
-		RetryJitterRatio      float64       `json:"retryjitterratio"`
-		GzipResults           bool          `json:"gzipresults"`
-	} `json:"transport"`
-	Discovery struct {
-		Provider string `json:"provider"`
-		Static   struct {
-			Enabled  bool     `json:"enabled"`
-			HCLFiles []string `json:"hcl_files"`
-		} `json:"static"`
-		Docker struct {
-			Mode string `json:"mode"`
-		} `json:"docker"`
-	} `json:"discovery"`
-	Log struct {
-		Level string `json:"level"`
-	} `json:"log"`
 }
 
 func defaultOptions() []configx.Option {
@@ -182,40 +158,6 @@ func configFileParserOptions() []configx.Option {
 		configx.WithFileParser(".yml", yamlparser.Parser()),
 		configx.WithFileParser(".hcl", agentHCLFileParser()),
 	}
-}
-
-func defaultConfig() defaultConfigValues {
-	var cfg defaultConfigValues
-	cfg.Server.URL = ""
-	cfg.Server.MDNS.Service = "orivis"
-	cfg.Server.MDNS.Domain = "local."
-	cfg.Server.MDNS.Timeout = 5 * time.Second
-	cfg.Server.MDNS.DefaultScheme = "http"
-	cfg.Agent.Name = "local-agent"
-	cfg.Agent.Region = "local"
-	cfg.Agent.Environments = []string{}
-	cfg.Runtime = "host"
-	cfg.Poll.Interval = 30 * time.Second
-	cfg.Poll.Jitter = 5 * time.Second
-	cfg.Buffer.Enabled = true
-	cfg.Buffer.Driver = "memory"
-	cfg.Buffer.Path = "orivis-agent-buffer.jsonl"
-	cfg.Buffer.Capacity = 1024
-	cfg.Transport.RequestTimeout = 10 * time.Second
-	cfg.Transport.MaxIdleConns = 100
-	cfg.Transport.MaxIdleConnsPerHost = 16
-	cfg.Transport.IdleConnTimeout = 90 * time.Second
-	cfg.Transport.TLSHandshakeTimeout = 10 * time.Second
-	cfg.Transport.ResponseHeaderTimeout = 10 * time.Second
-	cfg.Transport.RetryAttempts = 3
-	cfg.Transport.RetryBaseDelay = time.Second
-	cfg.Transport.RetryMaxDelay = 5 * time.Second
-	cfg.Transport.RetryJitterRatio = 0.2
-	cfg.Transport.GzipResults = true
-	cfg.Discovery.Static.Enabled = true
-	cfg.Discovery.Static.HCLFiles = []string{}
-	cfg.Log.Level = "info"
-	return cfg
 }
 
 func normalizeBufferConfig(cfg *Config) error {
@@ -257,42 +199,12 @@ func normalizeDiscoveryConfig(cfg *Config) error {
 
 func normalizeDockerDiscovery(cfg *Config) error {
 	cfg.Discovery.Docker.Enabled = true
-	if runtime := strings.TrimSpace(cfg.Runtime); runtime == "" || strings.EqualFold(runtime, "host") {
+	runtimeMode := strings.TrimSpace(cfg.Runtime)
+	if runtimeMode == "" || strings.EqualFold(runtimeMode, "host") {
 		cfg.Runtime = "docker"
 	}
 	if cfg.Discovery.Docker.Mode == "" {
 		return errors.New("discovery docker mode is required when provider is docker")
 	}
 	return nil
-}
-
-func normalizeStaticMonitors(single discovery.StaticMonitor, monitors, hclMonitors []discovery.StaticMonitor) []discovery.StaticMonitor {
-	out := collectionlist.NewListWithCapacity[discovery.StaticMonitor](len(monitors) + len(hclMonitors) + 1)
-	if hasStaticMonitor(single) {
-		out.Add(single)
-	}
-	out.Add(monitors...)
-	out.Add(hclMonitors...)
-	return out.Values()
-}
-
-func hasStaticMonitor(monitor discovery.StaticMonitor) bool {
-	return strings.TrimSpace(monitor.SourceKey) != "" ||
-		strings.TrimSpace(monitor.Name) != "" ||
-		strings.TrimSpace(monitor.Type) != "" ||
-		strings.TrimSpace(monitor.Target) != "" ||
-		strings.TrimSpace(monitor.EnvironmentCode) != ""
-}
-
-func normalizeStringSlice(values []string) []string {
-	parts := collectionlist.FlatMapList(
-		collectionlist.NewList(values...),
-		func(_ int, value string) []string {
-			return strings.Split(value, ",")
-		},
-	)
-	return collectionlist.FilterMapList(parts, func(_ int, part string) (string, bool) {
-		part = strings.TrimSpace(part)
-		return part, part != ""
-	}).Values()
 }

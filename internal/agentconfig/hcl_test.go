@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ func TestLoadHCLConfigAllowsEnvOverride(t *testing.T) {
 
 func loadHCLConfig(t *testing.T) config.Config {
 	t.Helper()
+	t.Setenv("HOSTNAME", "hcl-node")
 	path := writeAgentHCLConfig(t)
 	cfg, err := config.LoadFromFlags(pflag.NewFlagSet("test", pflag.ContinueOnError), path)
 	if err != nil {
@@ -56,10 +58,10 @@ func assertHCLAgentIdentity(t *testing.T, cfg config.Config) {
 	if cfg.Server.URL != "http://server:8080" {
 		t.Fatalf("expected HCL server URL, got %q", cfg.Server.URL)
 	}
-	if cfg.Agent.Name != "hcl-agent" || cfg.Runtime != "docker" {
+	if !strings.HasPrefix(cfg.Agent.Name, "hcl-agent@") || strings.TrimPrefix(cfg.Agent.Name, "hcl-agent@") == "" || cfg.Runtime != "docker" {
 		t.Fatalf("unexpected HCL agent config: %#v", cfg)
 	}
-	if cfg.Poll.Interval != 12*time.Second || cfg.Poll.Jitter != time.Second || cfg.Log.Level != "debug" {
+	if cfg.Poll.Interval != 12*time.Second || cfg.Poll.Jitter != time.Second || cfg.Poll.Workers != 12 || cfg.Log.Level != "debug" {
 		t.Fatalf("unexpected HCL timing/log config: %#v", cfg)
 	}
 	assertHCLBuffer(t, cfg)
@@ -114,6 +116,7 @@ agent {
 poll {
   interval = "12s"
   jitter = "1s"
+  workers = 12
 }
 
 buffer {

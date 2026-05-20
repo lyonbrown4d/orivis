@@ -22,6 +22,10 @@ func SQLite() ([]File, error) {
 	return readDir("sqlite")
 }
 
+func All() ([]File, error) {
+	return SQLite()
+}
+
 func readDir(dir string) ([]File, error) {
 	entries, err := fs.ReadDir(files, dir)
 	if err != nil {

@@ -8,7 +8,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_HTTP__BODYLIMITBYTES", "ORIVIS_MDNS__ENABLED", "ORIVIS_MDNS__SERVICE", "ORIVIS_MDNS__DOMAIN", "ORIVIS_MDNS__INSTANCE", "ORIVIS_MDNS__SCHEME", "ORIVIS_MDNS__PORT", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN")
+	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_HTTP__BODYLIMITBYTES", "ORIVIS_MDNS__ENABLED", "ORIVIS_MDNS__SERVICE", "ORIVIS_MDNS__DOMAIN", "ORIVIS_MDNS__INSTANCE", "ORIVIS_MDNS__SCHEME", "ORIVIS_MDNS__PORT", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN", "ORIVIS_CACHE__DRIVER", "ORIVIS_CACHE__PREFIX")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -30,6 +30,8 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	assertEqual(t, "web root", cfg.Web.Root, "web/dist")
 	assertEqual(t, "db driver", cfg.DB.Driver, "sqlite")
 	assertEqual(t, "db dsn", cfg.DB.DSN, config.DefaultSQLiteDSN)
+	assertEqual(t, "cache driver", cfg.Cache.Driver, "memory")
+	assertEqual(t, "cache prefix", cfg.Cache.Prefix, "orivis")
 }
 
 func unset(t *testing.T, keys ...string) {
@@ -53,6 +55,8 @@ func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_LOG__LEVEL", "debug")
 	t.Setenv("ORIVIS_DB__DRIVER", "sqlite")
 	t.Setenv("ORIVIS_DB__DSN", "file:orivis.db")
+	t.Setenv("ORIVIS_CACHE__DRIVER", "memory")
+	t.Setenv("ORIVIS_CACHE__PREFIX", "unit-test")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -72,6 +76,8 @@ func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	assertEqual(t, "mDNS port", cfg.MDNS.Port, 9090)
 	assertEqual(t, "db driver", cfg.DB.Driver, "sqlite")
 	assertEqual(t, "db dsn", cfg.DB.DSN, "file:orivis.db")
+	assertEqual(t, "cache driver", cfg.Cache.Driver, "memory")
+	assertEqual(t, "cache prefix", cfg.Cache.Prefix, "unit-test")
 	assertEqual(t, "web enabled", cfg.Web.Enabled, true)
 	assertEqual(t, "web root", cfg.Web.Root, "/app/web")
 }

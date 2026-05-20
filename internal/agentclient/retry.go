@@ -75,6 +75,7 @@ func retryableAgentResponse(resp *resty.Response, err error) bool {
 	}
 	switch resp.StatusCode() {
 	case http.StatusTooManyRequests,
+		http.StatusConflict,
 		http.StatusInternalServerError,
 		http.StatusBadGateway,
 		http.StatusServiceUnavailable,

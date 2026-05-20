@@ -13,6 +13,7 @@ runtime = "host"
 
 poll {
   interval = "30s"
+  workers = 0
 }
 
 log {
