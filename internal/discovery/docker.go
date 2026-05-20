@@ -110,7 +110,7 @@ func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.A
 		return nil, fmt.Errorf("list Docker containers: %w", err)
 	}
 	if d.logger != nil {
-		d.logger.Info("discovering docker containers", "count", len(result))
+		d.logger.Info("discovering docker containers", "count", len(result.Items))
 	}
 
 	monitors, err := collectionlist.ReduceErrList(
@@ -148,7 +148,7 @@ func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.Age
 		return nil, fmt.Errorf("list Docker services: %w", err)
 	}
 	if d.logger != nil {
-		d.logger.Info("discovering docker services", "count", len(result))
+		d.logger.Info("discovering docker services", "count", len(result.Items))
 	}
 
 	monitors, err := collectionlist.ReduceErrList(
