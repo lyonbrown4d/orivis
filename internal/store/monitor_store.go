@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/dbx"
 	"github.com/arcgolabs/dbx/querydsl"
 	repository "github.com/arcgolabs/dbx/repository"
@@ -138,16 +139,22 @@ func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) 
 		return nil, fmt.Errorf("list assigned monitors: %w", err)
 	}
 
-	monitors := make([]model.Monitor, 0, records.Len())
-	values := records.Values()
-	for index := range values {
-		monitor, err := values[index].model()
-		if err != nil {
-			return nil, fmt.Errorf("map assigned monitor: %w", err)
-		}
-		monitors = append(monitors, monitor)
+	monitors, err := collectionlist.ReduceErrList(
+		records,
+		collectionlist.NewListWithCapacity[model.Monitor](records.Len()),
+		func(out *collectionlist.List[model.Monitor], _ int, record monitorRecord) (*collectionlist.List[model.Monitor], error) {
+			monitor, mapErr := record.model()
+			if mapErr != nil {
+				return nil, fmt.Errorf("map assigned monitor: %w", mapErr)
+			}
+			out.Add(monitor)
+			return out, nil
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build assigned monitors: %w", err)
 	}
-	return monitors, nil
+	return monitors.Values(), nil
 }
 
 func (s *monitorStore) Get(ctx context.Context, id string) (model.Monitor, error) {

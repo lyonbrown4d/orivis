@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionmapping "github.com/arcgolabs/collectionx/mapping"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
@@ -22,7 +23,7 @@ func dashboardStatusLights(snapshot store.DashboardSnapshot, limit int) *collect
 		collectionlist.NewList(ordered...),
 		func(_ int, result store.DashboardResult) dashboardStatusLight {
 			return dashboardStatusLight{
-				MonitorName: monitorNames[result.MonitorID],
+				MonitorName: monitorNames.GetOrDefault(result.MonitorID, ""),
 				Status:      result.Status,
 				Latency:     result.Latency,
 				CheckedAt:   result.CheckedAt,
@@ -31,13 +32,11 @@ func dashboardStatusLights(snapshot store.DashboardSnapshot, limit int) *collect
 	)
 }
 
-func dashboardMonitorNameMap(monitors *collectionlist.List[store.DashboardMonitor]) map[string]string {
-	return collectionlist.ReduceList(
+func dashboardMonitorNameMap(monitors *collectionlist.List[store.DashboardMonitor]) *collectionmapping.Map[string, string] {
+	return collectionmapping.AssociateList(
 		monitors,
-		make(map[string]string, monitors.Len()),
-		func(out map[string]string, _ int, monitor store.DashboardMonitor) map[string]string {
-			out[monitor.ID] = monitor.Name
-			return out
+		func(_ int, monitor store.DashboardMonitor) (string, string) {
+			return monitor.ID, monitor.Name
 		},
 	)
 }

@@ -134,14 +134,15 @@ func exposedPortsToSummaries(exposed network.PortSet) []container.PortSummary {
 	}
 
 	slices.Sort(raw)
-	summaries := collectionlist.NewListWithCapacity[container.PortSummary](len(raw))
-	for _, value := range raw {
-		summaries.Add(container.PortSummary{
-			PrivatePort: value,
-			Type:        "tcp",
-		})
-	}
-	return summaries.Values()
+	return collectionlist.MapList(
+		collectionlist.NewList(raw...),
+		func(_ int, value uint16) container.PortSummary {
+			return container.PortSummary{
+				PrivatePort: value,
+				Type:        "tcp",
+			}
+		},
+	).Values()
 }
 
 // ServiceSourceKey returns the stable discovery source key for a Docker Swarm service.

@@ -14,11 +14,11 @@ import (
 
 const dashboardDefaultGroup = "default"
 
-func dashboardLatestResults(results *collectionlist.List[store.DashboardResult]) map[string]dashboardResultView {
-	latestByMonitor := make(map[string]dashboardResultView, results.Len())
+func dashboardLatestResults(results *collectionlist.List[store.DashboardResult]) *collectionmapping.Map[string, dashboardResultView] {
+	latestByMonitor := collectionmapping.NewMapWithCapacity[string, dashboardResultView](results.Len())
 	results.Range(func(_ int, result store.DashboardResult) bool {
-		if _, ok := latestByMonitor[result.MonitorID]; !ok {
-			latestByMonitor[result.MonitorID] = dashboardResultView{DashboardResult: result}
+		if _, ok := latestByMonitor.Get(result.MonitorID); !ok {
+			latestByMonitor.Set(result.MonitorID, dashboardResultView{DashboardResult: result})
 		}
 		return true
 	})
@@ -27,7 +27,7 @@ func dashboardLatestResults(results *collectionlist.List[store.DashboardResult])
 
 func dashboardMonitorViews(
 	monitors *collectionlist.List[store.DashboardMonitor],
-	latestByMonitor map[string]dashboardResultView,
+	latestByMonitor *collectionmapping.Map[string, dashboardResultView],
 ) *collectionlist.List[dashboardMonitorView] {
 	return collectionlist.MapList(
 		monitors,
@@ -37,7 +37,7 @@ func dashboardMonitorViews(
 				DiscoverySource:  dashboardDiscoverySource(monitor.SourceKey, string(monitor.Source)),
 				DiscoveryDetail:  dashboardDiscoveryDetail(monitor.SourceKey),
 			}
-			if latest, ok := latestByMonitor[monitor.ID]; ok {
+			if latest, ok := latestByMonitor.Get(monitor.ID); ok {
 				latest.MonitorName = monitor.Name
 				item.Latest = &latest
 			}

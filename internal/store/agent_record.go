@@ -18,11 +18,13 @@ func normalizeRegisterParams(params RegisterAgentParams) (normalizedRegisterPara
 		RuntimeType: strings.TrimSpace(params.RuntimeType),
 		Version:     strings.TrimSpace(params.Version),
 	}
-	for _, code := range params.EnvironmentCodes {
-		if normalized := normalizeCode(code); normalized != "" {
-			out.EnvironmentCodes = append(out.EnvironmentCodes, normalized)
-		}
-	}
+	out.EnvironmentCodes = collectionlist.FilterMapList(
+		collectionlist.NewList(params.EnvironmentCodes...),
+		func(_ int, code string) (string, bool) {
+			normalized := normalizeCode(code)
+			return normalized, normalized != ""
+		},
+	).Values()
 
 	switch {
 	case out.Name == "":

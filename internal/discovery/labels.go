@@ -63,12 +63,9 @@ func monitorLabelGroups(labels map[string]string, defaultName string) *collectio
 		if !ok {
 			continue
 		}
-		fields, ok := groups.Get(name)
-		if !ok {
-			fields = map[string]string{}
-			groups.Set(name, fields)
-		}
+		fields := groups.GetOption(name).OrElse(map[string]string{})
 		fields[field] = strings.TrimSpace(value)
+		groups.Set(name, fields)
 	}
 	return groups
 }
@@ -102,7 +99,7 @@ func parseMonitorGroups(
 		collectionlist.NewList(names...),
 		collectionlist.NewListWithCapacity[protocol.AgentDiscoveredMonitor](len(names)),
 		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, name string) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
-			fields, _ := groups.Get(name)
+			fields := groups.GetOrDefault(name, nil)
 			fields, _ = inferredMonitorFields(source, fields)
 			monitor, err := parseMonitor(sourceKey, environment, defaultGroup, name, fields)
 			if err != nil {

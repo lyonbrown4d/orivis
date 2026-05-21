@@ -122,7 +122,8 @@ func newAgentApp(cmd *cobra.Command, configFile string) *dix.App {
 	collectorModule := dix.NewModule("collector",
 		dix.WithModuleImports(configModule, loggingModule, observabilityModule, concurrencyModule),
 		dix.WithModuleProviders(
-			dix.ProviderErr4(collector.NewRuntimeController),
+			dix.Provider2(collector.NewRuntimeControllerDeps),
+			dix.ProviderErr5(collector.NewRuntimeController),
 		),
 		dix.WithModuleHooks(
 			dix.OnStart[*collector.RuntimeController](func(ctx context.Context, controller *collector.RuntimeController) error {

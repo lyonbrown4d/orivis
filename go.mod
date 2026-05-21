@@ -7,9 +7,9 @@ require (
 	github.com/arcgolabs/authx v0.3.0
 	github.com/arcgolabs/authx/jwt v0.3.0
 	github.com/arcgolabs/clientx v0.1.2
-	github.com/arcgolabs/collectionx/list v0.8.0
-	github.com/arcgolabs/collectionx/mapping v0.8.0
-	github.com/arcgolabs/collectionx/set v0.8.0
+	github.com/arcgolabs/collectionx/list v0.9.0
+	github.com/arcgolabs/collectionx/mapping v0.9.0
+	github.com/arcgolabs/collectionx/set v0.9.0
 	github.com/arcgolabs/configx v0.5.0
 	github.com/arcgolabs/dbx v0.1.8
 	github.com/arcgolabs/dix v0.11.0
@@ -67,7 +67,8 @@ require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
-	github.com/arcgolabs/collectionx/graph v0.8.0 // indirect
+	github.com/arcgolabs/collectionx/bytex v0.9.0 // indirect
+	github.com/arcgolabs/collectionx/graph v0.9.0 // indirect
 	github.com/arcgolabs/httpx/adapter/std v0.1.6 // indirect
 	github.com/arcgolabs/pkg/option v0.0.3 // indirect
 	github.com/arcgolabs/plano v0.8.0 // indirect

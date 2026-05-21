@@ -3,6 +3,7 @@ package store
 import (
 	"time"
 
+	"github.com/arcgolabs/collectionx/bytex"
 	"github.com/arcgolabs/dbx"
 	columnx "github.com/arcgolabs/dbx/column"
 	repository "github.com/arcgolabs/dbx/repository"
@@ -69,7 +70,7 @@ func (r probeResultRow) model() (model.ProbeResult, error) {
 		Latency:       time.Duration(r.LatencyMS) * time.Millisecond,
 		ErrorMessage:  r.ErrorMessage,
 		CheckedAt:     checkedAt,
-		RawDetail:     append([]byte(nil), r.RawDetail...),
+		RawDetail:     bytex.WrapList(r.RawDetail).Snapshot(),
 		CreatedAt:     createdAt,
 	}, nil
 }
@@ -91,7 +92,7 @@ func newProbeResultRow(
 		LatencyMS:     normalized.Latency.Milliseconds(),
 		ErrorMessage:  normalized.ErrorMessage,
 		CheckedAt:     formatTime(normalized.CheckedAt),
-		RawDetail:     append([]byte(nil), normalized.RawDetail...),
+		RawDetail:     bytex.WrapList(normalized.RawDetail).Snapshot(),
 		CreatedAt:     formatTime(now),
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"hash/fnv"
 	"strings"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/arcgolabs/dbx/querydsl"
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
@@ -29,20 +31,18 @@ func (s *monitorStore) assignMonitorIfUnassigned(ctx context.Context, monitorID 
 }
 
 func (s *monitorStore) normalizeMonitorIDs(monitorIDs []string) []string {
-	normalized := make([]string, 0, len(monitorIDs))
-	seen := make(map[string]struct{}, len(monitorIDs))
-	for _, monitorID := range monitorIDs {
+	seen := collectionset.NewSetWithCapacity[string](len(monitorIDs))
+	return collectionlist.FilterMapList(collectionlist.NewList(monitorIDs...), func(_ int, monitorID string) (string, bool) {
 		monitorID = strings.TrimSpace(monitorID)
 		if monitorID == "" {
-			continue
+			return "", false
 		}
-		if _, ok := seen[monitorID]; ok {
-			continue
+		if seen.Contains(monitorID) {
+			return "", false
 		}
-		seen[monitorID] = struct{}{}
-		normalized = append(normalized, monitorID)
-	}
-	return normalized
+		seen.Add(monitorID)
+		return monitorID, true
+	}).Values()
 }
 
 func (s *monitorStore) listAgentIDsForMonitorAssignment(ctx context.Context) ([]string, error) {
@@ -56,19 +56,13 @@ func (s *monitorStore) listAgentIDsForMonitorAssignment(ctx context.Context) ([]
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
 
-	ids := make([]string, 0, rows.Len())
-	values := rows.Values()
-	for i := range values {
-		row := values[i]
+	return collectionlist.FilterMapList(rows, func(_ int, row agentRecord) (string, bool) {
 		if strings.EqualFold(strings.TrimSpace(row.Status), string(model.AgentStatusDisabled)) {
-			continue
+			return "", false
 		}
 		id := strings.TrimSpace(row.ID)
-		if id != "" {
-			ids = append(ids, id)
-		}
-	}
-	return ids, nil
+		return id, id != ""
+	}).Values(), nil
 }
 
 func monitorAssignedAgent(monitorID string, agentIDs []string) (string, error) {

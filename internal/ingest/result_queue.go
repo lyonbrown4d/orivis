@@ -3,6 +3,7 @@ package ingest
 import (
 	"sync"
 
+	"github.com/arcgolabs/collectionx/bytex"
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
@@ -85,6 +86,6 @@ func (q *resultQueue) close() {
 }
 
 func cloneRecordProbeResultParams(params store.RecordProbeResultParams) store.RecordProbeResultParams {
-	params.RawDetail = append([]byte(nil), params.RawDetail...)
+	params.RawDetail = bytex.WrapList(params.RawDetail).Snapshot()
 	return params
 }

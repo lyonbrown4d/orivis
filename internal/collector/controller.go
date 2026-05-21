@@ -20,6 +20,7 @@ type RuntimeController struct {
 	logger   *slog.Logger
 	obs      observabilityx.Observability
 	taskPool *ants.Pool
+	deps     RuntimeControllerDeps
 
 	mu      sync.Mutex
 	cancel  context.CancelFunc
@@ -32,7 +33,32 @@ type runtimeInstance struct {
 	serverURL string
 }
 
-func NewRuntimeController(watcher *config.Watcher, logger *slog.Logger, obs observabilityx.Observability, taskPool *ants.Pool) (*RuntimeController, error) {
+type RuntimeControllerDeps struct {
+	NewClient      func(config.Config) (*agentclient.Client, error)
+	NewDiscoverer  func(config.Config) (MonitorDiscoverer, error)
+	NewResultQueue func(context.Context, config.Config) (ResultQueue, error)
+}
+
+func NewRuntimeControllerDeps(logger *slog.Logger, obs observabilityx.Observability) RuntimeControllerDeps {
+	obs = observabilityx.Normalize(obs, logger)
+	return RuntimeControllerDeps{
+		NewClient: func(cfg config.Config) (*agentclient.Client, error) {
+			return agentclient.New(cfg, logger, obs)
+		},
+		NewDiscoverer: func(cfg config.Config) (MonitorDiscoverer, error) {
+			return NewMonitorDiscoverer(cfg, logger)
+		},
+		NewResultQueue: NewResultQueue,
+	}
+}
+
+func NewRuntimeController(
+	watcher *config.Watcher,
+	logger *slog.Logger,
+	obs observabilityx.Observability,
+	taskPool *ants.Pool,
+	deps RuntimeControllerDeps,
+) (*RuntimeController, error) {
 	if watcher == nil {
 		return nil, errors.New("agent config watcher is required")
 	}
@@ -40,12 +66,32 @@ func NewRuntimeController(watcher *config.Watcher, logger *slog.Logger, obs obse
 		return nil, errors.New("agent task pool is required")
 	}
 	obs = observabilityx.Normalize(obs, logger)
+	deps = normalizeRuntimeControllerDeps(deps, logger, obs)
 	return &RuntimeController{
 		watcher:  watcher,
 		logger:   logger,
 		obs:      obs,
 		taskPool: taskPool,
+		deps:     deps,
 	}, nil
+}
+
+func normalizeRuntimeControllerDeps(
+	deps RuntimeControllerDeps,
+	logger *slog.Logger,
+	obs observabilityx.Observability,
+) RuntimeControllerDeps {
+	defaults := NewRuntimeControllerDeps(logger, obs)
+	if deps.NewClient == nil {
+		deps.NewClient = defaults.NewClient
+	}
+	if deps.NewDiscoverer == nil {
+		deps.NewDiscoverer = defaults.NewDiscoverer
+	}
+	if deps.NewResultQueue == nil {
+		deps.NewResultQueue = defaults.NewResultQueue
+	}
+	return deps
 }
 
 func (c *RuntimeController) Start(ctx context.Context) error {
@@ -129,15 +175,15 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 		return nil, err
 	}
 	cfg.Server.URL = endpoint.URL
-	client, err := agentclient.New(cfg, c.logger, c.obs)
+	client, err := c.deps.NewClient(cfg)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create agent client")
 	}
-	discovery, err := NewMonitorDiscoverer(cfg, c.logger)
+	discovery, err := c.deps.NewDiscoverer(cfg)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create monitor discoverer")
 	}
-	results, err := NewResultQueue(ctx, cfg)
+	results, err := c.deps.NewResultQueue(ctx, cfg)
 	if err != nil {
 		return nil, oops.Wrapf(err, "create result queue")
 	}

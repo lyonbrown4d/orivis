@@ -4,68 +4,39 @@ import (
 	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionmapping "github.com/arcgolabs/collectionx/mapping"
+	"github.com/samber/mo"
 )
 
 func dashboardEnvironmentGroups(monitors *collectionlist.List[dashboardMonitorView]) *collectionlist.List[dashboardEnvironmentGroup] {
-	state := collectionlist.ReduceList(
-		monitors,
-		dashboardEnvironmentGroupState{
-			indexByName: map[string]int{},
-			groups:      []dashboardEnvironmentGroup{},
-		},
-		func(state dashboardEnvironmentGroupState, _ int, monitor dashboardMonitorView) dashboardEnvironmentGroupState {
-			group := dashboardEnvironmentGroupForMonitor(&monitor, state.indexByName, &state.groups)
-			group.Monitors = append(group.Monitors, monitor)
-			addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
-			return state
-		},
-	)
-	return collectionlist.NewList(state.groups...)
-}
-
-type dashboardEnvironmentGroupState struct {
-	indexByName map[string]int
-	groups      []dashboardEnvironmentGroup
+	groups := collectionmapping.NewOrderedMapWithCapacity[string, dashboardEnvironmentGroup](monitors.Len())
+	monitors.Range(func(_ int, monitor dashboardMonitorView) bool {
+		name := dashboardEnvironmentName(monitor.EnvironmentCode)
+		group := groups.GetOption(name).OrElse(dashboardEnvironmentGroup{Name: name})
+		group.Monitors = append(group.Monitors, monitor)
+		addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
+		groups.Set(name, group)
+		return true
+	})
+	return collectionlist.NewList(groups.Values()...)
 }
 
 func dashboardServiceGroups(monitors *collectionlist.List[dashboardMonitorView], activeSlug string) *collectionlist.List[dashboardServiceGroup] {
-	state := collectionlist.ReduceList(
-		monitors,
-		dashboardServiceGroupState{
-			activeSlug:  activeSlug,
-			indexBySlug: map[string]int{},
-			groups:      []dashboardServiceGroup{},
-		},
-		func(state dashboardServiceGroupState, _ int, monitor dashboardMonitorView) dashboardServiceGroupState {
-			group := dashboardServiceGroupForMonitor(monitor, &state)
-			group.Count++
-			addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
-			return state
-		},
-	)
-	return collectionlist.NewList(state.groups...)
-}
-
-type dashboardServiceGroupState struct {
-	activeSlug  string
-	indexBySlug map[string]int
-	groups      []dashboardServiceGroup
-}
-
-func dashboardServiceGroupForMonitor(monitor dashboardMonitorView, state *dashboardServiceGroupState) *dashboardServiceGroup {
-	name := dashboardGroupName(monitor.GroupName)
-	slug := dashboardGroupSlug(name)
-	groupIndex, ok := state.indexBySlug[slug]
-	if !ok {
-		groupIndex = len(state.groups)
-		state.indexBySlug[slug] = groupIndex
-		state.groups = append(state.groups, dashboardServiceGroup{
+	groups := collectionmapping.NewOrderedMapWithCapacity[string, dashboardServiceGroup](monitors.Len())
+	monitors.Range(func(_ int, monitor dashboardMonitorView) bool {
+		name := dashboardGroupName(monitor.GroupName)
+		slug := dashboardGroupSlug(name)
+		group := groups.GetOption(slug).OrElse(dashboardServiceGroup{
 			Name:   name,
 			Slug:   slug,
-			Active: slug == state.activeSlug,
+			Active: slug == activeSlug,
 		})
-	}
-	return &state.groups[groupIndex]
+		group.Count++
+		addDashboardStatus(&group.Up, &group.Down, &group.Unknown, monitor.Latest)
+		groups.Set(slug, group)
+		return true
+	})
+	return collectionlist.NewList(groups.Values()...)
 }
 
 func dashboardSelectedGroupName(groups *collectionlist.List[dashboardServiceGroup], activeSlug string) string {
@@ -73,36 +44,17 @@ func dashboardSelectedGroupName(groups *collectionlist.List[dashboardServiceGrou
 	if activeSlug == "" {
 		return ""
 	}
-	var selected string
-	groups.Range(func(_ int, group dashboardServiceGroup) bool {
-		if group.Slug == activeSlug {
-			selected = group.Name
-			return false
-		}
-		return true
-	})
-	if selected != "" {
-		return selected
-	}
-	return activeSlug
+	return mo.TupleToOption(collectionlist.FindList(groups, func(_ int, group dashboardServiceGroup) bool {
+		return group.Slug == activeSlug
+	})).OrElse(dashboardServiceGroup{Name: activeSlug}).Name
 }
 
-func dashboardEnvironmentGroupForMonitor(
-	monitor *dashboardMonitorView,
-	indexByName map[string]int,
-	groups *[]dashboardEnvironmentGroup,
-) *dashboardEnvironmentGroup {
-	name := strings.TrimSpace(monitor.EnvironmentCode)
+func dashboardEnvironmentName(value string) string {
+	name := strings.TrimSpace(value)
 	if name == "" {
-		name = "default"
+		return "default"
 	}
-	index, ok := indexByName[name]
-	if !ok {
-		index = len(*groups)
-		indexByName[name] = index
-		*groups = append(*groups, dashboardEnvironmentGroup{Name: name})
-	}
-	return &(*groups)[index]
+	return name
 }
 
 func dashboardMonitorStatusTotals(monitors *collectionlist.List[dashboardMonitorView]) (int, int, int) {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/lyonbrown4d/orivis/internal/model"
 )
 
@@ -73,18 +74,15 @@ type monitorAgentPair struct {
 }
 
 func uniqueMonitorAgentPairs(params []normalizedProbeResultParams) []monitorAgentPair {
-	seen := make(map[string]struct{}, len(params))
-	pairs := make([]monitorAgentPair, 0, len(params))
-	for index := range params {
-		params := params[index]
+	seen := collectionset.NewSetWithCapacity[string](len(params))
+	return collectionlist.FilterMapList(collectionlist.NewList(params...), func(_ int, params normalizedProbeResultParams) (monitorAgentPair, bool) {
 		key := monitorAgentKey(params.MonitorID, params.Agent.ID)
-		if _, ok := seen[key]; ok {
-			continue
+		if seen.Contains(key) {
+			return monitorAgentPair{}, false
 		}
-		seen[key] = struct{}{}
-		pairs = append(pairs, monitorAgentPair{monitorID: params.MonitorID, agentID: params.Agent.ID})
-	}
-	return pairs
+		seen.Add(key)
+		return monitorAgentPair{monitorID: params.MonitorID, agentID: params.Agent.ID}, true
+	}).Values()
 }
 
 func scanMonitorForAgentRows(rows *sql.Rows) (map[string]model.Monitor, error) {

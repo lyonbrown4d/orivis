@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/arcgolabs/collectionx/bytex"
 	"github.com/arcgolabs/kvx"
 )
 
@@ -26,7 +27,7 @@ func (s *kvxStore) Get(ctx context.Context, key string) ([]byte, bool, error) {
 		}
 		return nil, false, fmt.Errorf("get kvx cache: %w", err)
 	}
-	return append([]byte(nil), value...), true, nil
+	return bytex.WrapList(value).Snapshot(), true, nil
 }
 
 func (s *kvxStore) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {

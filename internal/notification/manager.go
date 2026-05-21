@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"sync"
 	"time"
 
+	"github.com/arcgolabs/clientx"
+	clienthttp "github.com/arcgolabs/clientx/http"
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/eventx"
+	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
 	"github.com/lyonbrown4d/orivis/internal/model"
@@ -24,7 +27,7 @@ type Manager struct {
 	bus           eventx.BusRuntime
 	cache         cachex.Store
 	storage       *store.Store
-	client        *http.Client
+	client        clienthttp.Client
 	mu            sync.Mutex
 	states        map[string]alertState
 	deliveries    chan webhookDelivery
@@ -74,13 +77,23 @@ func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, c
 	if err != nil {
 		return nil, fmt.Errorf("parse notification webhook retry interval: %w", err)
 	}
+	httpClient, err := clienthttp.New(
+		clienthttp.Config{
+			Timeout:   timeout,
+			UserAgent: "orivis-server/" + buildinfo.Version,
+		},
+		clienthttp.WithPolicies(clientx.NewTimeoutPolicy(timeout)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create notification HTTP client: %w", err)
+	}
 	return &Manager{
 		cfg:           cfg,
 		logger:        logger,
 		bus:           bus,
 		cache:         cacheStore,
 		storage:       storage,
-		client:        &http.Client{Timeout: timeout},
+		client:        httpClient,
 		states:        make(map[string]alertState),
 		deliveries:    make(chan webhookDelivery, webhookQueueSize(cfg)),
 		stop:          make(chan struct{}),
@@ -111,16 +124,30 @@ func (m *Manager) Stop(ctx context.Context) error {
 	if m == nil {
 		return nil
 	}
+	var stopErr error
 	if m.unsubscribe != nil {
 		m.unsubscribe()
 		m.unsubscribe = nil
 	} else {
+		if m.client != nil {
+			return closeNotificationHTTPClient(m.client)
+		}
 		return nil
 	}
 	m.stopOnce.Do(func() {
 		close(m.stop)
 	})
 	<-m.done
+	if m.client != nil {
+		stopErr = errors.Join(stopErr, closeNotificationHTTPClient(m.client))
+	}
+	return stopErr
+}
+
+func closeNotificationHTTPClient(client clienthttp.Client) error {
+	if err := client.Close(); err != nil {
+		return fmt.Errorf("close notification HTTP client: %w", err)
+	}
 	return nil
 }
 
@@ -151,10 +178,18 @@ func (m *Manager) drainDeliveries(ctx context.Context) {
 }
 
 func (m *Manager) handleProbeResultsRecorded(ctx context.Context, event ingest.ProbeResultsRecordedEvent) error {
-	for index := range event.Results {
-		if err := m.handleProbeResult(ctx, event.Results[index]); err != nil {
-			return err
-		}
+	_, err := collectionlist.ReduceErrList(
+		collectionlist.NewList(event.Results...),
+		struct{}{},
+		func(empty struct{}, _ int, result model.ProbeResult) (struct{}, error) {
+			if err := m.handleProbeResult(ctx, result); err != nil {
+				return empty, err
+			}
+			return empty, nil
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("handle probe result notifications: %w", err)
 	}
 	return nil
 }
@@ -168,10 +203,18 @@ func (m *Manager) handleProbeResult(ctx context.Context, result model.ProbeResul
 	if err != nil {
 		return err
 	}
-	for index := range channels {
-		if err := m.enqueueWebhook(ctx, payload, channels[index]); err != nil {
-			return err
-		}
+	_, err = collectionlist.ReduceErrList(
+		collectionlist.NewList(channels...),
+		struct{}{},
+		func(empty struct{}, _ int, channel webhookChannel) (struct{}, error) {
+			if enqueueErr := m.enqueueWebhook(ctx, payload, channel); enqueueErr != nil {
+				return empty, enqueueErr
+			}
+			return empty, nil
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("enqueue webhook notifications: %w", err)
 	}
 	return nil
 }

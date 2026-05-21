@@ -5,7 +5,10 @@ import (
 	"net/http"
 	"strings"
 
+	collectionlist "github.com/arcgolabs/collectionx/list"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
+	"github.com/samber/lo"
+	"github.com/samber/mo"
 )
 
 type webhookChannel struct {
@@ -97,13 +100,12 @@ func (c webhookChannel) matches(monitorID, groupName string) bool {
 }
 
 func matchingWebhookChannels(channels []webhookChannel, monitorID, groupName string) []webhookChannel {
-	matches := make([]webhookChannel, 0, len(channels))
-	for index := range channels {
-		if channels[index].matches(monitorID, groupName) {
-			matches = append(matches, channels[index])
-		}
-	}
-	return matches
+	return collectionlist.FilterMapList(
+		collectionlist.NewList(channels...),
+		func(_ int, channel webhookChannel) (webhookChannel, bool) {
+			return channel, channel.matches(monitorID, groupName)
+		},
+	).Values()
 }
 
 func (c webhookChannel) channelName() string {
@@ -119,12 +121,9 @@ func containsFold(values []string, target string) bool {
 	if target == "" {
 		return false
 	}
-	for _, value := range values {
-		if strings.EqualFold(value, target) {
-			return true
-		}
-	}
-	return false
+	return lo.ContainsBy(values, func(value string) bool {
+		return strings.EqualFold(value, target)
+	})
 }
 
 func webhookMethod(method string) string {
@@ -136,10 +135,7 @@ func webhookMethod(method string) string {
 }
 
 func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
+	return mo.TupleToOption(lo.Find(values, func(value string) bool {
+		return strings.TrimSpace(value) != ""
+	})).OrEmpty()
 }

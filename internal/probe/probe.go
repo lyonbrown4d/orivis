@@ -10,15 +10,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/arcgolabs/clientx"
+	clienthttp "github.com/arcgolabs/clientx/http"
+	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 )
 
 const defaultTimeout = 5 * time.Second
+const probeHTTPClientTimeout = 24 * time.Hour
 
 type Checker struct {
-	httpClient *http.Client
-	resolver   *net.Resolver
+	httpClient    clienthttp.Client
+	httpClientErr error
+	resolver      *net.Resolver
 }
 
 type Result struct {
@@ -30,9 +35,11 @@ type Result struct {
 }
 
 func New() *Checker {
+	httpClient, err := newProbeHTTPClient()
 	return &Checker{
-		httpClient: &http.Client{},
-		resolver:   net.DefaultResolver,
+		httpClient:    httpClient,
+		httpClientErr: err,
+		resolver:      net.DefaultResolver,
 	}
 }
 
@@ -136,21 +143,45 @@ func isDatabaseProbeType(probeType string) bool {
 }
 
 func (c *Checker) checkHTTP(ctx context.Context, task protocol.AgentTask) (model.Status, map[string]any, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, task.Target, http.NoBody)
-	if err != nil {
-		return model.StatusDown, map[string]any{"target": task.Target}, wrapError(err, "build HTTP probe request")
+	if c.httpClientErr != nil {
+		return model.StatusDown, map[string]any{"target": task.Target}, wrapError(c.httpClientErr, "initialize HTTP probe client")
 	}
-	resp, err := c.httpClient.Do(req)
+	if c.httpClient == nil {
+		return model.StatusDown, map[string]any{"target": task.Target}, errorf("HTTP probe client is not initialized")
+	}
+	resp, err := c.httpClient.Execute(
+		ctx,
+		c.httpClient.R().SetDoNotParseResponse(true),
+		http.MethodGet,
+		task.Target,
+	)
 	if err != nil {
 		return model.StatusDown, map[string]any{"target": task.Target}, wrapError(err, "execute HTTP probe")
 	}
-	defer closeSilently(resp.Body)
+	if resp != nil && resp.Body != nil {
+		defer closeSilently(resp.Body)
+	}
 
-	detail := map[string]any{"status_code": resp.StatusCode}
-	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+	statusCode := resp.StatusCode()
+	detail := map[string]any{"status_code": statusCode}
+	if statusCode >= 200 && statusCode < 400 {
 		return model.StatusUp, detail, nil
 	}
-	return model.StatusDown, detail, errorf("http status %d", resp.StatusCode)
+	return model.StatusDown, detail, errorf("http status %d", statusCode)
+}
+
+func newProbeHTTPClient() (clienthttp.Client, error) {
+	client, err := clienthttp.New(
+		clienthttp.Config{
+			Timeout:   probeHTTPClientTimeout,
+			UserAgent: "orivis-probe/" + buildinfo.Version,
+		},
+		clienthttp.WithPolicies(clientx.NewTimeoutPolicy(probeHTTPClientTimeout)),
+	)
+	if err != nil {
+		return nil, wrapError(err, "create HTTP probe client")
+	}
+	return client, nil
 }
 
 func (c *Checker) checkTCP(ctx context.Context, task protocol.AgentTask) (model.Status, map[string]any, error) {

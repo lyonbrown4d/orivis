@@ -1,20 +1,19 @@
 package notification
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
+	"resty.dev/v3"
 )
 
 func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) (int, error) {
@@ -23,30 +22,24 @@ func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) 
 	if err != nil {
 		return 0, fmt.Errorf("marshal webhook payload: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, delivery.channel.method, strings.TrimSpace(delivery.channel.url), bytes.NewReader(body))
-	if err != nil {
-		return 0, fmt.Errorf("build webhook request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
+	req := m.client.R().
+		SetBody(body).
+		SetHeader("Content-Type", "application/json")
 	if headerErr := applyWebhookHeaders(req, delivery.channel, body); headerErr != nil {
 		return 0, headerErr
 	}
 
-	resp, err := m.client.Do(req)
+	resp, err := m.client.Execute(ctx, req, delivery.channel.method, strings.TrimSpace(delivery.channel.url))
 	if err != nil {
 		return 0, fmt.Errorf("deliver webhook notification: %w", err)
 	}
-	defer closeBody(resp.Body)
-	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
-		return resp.StatusCode, fmt.Errorf("read webhook response body: %w", err)
-	}
-	if resp.StatusCode >= http.StatusBadRequest {
-		return resp.StatusCode, fmt.Errorf("webhook notification returned HTTP %d", resp.StatusCode)
+	if resp.StatusCode() >= http.StatusBadRequest {
+		return resp.StatusCode(), fmt.Errorf("webhook notification returned HTTP %d", resp.StatusCode())
 	}
 	if m.logger != nil {
 		m.logger.Info("sent webhook notification", "channel", delivery.channel.channelName(), "event", payload.Event, "monitor_id", payload.MonitorID, "status", payload.Status)
 	}
-	return resp.StatusCode, nil
+	return resp.StatusCode(), nil
 }
 
 func (m *Manager) deliverWithRetry(ctx context.Context, delivery webhookDelivery) error {
@@ -127,16 +120,16 @@ func (m *Manager) logDeliveryError(err error) {
 	}
 }
 
-func applyWebhookHeaders(req *http.Request, channel webhookChannel, body []byte) error {
+func applyWebhookHeaders(req *resty.Request, channel webhookChannel, body []byte) error {
 	for key, value := range webhookHeaders(channel.headers) {
-		req.Header.Set(key, value)
+		req.SetHeader(key, value)
 	}
 	signature, err := webhookSignature(channel.secret, body)
 	if err != nil {
 		return err
 	}
 	if signature != "" {
-		req.Header.Set("X-Orivis-Signature", signature)
+		req.SetHeader("X-Orivis-Signature", signature)
 	}
 	return nil
 }
@@ -214,13 +207,4 @@ func parseDuration(value string, fallback time.Duration) (time.Duration, error) 
 		return fallback, nil
 	}
 	return duration, nil
-}
-
-func closeBody(body io.Closer) {
-	if body == nil {
-		return
-	}
-	if err := body.Close(); err != nil {
-		return
-	}
 }

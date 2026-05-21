@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 
+	"github.com/arcgolabs/collectionx/bytex"
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	"github.com/lyonbrown4d/orivis/internal/model"
@@ -67,7 +68,7 @@ func cloneProbeResults(results []model.ProbeResult) []model.ProbeResult {
 	out := make([]model.ProbeResult, len(results))
 	copy(out, results)
 	for index := range out {
-		out[index].RawDetail = append([]byte(nil), out[index].RawDetail...)
+		out[index].RawDetail = bytex.WrapList(out[index].RawDetail).Snapshot()
 	}
 	return out
 }

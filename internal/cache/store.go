@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/arcgolabs/collectionx/bytex"
 	"github.com/redis/go-redis/v9"
 
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
@@ -69,14 +70,14 @@ func (s *memoryStore) Get(ctx context.Context, key string) ([]byte, bool, error)
 		}
 		return nil, false, nil
 	}
-	return append([]byte(nil), item.value...), true, nil
+	return bytex.WrapList(item.value).Snapshot(), true, nil
 }
 
 func (s *memoryStore) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("set memory cache: %w", err)
 	}
-	item := memoryItem{value: append([]byte(nil), value...)}
+	item := memoryItem{value: bytex.WrapList(value).Snapshot()}
 	if ttl > 0 {
 		item.expiresAt = time.Now().UTC().Add(ttl)
 	}

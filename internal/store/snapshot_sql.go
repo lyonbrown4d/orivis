@@ -7,6 +7,7 @@ import (
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionmapping "github.com/arcgolabs/collectionx/mapping"
 	"github.com/arcgolabs/dbx/querydsl"
 	"github.com/lyonbrown4d/orivis/internal/model"
 )
@@ -49,7 +50,7 @@ func (s *Store) sqlDashboardSnapshot(ctx context.Context, resultLimit int) (Dash
 	}, nil
 }
 
-func (s *Store) sqlDashboardRegions(ctx context.Context) (map[string]string, error) {
+func (s *Store) sqlDashboardRegions(ctx context.Context) (*collectionmapping.Map[string, string], error) {
 	rows, err := s.repositories.regions.List(
 		ctx,
 		querydsl.Select(querydsl.AllColumns(regionsSchema).Values()...).
@@ -58,13 +59,12 @@ func (s *Store) sqlDashboardRegions(ctx context.Context) (map[string]string, err
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard regions: %w", err)
 	}
-	return collectionlist.ReduceList(rows, make(map[string]string, rows.Len()), func(out map[string]string, _ int, row regionRow) map[string]string {
-		out[row.ID] = row.Code
-		return out
+	return collectionmapping.AssociateList(rows, func(_ int, row regionRow) (string, string) {
+		return row.ID, row.Code
 	}), nil
 }
 
-func (s *Store) sqlDashboardEnvironments(ctx context.Context) (map[string]string, error) {
+func (s *Store) sqlDashboardEnvironments(ctx context.Context) (*collectionmapping.Map[string, string], error) {
 	rows, err := s.repositories.environments.List(
 		ctx,
 		querydsl.Select(querydsl.AllColumns(environmentsSchema).Values()...).
@@ -73,13 +73,15 @@ func (s *Store) sqlDashboardEnvironments(ctx context.Context) (map[string]string
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard environments: %w", err)
 	}
-	return collectionlist.ReduceList(rows, make(map[string]string, rows.Len()), func(out map[string]string, _ int, row environmentRow) map[string]string {
-		out[row.ID] = row.Code
-		return out
+	return collectionmapping.AssociateList(rows, func(_ int, row environmentRow) (string, string) {
+		return row.ID, row.Code
 	}), nil
 }
 
-func (s *Store) sqlDashboardAgentEnvironments(ctx context.Context, environments map[string]string) (map[string][]string, error) {
+func (s *Store) sqlDashboardAgentEnvironments(
+	ctx context.Context,
+	environments *collectionmapping.Map[string, string],
+) (*collectionmapping.Map[string, []string], error) {
 	rows, err := s.repositories.agentEnvironments.List(
 		ctx,
 		querydsl.Select(querydsl.AllColumns(agentEnvironmentsSchema).Values()...).
@@ -89,24 +91,25 @@ func (s *Store) sqlDashboardAgentEnvironments(ctx context.Context, environments 
 	if err != nil {
 		return nil, fmt.Errorf("list dashboard agent environments: %w", err)
 	}
-	out := collectionlist.ReduceList(rows, map[string][]string{}, func(out map[string][]string, _ int, row agentEnvironmentRow) map[string][]string {
-		code := environments[row.EnvironmentID]
+	out := collectionlist.ReduceList(rows, collectionmapping.NewMap[string, []string](), func(out *collectionmapping.Map[string, []string], _ int, row agentEnvironmentRow) *collectionmapping.Map[string, []string] {
+		code := environments.GetOrDefault(row.EnvironmentID, "")
 		if code == "" {
 			return out
 		}
-		out[row.AgentID] = append(out[row.AgentID], code)
+		out.Set(row.AgentID, append(out.GetOrDefault(row.AgentID, nil), code))
 		return out
 	})
-	for agentID := range out {
-		slices.Sort(out[agentID])
-	}
+	out.Range(func(_ string, values []string) bool {
+		slices.Sort(values)
+		return true
+	})
 	return out, nil
 }
 
 func (s *Store) sqlDashboardAgents(
 	ctx context.Context,
-	regions map[string]string,
-	agentEnvironments map[string][]string,
+	regions *collectionmapping.Map[string, string],
+	agentEnvironments *collectionmapping.Map[string, []string],
 ) ([]DashboardAgent, error) {
 	rows, err := s.repositories.agents.List(
 		ctx,
@@ -128,8 +131,8 @@ func (s *Store) sqlDashboardAgents(
 			out.Add(DashboardAgent{
 				ID:               row.ID,
 				Name:             row.Name,
-				RegionCode:       regions[row.RegionID],
-				EnvironmentCodes: append([]string(nil), agentEnvironments[row.ID]...),
+				RegionCode:       regions.GetOrDefault(row.RegionID, ""),
+				EnvironmentCodes: slices.Clone(agentEnvironments.GetOrDefault(row.ID, nil)),
 				RuntimeType:      row.RuntimeType,
 				Version:          row.Version,
 				LastSeenAt:       lastSeenAt,
@@ -144,7 +147,7 @@ func (s *Store) sqlDashboardAgents(
 	return agents.Values(), nil
 }
 
-func (s *Store) sqlDashboardMonitors(ctx context.Context, environments map[string]string) ([]DashboardMonitor, error) {
+func (s *Store) sqlDashboardMonitors(ctx context.Context, environments *collectionmapping.Map[string, string]) ([]DashboardMonitor, error) {
 	rows, err := s.repositories.monitors.List(
 		ctx,
 		querydsl.Select(querydsl.AllColumns(monitorsSchema).Values()...).
@@ -161,7 +164,7 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context, environments map[strin
 			Type:              model.MonitorType(row.Type),
 			Target:            row.Target,
 			GroupName:         row.GroupName,
-			EnvironmentCode:   environments[row.EnvironmentID],
+			EnvironmentCode:   environments.GetOrDefault(row.EnvironmentID, ""),
 			Enabled:           row.Enabled == 1,
 			Interval:          time.Duration(row.IntervalSeconds) * time.Second,
 			Timeout:           time.Duration(row.TimeoutSeconds) * time.Second,
@@ -183,8 +186,8 @@ func (s *Store) sqlDashboardResults(
 	ctx context.Context,
 	limit int,
 	agents []DashboardAgent,
-	regions map[string]string,
-	environments map[string]string,
+	regions *collectionmapping.Map[string, string],
+	environments *collectionmapping.Map[string, string],
 	monitors []DashboardMonitor,
 ) ([]DashboardResult, error) {
 	rows, err := s.repositories.probeResults.List(
@@ -215,10 +218,10 @@ func (s *Store) sqlDashboardResults(
 				ID:              row.ID,
 				MonitorID:       row.MonitorID,
 				AgentID:         row.AgentID,
-				AgentName:       agentNames[row.AgentID],
-				RegionCode:      regions[row.RegionID],
-				EnvironmentCode: environments[row.EnvironmentID],
-				GroupName:       monitorGroups[row.MonitorID],
+				AgentName:       agentNames.GetOrDefault(row.AgentID, ""),
+				RegionCode:      regions.GetOrDefault(row.RegionID, ""),
+				EnvironmentCode: environments.GetOrDefault(row.EnvironmentID, ""),
+				GroupName:       monitorGroups.GetOrDefault(row.MonitorID, ""),
 				Status:          model.Status(row.Status),
 				Latency:         time.Duration(row.LatencyMS) * time.Millisecond,
 				ErrorMessage:    row.ErrorMessage,
@@ -234,17 +237,15 @@ func (s *Store) sqlDashboardResults(
 	return results.Values(), nil
 }
 
-func dashboardAgentNames(agents []DashboardAgent) map[string]string {
-	return collectionlist.ReduceList(collectionlist.NewList(agents...), make(map[string]string, len(agents)), func(out map[string]string, _ int, agent DashboardAgent) map[string]string {
-		out[agent.ID] = agent.Name
-		return out
+func dashboardAgentNames(agents []DashboardAgent) *collectionmapping.Map[string, string] {
+	return collectionmapping.AssociateList(collectionlist.NewList(agents...), func(_ int, agent DashboardAgent) (string, string) {
+		return agent.ID, agent.Name
 	})
 }
 
-func dashboardMonitorGroups(monitors []DashboardMonitor) map[string]string {
-	return collectionlist.ReduceList(collectionlist.NewList(monitors...), make(map[string]string, len(monitors)), func(out map[string]string, _ int, monitor DashboardMonitor) map[string]string {
-		out[monitor.ID] = monitor.GroupName
-		return out
+func dashboardMonitorGroups(monitors []DashboardMonitor) *collectionmapping.Map[string, string] {
+	return collectionmapping.AssociateList(collectionlist.NewList(monitors...), func(_ int, monitor DashboardMonitor) (string, string) {
+		return monitor.ID, monitor.GroupName
 	})
 }
 

@@ -11,6 +11,7 @@ import (
 	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	agentdiscovery "github.com/lyonbrown4d/orivis/internal/discovery"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
+	"github.com/samber/lo"
 	"github.com/samber/oops"
 )
 
@@ -52,10 +53,7 @@ func discoveryProviderEnabled(cfg config.Config) bool {
 }
 
 func defaultDiscoveryEnvironment(environments []string) string {
-	if len(environments) == 0 {
-		return ""
-	}
-	return environments[0]
+	return lo.FirstOrEmpty(environments)
 }
 
 type compositeDiscoverer struct {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
+	collectionset "github.com/arcgolabs/collectionx/set"
 	"github.com/arcgolabs/dbx/querydsl"
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
@@ -45,67 +46,55 @@ func existingProbeResultsByResultID(
 }
 
 func uniqueResultIDs(params *collectionlist.List[normalizedProbeResultParams]) *collectionlist.List[string] {
-	values := params.Values()
-	seen := make(map[string]struct{}, len(values))
-	out := collectionlist.NewListWithCapacity[string](len(values))
-	for index := range values {
-		params := values[index]
+	seen := collectionset.NewSetWithCapacity[string](params.Len())
+	return collectionlist.FilterMapList(params, func(_ int, params normalizedProbeResultParams) (string, bool) {
 		if params.ResultID == "" {
-			continue
+			return "", false
 		}
-		if _, ok := seen[params.ResultID]; ok {
-			continue
+		if seen.Contains(params.ResultID) {
+			return "", false
 		}
-		seen[params.ResultID] = struct{}{}
-		out.Add(params.ResultID)
-	}
-	return out
+		seen.Add(params.ResultID)
+		return params.ResultID, true
+	})
 }
 
 func orderedExistingProbeResults(
 	params *collectionlist.List[normalizedProbeResultParams],
 	existing map[string]model.ProbeResult,
 ) []model.ProbeResult {
-	values := params.Values()
-	seen := make(map[string]struct{}, len(existing))
-	out := make([]model.ProbeResult, 0, len(existing))
-	for index := range values {
-		params := values[index]
+	seen := collectionset.NewSetWithCapacity[string](len(existing))
+	return collectionlist.FilterMapList(params, func(_ int, params normalizedProbeResultParams) (model.ProbeResult, bool) {
 		if params.ResultID == "" {
-			continue
+			return model.ProbeResult{}, false
 		}
 		result, ok := existing[params.ResultID]
 		if !ok {
-			continue
+			return model.ProbeResult{}, false
 		}
-		if _, ok := seen[params.ResultID]; ok {
-			continue
+		if seen.Contains(params.ResultID) {
+			return model.ProbeResult{}, false
 		}
-		seen[params.ResultID] = struct{}{}
-		out = append(out, result)
-	}
-	return out
+		seen.Add(params.ResultID)
+		return result, true
+	}).Values()
 }
 
 func pendingProbeResults(
 	params *collectionlist.List[normalizedProbeResultParams],
 	existing map[string]model.ProbeResult,
 ) *collectionlist.List[normalizedProbeResultParams] {
-	values := params.Values()
-	seen := make(map[string]struct{}, len(values))
-	out := collectionlist.NewListWithCapacity[normalizedProbeResultParams](len(values))
-	for index := range values {
-		params := values[index]
+	seen := collectionset.NewSetWithCapacity[string](params.Len())
+	return collectionlist.FilterMapList(params, func(_ int, params normalizedProbeResultParams) (normalizedProbeResultParams, bool) {
 		if params.ResultID != "" {
 			if _, ok := existing[params.ResultID]; ok {
-				continue
+				return normalizedProbeResultParams{}, false
 			}
-			if _, ok := seen[params.ResultID]; ok {
-				continue
+			if seen.Contains(params.ResultID) {
+				return normalizedProbeResultParams{}, false
 			}
-			seen[params.ResultID] = struct{}{}
+			seen.Add(params.ResultID)
 		}
-		out.Add(params)
-	}
-	return out
+		return params, true
+	})
 }
