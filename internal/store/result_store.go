@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	repository "github.com/arcgolabs/dbx/repository"
 	"github.com/lyonbrown4d/orivis/internal/model"
 	"github.com/samber/lo"
-	"github.com/samber/oops"
 )
 
 type ResultStore interface {
@@ -48,7 +46,7 @@ func (s *resultStore) Record(ctx context.Context, params RecordProbeResultParams
 		return model.ProbeResult{}, err
 	}
 	if len(results) == 0 {
-		return model.ProbeResult{}, fmt.Errorf("%w: result batch returned no records", ErrInvalidInput)
+		return model.ProbeResult{}, wrapError(ErrInvalidInput, "result batch returned no records")
 	}
 	return results[0], nil
 }
@@ -65,13 +63,13 @@ func (s *resultStore) RecordBatch(ctx context.Context, params []RecordProbeResul
 			return err
 		}
 		if err := repo.CreateMany(ctx, rows...); err != nil {
-			return fmt.Errorf("create probe result batch: %w", err)
+			return wrapError(err, "create probe result batch")
 		}
 		results = nextResults
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("record probe result batch: %w", err)
+		return nil, wrapError(err, "record probe result batch")
 	}
 
 	return results, nil
@@ -79,15 +77,15 @@ func (s *resultStore) RecordBatch(ctx context.Context, params []RecordProbeResul
 
 func (s *resultStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
 	if s == nil || s.db == nil {
-		return 0, fmt.Errorf("%w", oops.New("result store is not available"))
+		return 0, newError("result store is not available")
 	}
 	result, err := s.db.ExecContext(ctx, "DELETE FROM probe_results WHERE checked_at < ?", before.UTC())
 	if err != nil {
-		return 0, fmt.Errorf("%w", oops.Wrapf(err, "%s", "delete old probe results"))
+		return 0, wrapError(err, "delete old probe results")
 	}
 	rows, err := result.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("%w", oops.Wrapf(err, "%s", "read deleted probe result count"))
+		return 0, wrapError(err, "read deleted probe result count")
 	}
 	return rows, nil
 }
@@ -121,7 +119,7 @@ func (s *resultStore) prepareProbeResultRows(
 		func(out preparedProbeResultRows, _ int, params normalizedProbeResultParams) (preparedProbeResultRows, error) {
 			monitor, ok := monitors[monitorAgentKey(params.MonitorID, params.Agent.ID)]
 			if !ok {
-				return out, fmt.Errorf("%w: assigned monitor %s", ErrNotFound, params.MonitorID)
+				return out, wrapErrorf(ErrNotFound, "assigned monitor %s", params.MonitorID)
 			}
 			result, row, rowErr := s.prepareProbeResultRowWithMonitor(ctx, params, monitor)
 			if rowErr != nil {
@@ -133,7 +131,7 @@ func (s *resultStore) prepareProbeResultRows(
 		},
 	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("prepare probe result rows: %w", err)
+		return nil, nil, wrapError(err, "prepare probe result rows")
 	}
 	return prepared.results.Values(), prepared.rows.Values(), nil
 }
@@ -150,7 +148,7 @@ func (s *resultStore) prepareProbeResultRowWithMonitor(
 ) (model.ProbeResult, *probeResultRow, error) {
 	id, err := s.ids.NewID(ctx, "res")
 	if err != nil {
-		return model.ProbeResult{}, nil, fmt.Errorf("generate probe result id: %w", err)
+		return model.ProbeResult{}, nil, wrapError(err, "generate probe result id")
 	}
 	now := time.Now().UTC()
 	row := newProbeResultRow(id, normalized, monitor, now)
@@ -202,11 +200,11 @@ func normalizeProbeResultParams(params RecordProbeResultParams) (normalizedProbe
 
 	switch {
 	case out.Agent.ID == "":
-		return out, fmt.Errorf("%w: agent is required", ErrInvalidInput)
+		return out, wrapError(ErrInvalidInput, "agent is required")
 	case out.MonitorID == "":
-		return out, fmt.Errorf("%w: monitor id is required", ErrInvalidInput)
+		return out, wrapError(ErrInvalidInput, "monitor id is required")
 	case !validProbeStatus(out.Status):
-		return out, fmt.Errorf("%w: invalid probe status %q", ErrInvalidInput, out.Status)
+		return out, wrapErrorf(ErrInvalidInput, "invalid probe status %q", out.Status)
 	default:
 		return out, nil
 	}

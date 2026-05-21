@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
@@ -18,7 +17,7 @@ func (s *agentStore) findAgentCredentialByName(ctx context.Context, name string)
 		if errors.Is(err, repository.ErrNotFound) {
 			return agentCredential{}, nil
 		}
-		return agentCredential{}, fmt.Errorf("find agent by name: %w", err)
+		return agentCredential{}, wrapError(err, "find agent by name")
 	}
 	return agentCredential{
 		ID:        agent.ID,
@@ -56,7 +55,7 @@ func (s *agentStore) createRegisteredAgent(
 ) (model.Agent, error) {
 	id, err := s.ids.NewID(ctx, "agt")
 	if err != nil {
-		return model.Agent{}, fmt.Errorf("generate agent id: %w", err)
+		return model.Agent{}, wrapError(err, "generate agent id")
 	}
 	tokenHash, err := hashAgentToken(normalized.Token)
 	if err != nil {
@@ -83,10 +82,10 @@ func (s *agentStore) updateAgentAfterCreateConflict(
 ) (model.Agent, error) {
 	credential, err := s.findAgentCredentialByName(ctx, normalized.Name)
 	if err != nil {
-		return model.Agent{}, fmt.Errorf("resolve agent create conflict: %w", err)
+		return model.Agent{}, wrapError(err, "resolve agent create conflict")
 	}
 	if !credential.Found {
-		return model.Agent{}, fmt.Errorf("resolve agent create conflict: %w", repository.ErrNotFound)
+		return model.Agent{}, wrapError(repository.ErrNotFound, "resolve agent create conflict")
 	}
 	return s.updateRegisteredAgent(ctx, credential, normalized, regionID, environmentIDs, now)
 }
@@ -113,7 +112,7 @@ func (s *agentStore) insertAgent(
 		UpdatedAt:   formatTime(now),
 	}
 	if err := s.repositories.agents.Create(ctx, &agent); err != nil {
-		return fmt.Errorf("insert agent: %w", err)
+		return wrapError(err, "insert agent")
 	}
 	return nil
 }
@@ -122,9 +121,9 @@ func (s *agentStore) getAgentRecord(ctx context.Context, id string) (agentRecord
 	rec, err := s.repositories.agents.FirstSpec(ctx, repository.Where(agentsSchema.ID.Eq(id)))
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return agentRecord{}, fmt.Errorf("%w: agent %s", ErrNotFound, id)
+			return agentRecord{}, wrapErrorf(ErrNotFound, "agent %s", id)
 		}
-		return agentRecord{}, fmt.Errorf("get agent: %w", err)
+		return agentRecord{}, wrapError(err, "get agent")
 	}
 	return rec, nil
 }
@@ -138,7 +137,7 @@ func (s *agentStore) ensureRegion(ctx context.Context, code string, now time.Tim
 func (s *agentStore) findRegionIDByCode(ctx context.Context, code string) (string, error) {
 	region, err := s.repositories.regions.FirstSpec(ctx, repository.Where(regionsSchema.Code.Eq(code)))
 	if err != nil {
-		return "", fmt.Errorf("find region by code: %w", err)
+		return "", wrapError(err, "find region by code")
 	}
 	return region.ID, nil
 }
@@ -154,7 +153,7 @@ func (s *agentStore) insertRegion(ctx context.Context, id, code string, now time
 		UpdatedAt: formatTime(now),
 	}
 	if err := s.repositories.regions.Create(ctx, &row); err != nil {
-		return fmt.Errorf("insert region: %w", err)
+		return wrapError(err, "insert region")
 	}
 	return nil
 }
@@ -177,7 +176,7 @@ func (s *agentStore) ensureEnvironments(ctx context.Context, codes []string, now
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("ensure agent environments: %w", err)
+		return nil, wrapError(err, "ensure agent environments")
 	}
 	return ids.Values(), nil
 }
@@ -191,7 +190,7 @@ func (s *agentStore) ensureEnvironment(ctx context.Context, code string, now tim
 func (s *agentStore) findEnvironmentIDByCode(ctx context.Context, code string) (string, error) {
 	environment, err := s.repositories.environments.FirstSpec(ctx, repository.Where(environmentsSchema.Code.Eq(code)))
 	if err != nil {
-		return "", fmt.Errorf("find environment by code: %w", err)
+		return "", wrapError(err, "find environment by code")
 	}
 	return environment.ID, nil
 }
@@ -207,7 +206,7 @@ func (s *agentStore) insertEnvironment(ctx context.Context, id, code string, now
 		UpdatedAt: formatTime(now),
 	}
 	if err := s.repositories.environments.Create(ctx, &row); err != nil {
-		return fmt.Errorf("insert environment: %w", err)
+		return wrapError(err, "insert environment")
 	}
 	return nil
 }
@@ -228,7 +227,7 @@ func (s *agentStore) updateExistingAgent(ctx context.Context, id, regionID, runt
 			Where(schema.ID.Eq(id)),
 	)
 	if err != nil {
-		return fmt.Errorf("update existing agent: %w", err)
+		return wrapError(err, "update existing agent")
 	}
 	return nil
 }
@@ -237,7 +236,7 @@ func (s *agentStore) replaceAgentEnvironments(ctx context.Context, agentID strin
 	repo := s.repositories.agentEnvironments
 	schema := agentEnvironmentsSchema
 	if _, err := repo.Delete(ctx, querydsl.DeleteFrom(schema).Where(schema.AgentID.Eq(agentID))); err != nil {
-		return fmt.Errorf("clear agent environments: %w", err)
+		return wrapError(err, "clear agent environments")
 	}
 	if len(environmentIDs) == 0 {
 		return nil
@@ -252,7 +251,7 @@ func (s *agentStore) replaceAgentEnvironments(ctx context.Context, agentID strin
 		},
 	).Values()
 	if err := repo.CreateMany(ctx, rows...); err != nil {
-		return fmt.Errorf("insert agent environments: %w", err)
+		return wrapError(err, "insert agent environments")
 	}
 	return nil
 }
@@ -267,7 +266,7 @@ func (s *agentStore) agentEnvironmentIDs(ctx context.Context, agentID string) (*
 			OrderBy(schema.EnvironmentID.Asc()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("query agent environments: %w", err)
+		return nil, wrapError(err, "query agent environments")
 	}
 	return collectionlist.MapList(links, func(_ int, link agentEnvironmentRow) string {
 		return link.EnvironmentID

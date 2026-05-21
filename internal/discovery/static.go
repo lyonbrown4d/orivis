@@ -2,8 +2,6 @@ package discovery
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -44,14 +42,14 @@ func (d *StaticDiscoverer) Discover(context.Context) ([]protocol.AgentDiscovered
 		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, monitor StaticMonitor) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
 			discovered, err := staticMonitor(monitor)
 			if err != nil {
-				return nil, fmt.Errorf("decode static monitor: %w", err)
+				return nil, wrapError(err, "decode static monitor")
 			}
 			out.Add(discovered)
 			return out, nil
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("discover static monitors: %w", err)
+		return nil, wrapError(err, "discover static monitors")
 	}
 	return monitors.Values(), nil
 }
@@ -67,13 +65,13 @@ func staticMonitor(monitor StaticMonitor) (protocol.AgentDiscoveredMonitor, erro
 	sourceKey := strings.TrimSpace(monitor.SourceKey)
 
 	if name == "" {
-		return protocol.AgentDiscoveredMonitor{}, errors.New("static monitor name is required")
+		return protocol.AgentDiscoveredMonitor{}, newError("static monitor name is required")
 	}
 	if monitorType == "" {
-		return protocol.AgentDiscoveredMonitor{}, fmt.Errorf("static monitor %q type is required", name)
+		return protocol.AgentDiscoveredMonitor{}, newErrorf("static monitor %q type is required", name)
 	}
 	if target == "" {
-		return protocol.AgentDiscoveredMonitor{}, fmt.Errorf("static monitor %q target is required", name)
+		return protocol.AgentDiscoveredMonitor{}, newErrorf("static monitor %q target is required", name)
 	}
 	if sourceKey == "" {
 		sourceKey = "static:" + name

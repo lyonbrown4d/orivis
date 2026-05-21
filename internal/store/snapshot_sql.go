@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"time"
 
@@ -57,7 +56,7 @@ func (s *Store) sqlDashboardRegions(ctx context.Context) (*collectionmapping.Map
 			From(regionsSchema),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard regions: %w", err)
+		return nil, wrapError(err, "list dashboard regions")
 	}
 	return collectionmapping.AssociateList(rows, func(_ int, row regionRow) (string, string) {
 		return row.ID, row.Code
@@ -71,7 +70,7 @@ func (s *Store) sqlDashboardEnvironments(ctx context.Context) (*collectionmappin
 			From(environmentsSchema),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard environments: %w", err)
+		return nil, wrapError(err, "list dashboard environments")
 	}
 	return collectionmapping.AssociateList(rows, func(_ int, row environmentRow) (string, string) {
 		return row.ID, row.Code
@@ -89,7 +88,7 @@ func (s *Store) sqlDashboardAgentEnvironments(
 			OrderBy(agentEnvironmentsSchema.AgentID.Asc(), agentEnvironmentsSchema.EnvironmentID.Asc()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard agent environments: %w", err)
+		return nil, wrapError(err, "list dashboard agent environments")
 	}
 	out := collectionlist.ReduceList(rows, collectionmapping.NewMap[string, []string](), func(out *collectionmapping.Map[string, []string], _ int, row agentEnvironmentRow) *collectionmapping.Map[string, []string] {
 		code := environments.GetOrDefault(row.EnvironmentID, "")
@@ -118,7 +117,7 @@ func (s *Store) sqlDashboardAgents(
 			OrderBy(agentsSchema.Name.Asc()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard agents: %w", err)
+		return nil, wrapError(err, "list dashboard agents")
 	}
 	agents, err := collectionlist.ReduceErrList(
 		rows,
@@ -142,7 +141,7 @@ func (s *Store) sqlDashboardAgents(
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build dashboard agents: %w", err)
+		return nil, wrapError(err, "build dashboard agents")
 	}
 	return agents.Values(), nil
 }
@@ -154,7 +153,7 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context, environments *collecti
 			From(monitorsSchema),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard monitors: %w", err)
+		return nil, wrapError(err, "list dashboard monitors")
 	}
 	monitors := collectionlist.MapList(rows, func(_ int, row monitorRecord) DashboardMonitor {
 		return DashboardMonitor{
@@ -198,7 +197,7 @@ func (s *Store) sqlDashboardResults(
 			Limit(limit),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard results: %w", err)
+		return nil, wrapError(err, "list dashboard results")
 	}
 	agentNames := dashboardAgentNames(agents)
 	monitorGroups := dashboardMonitorGroups(monitors)
@@ -232,7 +231,7 @@ func (s *Store) sqlDashboardResults(
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build dashboard results: %w", err)
+		return nil, wrapError(err, "build dashboard results")
 	}
 	return results.Values(), nil
 }

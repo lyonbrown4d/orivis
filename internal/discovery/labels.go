@@ -1,8 +1,6 @@
 package discovery
 
 import (
-	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,7 +32,7 @@ type LabelSource struct {
 func ParseLabels(source LabelSource) ([]protocol.AgentDiscoveredMonitor, error) {
 	sourceKey := strings.TrimSpace(source.SourceKey)
 	if sourceKey == "" {
-		return nil, errors.New("source key is required")
+		return nil, newError("source key is required")
 	}
 	enableValue := strings.TrimSpace(source.Labels[LabelEnable])
 	if !labelBool(enableValue, true) {
@@ -110,7 +108,7 @@ func parseMonitorGroups(
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("parse monitor label groups: %w", err)
+		return nil, wrapError(err, "parse monitor label groups")
 	}
 	return monitors.Values(), nil
 }
@@ -119,10 +117,10 @@ func parseMonitor(sourceKey, environment, defaultGroup, key string, fields map[s
 	monitorType := strings.ToLower(strings.TrimSpace(fields["type"]))
 	target := strings.TrimSpace(fields["target"])
 	if monitorType == "" {
-		return protocol.AgentDiscoveredMonitor{}, fmt.Errorf("monitor %q type is required", key)
+		return protocol.AgentDiscoveredMonitor{}, newErrorf("monitor %q type is required", key)
 	}
 	if target == "" {
-		return protocol.AgentDiscoveredMonitor{}, fmt.Errorf("monitor %q target is required", key)
+		return protocol.AgentDiscoveredMonitor{}, newErrorf("monitor %q target is required", key)
 	}
 
 	timing, err := parseMonitorTiming(key, fields)
@@ -157,15 +155,15 @@ type monitorTiming struct {
 func parseMonitorTiming(key string, fields map[string]string) (monitorTiming, error) {
 	interval, err := labelSeconds(fields["interval"])
 	if err != nil {
-		return monitorTiming{}, fmt.Errorf("monitor %q interval: %w", key, err)
+		return monitorTiming{}, wrapErrorf(err, "monitor %q interval", key)
 	}
 	timeout, err := labelSeconds(fields["timeout"])
 	if err != nil {
-		return monitorTiming{}, fmt.Errorf("monitor %q timeout: %w", key, err)
+		return monitorTiming{}, wrapErrorf(err, "monitor %q timeout", key)
 	}
 	retryCount, err := labelInt(fields["retry"])
 	if err != nil {
-		return monitorTiming{}, fmt.Errorf("monitor %q retry: %w", key, err)
+		return monitorTiming{}, wrapErrorf(err, "monitor %q retry", key)
 	}
 	return monitorTiming{interval: interval, timeout: timeout, retryCount: retryCount}, nil
 }
@@ -200,7 +198,7 @@ func labelSeconds(value string) (int, error) {
 	}
 	duration, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("parse label duration: %w", err)
+		return 0, wrapError(err, "parse label duration")
 	}
 	return int(duration.Seconds()), nil
 }
@@ -212,7 +210,7 @@ func labelInt(value string) (int, error) {
 	}
 	parsed, err := strconv.Atoi(value)
 	if err != nil {
-		return 0, fmt.Errorf("parse label int: %w", err)
+		return 0, wrapError(err, "parse label int")
 	}
 	return parsed, nil
 }

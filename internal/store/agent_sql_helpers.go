@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 
 	repository "github.com/arcgolabs/dbx/repository"
@@ -24,12 +23,12 @@ func ensureCodeEntity(
 		return id, nil
 	}
 	if !errors.Is(err, repository.ErrNotFound) {
-		return "", fmt.Errorf("find %s: %w", entityName, err)
+		return "", wrapErrorf(err, "find %s", entityName)
 	}
 
 	id, err = ids.NewID(ctx, idPrefix)
 	if err != nil {
-		return "", fmt.Errorf("generate %s id: %w", entityName, err)
+		return "", wrapErrorf(err, "generate %s id", entityName)
 	}
 	if err := insert(ctx, id, code); err != nil {
 		if !isCodeEntityConflict(err) {
@@ -42,7 +41,7 @@ func ensureCodeEntity(
 		if errors.Is(findErr, repository.ErrNotFound) {
 			return "", err
 		}
-		return "", fmt.Errorf("resolve %s conflict: %w", entityName, findErr)
+		return "", wrapErrorf(findErr, "resolve %s conflict", entityName)
 	}
 	return id, nil
 }

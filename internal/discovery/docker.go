@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -45,12 +44,12 @@ type cachedDockerContainerConfig struct {
 func NewDockerDiscoverer(opts DockerOptions) (*DockerDiscoverer, error) {
 	mode := normalizeDockerMode(opts.Mode)
 	if mode == "" {
-		return nil, fmt.Errorf("unsupported Docker discovery mode %q", opts.Mode)
+		return nil, newErrorf("unsupported Docker discovery mode %q", opts.Mode)
 	}
 
 	client, err := dockerclient.New(dockerclient.FromEnv)
 	if err != nil {
-		return nil, fmt.Errorf("create Docker client: %w", err)
+		return nil, wrapError(err, "create Docker client")
 	}
 
 	return &DockerDiscoverer{
@@ -77,7 +76,7 @@ func (d *DockerDiscoverer) Discover(ctx context.Context) ([]protocol.AgentDiscov
 	case DockerModeSwarm:
 		return d.discoverServices(ctx)
 	default:
-		return nil, fmt.Errorf("unsupported Docker discovery mode %q", d.mode)
+		return nil, newErrorf("unsupported Docker discovery mode %q", d.mode)
 	}
 }
 
@@ -86,7 +85,7 @@ func (d *DockerDiscoverer) Close(context.Context) error {
 		return nil
 	}
 	if err := d.client.Close(); err != nil {
-		return fmt.Errorf("close Docker client: %w", err)
+		return wrapError(err, "close Docker client")
 	}
 	return nil
 }
@@ -94,7 +93,7 @@ func (d *DockerDiscoverer) Close(context.Context) error {
 func (d *DockerDiscoverer) discoverContainers(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
 	result, err := d.client.ContainerList(ctx, dockerclient.ContainerListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("list Docker containers: %w", err)
+		return nil, wrapError(err, "list Docker containers")
 	}
 	if d.logger != nil {
 		d.logger.Info("discovering docker containers", "count", len(result.Items))

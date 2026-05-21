@@ -3,8 +3,6 @@ package notification
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -71,21 +69,18 @@ func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, c
 	}
 	timeout, err := parseDuration(cfg.Notification.Webhook.Timeout, 5*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("parse notification webhook timeout: %w", err)
+		return nil, wrapError(err, "parse notification webhook timeout")
 	}
 	retryInterval, err := parseDuration(cfg.Notification.Webhook.RetryInterval, 5*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("parse notification webhook retry interval: %w", err)
+		return nil, wrapError(err, "parse notification webhook retry interval")
 	}
-	httpClient, err := clienthttp.New(
-		clienthttp.Config{
-			Timeout:   timeout,
-			UserAgent: "orivis-server/" + buildinfo.Version,
-		},
-		clienthttp.WithPolicies(clientx.NewTimeoutPolicy(timeout)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create notification HTTP client: %w", err)
+	var httpClient clienthttp.Client
+	if len(channels) > 0 {
+		httpClient, err = newNotificationHTTPClient(timeout)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return &Manager{
 		cfg:           cfg,
@@ -109,11 +104,11 @@ func (m *Manager) Start(ctx context.Context) error {
 		return nil
 	}
 	if m.bus == nil {
-		return errors.New("notification event bus is not available")
+		return newError("notification event bus is not available")
 	}
 	unsubscribe, err := eventx.Subscribe[ingest.ProbeResultsRecordedEvent](m.bus, m.handleProbeResultsRecorded)
 	if err != nil {
-		return fmt.Errorf("subscribe probe results recorded event: %w", err)
+		return wrapError(err, "subscribe probe results recorded event")
 	}
 	m.unsubscribe = unsubscribe
 	go m.run(ctx)
@@ -124,29 +119,38 @@ func (m *Manager) Stop(ctx context.Context) error {
 	if m == nil {
 		return nil
 	}
-	var stopErr error
-	if m.unsubscribe != nil {
-		m.unsubscribe()
-		m.unsubscribe = nil
-	} else {
-		if m.client != nil {
-			return closeNotificationHTTPClient(m.client)
-		}
-		return nil
+	if m.unsubscribe == nil {
+		return closeNotificationHTTPClient(m.client)
 	}
+	m.unsubscribe()
+	m.unsubscribe = nil
 	m.stopOnce.Do(func() {
 		close(m.stop)
 	})
 	<-m.done
-	if m.client != nil {
-		stopErr = errors.Join(stopErr, closeNotificationHTTPClient(m.client))
+	return closeNotificationHTTPClient(m.client)
+}
+
+func newNotificationHTTPClient(timeout time.Duration) (clienthttp.Client, error) {
+	httpClient, err := clienthttp.New(
+		clienthttp.Config{
+			Timeout:   timeout,
+			UserAgent: "orivis-server/" + buildinfo.Version,
+		},
+		clienthttp.WithPolicies(clientx.NewTimeoutPolicy(timeout)),
+	)
+	if err != nil {
+		return nil, wrapError(err, "create notification HTTP client")
 	}
-	return stopErr
+	return httpClient, nil
 }
 
 func closeNotificationHTTPClient(client clienthttp.Client) error {
+	if client == nil {
+		return nil
+	}
 	if err := client.Close(); err != nil {
-		return fmt.Errorf("close notification HTTP client: %w", err)
+		return wrapError(err, "close notification HTTP client")
 	}
 	return nil
 }
@@ -189,7 +193,7 @@ func (m *Manager) handleProbeResultsRecorded(ctx context.Context, event ingest.P
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("handle probe result notifications: %w", err)
+		return wrapError(err, "handle probe result notifications")
 	}
 	return nil
 }
@@ -214,7 +218,7 @@ func (m *Manager) handleProbeResult(ctx context.Context, result model.ProbeResul
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("enqueue webhook notifications: %w", err)
+		return wrapError(err, "enqueue webhook notifications")
 	}
 	return nil
 }
@@ -236,7 +240,7 @@ func (m *Manager) monitorGroupName(ctx context.Context, monitorID string) (strin
 	}
 	monitor, err := m.storage.MonitorStore().Get(ctx, monitorID)
 	if err != nil {
-		return "", fmt.Errorf("load monitor for notification routing: %w", err)
+		return "", wrapError(err, "load monitor for notification routing")
 	}
 	return monitor.GroupName, nil
 }
@@ -244,11 +248,11 @@ func (m *Manager) monitorGroupName(ctx context.Context, monitorID string) (strin
 func (m *Manager) enqueueWebhook(ctx context.Context, payload webhookPayload, channel webhookChannel) error {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("enqueue webhook notification: %w", ctx.Err())
+		return wrapError(ctx.Err(), "enqueue webhook notification")
 	case m.deliveries <- webhookDelivery{payload: payload, channel: channel}:
 		return nil
 	default:
-		return errors.New("webhook notification delivery queue is full")
+		return newError("webhook notification delivery queue is full")
 	}
 }
 

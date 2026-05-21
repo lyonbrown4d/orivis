@@ -15,7 +15,7 @@ import (
 func (d *DockerDiscoverer) discoverServices(ctx context.Context) ([]protocol.AgentDiscoveredMonitor, error) {
 	result, err := d.client.ServiceList(ctx, dockerclient.ServiceListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("list Docker services: %w", err)
+		return nil, wrapError(err, "list Docker services")
 	}
 	if d.logger != nil {
 		d.logger.Info("discovering docker services", "count", len(result.Items))
@@ -50,7 +50,7 @@ func discoverByItems[T any](
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("%s labels: %w", parseErrPrefix, err)
+		return nil, wrapErrorf(err, "%s labels", parseErrPrefix)
 	}
 	parsed := monitors.Values()
 	if logger != nil {

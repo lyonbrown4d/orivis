@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -28,11 +27,11 @@ func normalizeRegisterParams(params RegisterAgentParams) (normalizedRegisterPara
 
 	switch {
 	case out.Name == "":
-		return out, fmt.Errorf("%w: agent name is required", ErrInvalidInput)
+		return out, wrapError(ErrInvalidInput, "agent name is required")
 	case out.RegionCode == "":
-		return out, fmt.Errorf("%w: region code is required", ErrInvalidInput)
+		return out, wrapError(ErrInvalidInput, "region code is required")
 	case out.RuntimeType == "":
-		return out, fmt.Errorf("%w: runtime type is required", ErrInvalidInput)
+		return out, wrapError(ErrInvalidInput, "runtime type is required")
 	default:
 		return out, nil
 	}
@@ -85,14 +84,14 @@ func (r agentRecord) model(environmentIDs *collectionlist.List[string]) (model.A
 func hashAgentToken(token string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(token), bcrypt.DefaultCost)
 	if err != nil {
-		return "", fmt.Errorf("hash agent token: %w", err)
+		return "", wrapError(err, "hash agent token")
 	}
 	return string(hash), nil
 }
 
 func verifyAgentToken(hash, token string) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(token)); err != nil {
-		return fmt.Errorf("%w: invalid agent token", ErrUnauthorized)
+		return wrapError(ErrUnauthorized, "invalid agent token")
 	}
 	return nil
 }
@@ -108,7 +107,7 @@ func formatTime(t time.Time) string {
 func parseTime(value string) (time.Time, error) {
 	t, err := time.Parse(time.RFC3339Nano, value)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("parse time %q: %w", value, err)
+		return time.Time{}, wrapErrorf(err, "parse time %q", value)
 	}
 	return t, nil
 }

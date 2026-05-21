@@ -61,16 +61,9 @@ func (r *Runner) Stop(ctx context.Context) error {
 	if r.sched != nil {
 		r.sched.Stop()
 	}
-	if r.discovery != nil {
-		if err := r.discovery.Close(ctx); err != nil {
-			r.logger.Warn("close monitor discovery failed", "error", err)
-		}
-	}
-	if r.results != nil {
-		if err := r.results.Close(); err != nil {
-			r.logger.Warn("close result buffer failed", "error", err)
-		}
-	}
+	r.closeDiscovery(ctx)
+	r.closeResultBuffer()
+	r.closeChecker()
 	r.logger.Info("stopped agent")
 	return nil
 }

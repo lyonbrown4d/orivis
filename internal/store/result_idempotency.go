@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionset "github.com/arcgolabs/collectionx/set"
@@ -29,7 +28,7 @@ func existingProbeResultsByResultID(
 			Where(schema.ResultID.InList(resultIDs)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("find existing probe results: %w", err)
+		return nil, wrapError(err, "find existing probe results")
 	}
 
 	values := rows.Values()
@@ -38,7 +37,7 @@ func existingProbeResultsByResultID(
 		row := values[index]
 		result, err := row.model()
 		if err != nil {
-			return nil, fmt.Errorf("map existing probe result: %w", err)
+			return nil, wrapError(err, "map existing probe result")
 		}
 		out[row.ResultID] = result
 	}

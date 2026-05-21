@@ -1,7 +1,7 @@
 package ingest
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/samber/oops"
 )
@@ -12,11 +12,11 @@ var (
 )
 
 func newError(message string) error {
-	return fmt.Errorf("%w", oops.New(message))
+	return wrapError(errors.New(message), message)
 }
 
 func wrapError(err error, message string) error {
-	return oops.Wrapf(err, "%s", message)
+	return oops.In("ingest").Wrapf(err, "%s", message)
 }
 
 func joinErrors(errs ...error) error {
@@ -24,5 +24,5 @@ func joinErrors(errs ...error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("%w", err)
+	return wrapError(err, "join ingest errors")
 }

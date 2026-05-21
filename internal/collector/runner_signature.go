@@ -55,7 +55,15 @@ func discoverySignature(monitors []protocol.AgentDiscoveredMonitor) string {
 }
 
 func discoveredMonitorSignatureKey(m protocol.AgentDiscoveredMonitor) string {
-	enabled := ""
+	return discoveredMonitorIdentityKey(m, "")
+}
+
+func discoveredMonitorKey(m protocol.AgentDiscoveredMonitor) string {
+	return discoveredMonitorIdentityKey(m, "nil")
+}
+
+func discoveredMonitorIdentityKey(m protocol.AgentDiscoveredMonitor, nilEnabled string) string {
+	enabled := nilEnabled
 	if m.Enabled != nil {
 		enabled = strconv.FormatBool(*m.Enabled)
 	}

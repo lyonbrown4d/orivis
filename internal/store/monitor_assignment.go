@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"hash/fnv"
 	"strings"
 
@@ -20,12 +19,12 @@ func (s *monitorStore) assignMonitorIfUnassigned(ctx context.Context, monitorID 
 		return nil
 	}
 	if !errors.Is(err, repository.ErrNotFound) {
-		return fmt.Errorf("find monitor owner: %w", err)
+		return wrapError(err, "find monitor owner")
 	}
 
 	agentID, err := monitorAssignedAgent(monitorID, agentIDs)
 	if err != nil {
-		return fmt.Errorf("pick monitor owner: %w", err)
+		return wrapError(err, "pick monitor owner")
 	}
 	return s.assignMonitorOwner(ctx, monitorID, agentID)
 }
@@ -53,7 +52,7 @@ func (s *monitorStore) listAgentIDsForMonitorAssignment(ctx context.Context) ([]
 			OrderBy(agentsSchema.ID.Asc()),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list agents: %w", err)
+		return nil, wrapError(err, "list agents")
 	}
 
 	return collectionlist.FilterMapList(rows, func(_ int, row agentRecord) (string, bool) {
@@ -67,12 +66,12 @@ func (s *monitorStore) listAgentIDsForMonitorAssignment(ctx context.Context) ([]
 
 func monitorAssignedAgent(monitorID string, agentIDs []string) (string, error) {
 	if len(agentIDs) == 0 {
-		return "", fmt.Errorf("%w: no available agents", ErrNotFound)
+		return "", wrapError(ErrNotFound, "no available agents")
 	}
 
 	h := fnv.New32a()
 	if _, err := h.Write([]byte(monitorID)); err != nil {
-		return "", fmt.Errorf("hash monitor id: %w", err)
+		return "", wrapError(err, "hash monitor id")
 	}
 	return agentIDs[int(h.Sum32())%len(agentIDs)], nil
 }

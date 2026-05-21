@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -60,7 +59,7 @@ func parseWebhookRoute(entry string, cfg config.Config) (webhookChannel, error) 
 		groups:     routeList(fields["groups"]),
 	}
 	if channel.url == "" {
-		return webhookChannel{}, fmt.Errorf("webhook route %q missing url", entry)
+		return webhookChannel{}, newErrorf("webhook route %q missing url", entry)
 	}
 	return channel, nil
 }

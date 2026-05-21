@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -20,7 +19,7 @@ func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) 
 	payload := delivery.payload
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return 0, fmt.Errorf("marshal webhook payload: %w", err)
+		return 0, wrapError(err, "marshal webhook payload")
 	}
 	req := m.client.R().
 		SetBody(body).
@@ -31,10 +30,10 @@ func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) 
 
 	resp, err := m.client.Execute(ctx, req, delivery.channel.method, strings.TrimSpace(delivery.channel.url))
 	if err != nil {
-		return 0, fmt.Errorf("deliver webhook notification: %w", err)
+		return 0, wrapError(err, "deliver webhook notification")
 	}
 	if resp.StatusCode() >= http.StatusBadRequest {
-		return resp.StatusCode(), fmt.Errorf("webhook notification returned HTTP %d", resp.StatusCode())
+		return resp.StatusCode(), newErrorf("webhook notification returned HTTP %d", resp.StatusCode())
 	}
 	if m.logger != nil {
 		m.logger.Info("sent webhook notification", "channel", delivery.channel.channelName(), "event", payload.Event, "monitor_id", payload.MonitorID, "status", payload.Status)
@@ -51,13 +50,13 @@ func (m *Manager) deliverWithRetry(ctx context.Context, delivery webhookDelivery
 		if err != nil {
 			lastErr = err
 			if !m.waitBeforeRetry(ctx, attempt) {
-				return fmt.Errorf("deliver webhook notification: %w", lastErr)
+				return wrapError(lastErr, "deliver webhook notification")
 			}
 			continue
 		}
 		return nil
 	}
-	return fmt.Errorf("deliver webhook notification after %d attempts: %w", m.maxAttempts, lastErr)
+	return wrapErrorf(lastErr, "deliver webhook notification after %d attempts", m.maxAttempts)
 }
 
 func (m *Manager) recordDeliveryAttempt(
@@ -175,7 +174,7 @@ func webhookSignature(secret string, body []byte) (string, error) {
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
 	if _, err := mac.Write(body); err != nil {
-		return "", fmt.Errorf("sign webhook payload: %w", err)
+		return "", wrapError(err, "sign webhook payload")
 	}
 	return "sha256=" + hex.EncodeToString(mac.Sum(nil)), nil
 }
@@ -201,7 +200,7 @@ func parseDuration(value string, fallback time.Duration) (time.Duration, error) 
 	}
 	duration, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("parse duration %q: %w", value, err)
+		return 0, wrapErrorf(err, "parse duration %q", value)
 	}
 	if duration <= 0 {
 		return fallback, nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/lyonbrown4d/orivis/internal/protocol"
@@ -37,6 +38,9 @@ func gzipJSON(value any) ([]byte, error) {
 	var buf bytes.Buffer
 	writer := gzip.NewWriter(&buf)
 	if _, err := writer.Write(raw); err != nil {
+		if closeErr := writer.Close(); closeErr != nil {
+			return nil, fmt.Errorf("write gzip body: %w", errors.Join(err, closeErr))
+		}
 		return nil, fmt.Errorf("write gzip body: %w", err)
 	}
 	if err := writer.Close(); err != nil {

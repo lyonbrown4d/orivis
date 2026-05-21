@@ -1,7 +1,6 @@
 package store
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -90,7 +89,7 @@ func normalizeDiscoveredMonitorParams(params UpsertDiscoveredMonitorParams) (cre
 		return out, err
 	}
 	if out.SourceKey == "" {
-		return out, fmt.Errorf("%w: monitor source key is required", ErrInvalidInput)
+		return out, wrapError(ErrInvalidInput, "monitor source key is required")
 	}
 	return out, nil
 }
@@ -117,13 +116,13 @@ func applyMonitorDefaults(params *createMonitorParams) {
 func validateMonitorParams(params createMonitorParams) (createMonitorParams, error) {
 	switch {
 	case params.Name == "":
-		return params, fmt.Errorf("%w: monitor name is required", ErrInvalidInput)
+		return params, wrapError(ErrInvalidInput, "monitor name is required")
 	case params.Type == "":
-		return params, fmt.Errorf("%w: monitor type is required", ErrInvalidInput)
+		return params, wrapError(ErrInvalidInput, "monitor type is required")
 	case params.Target == "":
-		return params, fmt.Errorf("%w: monitor target is required", ErrInvalidInput)
+		return params, wrapError(ErrInvalidInput, "monitor target is required")
 	case params.EnvironmentID == "":
-		return params, fmt.Errorf("%w: environment id is required", ErrInvalidInput)
+		return params, wrapError(ErrInvalidInput, "environment id is required")
 	default:
 		return params, nil
 	}

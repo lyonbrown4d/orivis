@@ -51,12 +51,12 @@ func readLimited(reader io.Reader, limit int) ([]byte, error) {
 		}
 		return body, nil
 	}
-	var buf bytes.Buffer
-	if _, err := buf.ReadFrom(io.LimitReader(reader, int64(limit)+1)); err != nil {
+	body, err := io.ReadAll(io.LimitReader(reader, int64(limit)+1))
+	if err != nil {
 		return nil, fmt.Errorf("read gzip request body: %w", err)
 	}
-	if buf.Len() > limit {
+	if len(body) > limit {
 		return nil, fmt.Errorf("request body exceeds %d bytes", limit)
 	}
-	return buf.Bytes(), nil
+	return body, nil
 }

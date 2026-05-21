@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -46,7 +45,7 @@ func NewStore(cfg config.Config, logger *slog.Logger) (Store, error) {
 	case "redis":
 		return NewRedisStore(cfg, logger)
 	default:
-		return nil, fmt.Errorf("unsupported cache driver %q", cfg.Cache.Driver)
+		return nil, newErrorf("unsupported cache driver %q", cfg.Cache.Driver)
 	}
 }
 
@@ -56,7 +55,7 @@ func NewMemoryStore() Store {
 
 func (s *memoryStore) Get(ctx context.Context, key string) ([]byte, bool, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, false, fmt.Errorf("get memory cache: %w", err)
+		return nil, false, wrapError(err, "get memory cache")
 	}
 	s.mu.RLock()
 	item, ok := s.values[key]
@@ -75,7 +74,7 @@ func (s *memoryStore) Get(ctx context.Context, key string) ([]byte, bool, error)
 
 func (s *memoryStore) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("set memory cache: %w", err)
+		return wrapError(err, "set memory cache")
 	}
 	item := memoryItem{value: bytex.WrapList(value).Snapshot()}
 	if ttl > 0 {
@@ -89,7 +88,7 @@ func (s *memoryStore) Set(ctx context.Context, key string, value []byte, ttl tim
 
 func (s *memoryStore) Delete(ctx context.Context, key string) error {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("delete memory cache: %w", err)
+		return wrapError(err, "delete memory cache")
 	}
 	s.mu.Lock()
 	delete(s.values, key)
@@ -107,7 +106,7 @@ func (s *memoryStore) Close(context.Context) error {
 func NewRedisStore(cfg config.Config, logger *slog.Logger) (Store, error) {
 	addr := strings.TrimSpace(cfg.Cache.Redis.Addr)
 	if addr == "" {
-		return nil, errors.New("redis cache addr is required")
+		return nil, newError("redis cache addr is required")
 	}
 	options := &redis.Options{
 		Addr:     addr,
@@ -121,7 +120,7 @@ func NewRedisStore(cfg config.Config, logger *slog.Logger) (Store, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("connect redis cache: %w", err)
+		return nil, wrapError(err, "connect redis cache")
 	}
 	if logger != nil {
 		logger.Info("connected redis cache", "addr", addr)
@@ -135,28 +134,28 @@ func (s *redisStore) Get(ctx context.Context, key string) ([]byte, bool, error) 
 		if errors.Is(err, redis.Nil) {
 			return nil, false, nil
 		}
-		return nil, false, fmt.Errorf("get redis cache: %w", err)
+		return nil, false, wrapError(err, "get redis cache")
 	}
 	return value, true, nil
 }
 
 func (s *redisStore) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if err := s.client.Set(ctx, s.key(key), value, ttl).Err(); err != nil {
-		return fmt.Errorf("set redis cache: %w", err)
+		return wrapError(err, "set redis cache")
 	}
 	return nil
 }
 
 func (s *redisStore) Delete(ctx context.Context, key string) error {
 	if err := s.client.Del(ctx, s.key(key)).Err(); err != nil {
-		return fmt.Errorf("delete redis cache: %w", err)
+		return wrapError(err, "delete redis cache")
 	}
 	return nil
 }
 
 func (s *redisStore) Close(context.Context) error {
 	if err := s.client.Close(); err != nil {
-		return fmt.Errorf("close redis cache: %w", err)
+		return wrapError(err, "close redis cache")
 	}
 	return nil
 }

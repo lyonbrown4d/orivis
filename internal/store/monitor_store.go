@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -37,7 +36,7 @@ func (s *monitorStore) Create(ctx context.Context, params CreateMonitorParams) (
 
 	id, err := s.ids.NewID(ctx, "mon")
 	if err != nil {
-		return model.Monitor{}, fmt.Errorf("generate monitor id: %w", err)
+		return model.Monitor{}, wrapError(err, "generate monitor id")
 	}
 	if err := s.insertMonitor(ctx, id, normalized); err != nil {
 		return model.Monitor{}, err
@@ -63,7 +62,7 @@ func (s *monitorStore) UpsertDiscovered(ctx context.Context, params UpsertDiscov
 	case errors.Is(err, repository.ErrNotFound):
 		return s.Create(ctx, createMonitorParamsToPublic(normalized))
 	default:
-		return model.Monitor{}, fmt.Errorf("find discovered monitor: %w", err)
+		return model.Monitor{}, wrapError(err, "find discovered monitor")
 	}
 }
 
@@ -71,10 +70,10 @@ func (s *monitorStore) AssignAgent(ctx context.Context, monitorID, agentID strin
 	monitorID = strings.TrimSpace(monitorID)
 	agentID = strings.TrimSpace(agentID)
 	if monitorID == "" {
-		return fmt.Errorf("%w: monitor id is required", ErrInvalidInput)
+		return wrapError(ErrInvalidInput, "monitor id is required")
 	}
 	if agentID == "" {
-		return fmt.Errorf("%w: agent id is required", ErrInvalidInput)
+		return wrapError(ErrInvalidInput, "agent id is required")
 	}
 
 	row := monitorAgentRow{
@@ -88,7 +87,7 @@ func (s *monitorStore) AssignAgent(ctx context.Context, monitorID, agentID strin
 		"agent_id",
 	)
 	if err != nil {
-		return fmt.Errorf("assign monitor agent: %w", err)
+		return wrapError(err, "assign monitor agent")
 	}
 	return nil
 }
@@ -100,16 +99,16 @@ func (s *monitorStore) AssignMonitors(ctx context.Context, monitorIDs []string) 
 
 	agentIDs, err := s.listAgentIDsForMonitorAssignment(ctx)
 	if err != nil {
-		return fmt.Errorf("list assignment agents: %w", err)
+		return wrapError(err, "list assignment agents")
 	}
 	if len(agentIDs) == 0 {
-		return fmt.Errorf("%w: no available agents", ErrNotFound)
+		return wrapError(ErrNotFound, "no available agents")
 	}
 
 	normalized := s.normalizeMonitorIDs(monitorIDs)
 	for _, monitorID := range normalized {
 		if err := s.assignMonitorIfUnassigned(ctx, monitorID, agentIDs); err != nil {
-			return fmt.Errorf("assign monitor %s: %w", monitorID, err)
+			return wrapErrorf(err, "assign monitor %s", monitorID)
 		}
 	}
 
@@ -119,7 +118,7 @@ func (s *monitorStore) AssignMonitors(ctx context.Context, monitorIDs []string) 
 func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) ([]model.Monitor, error) {
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
-		return nil, fmt.Errorf("%w: agent id is required", ErrInvalidInput)
+		return nil, wrapError(ErrInvalidInput, "agent id is required")
 	}
 
 	query := querydsl.Select(querydsl.AllColumns(monitorsSchema).Values()...).
@@ -136,7 +135,7 @@ func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) 
 		query,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list assigned monitors: %w", err)
+		return nil, wrapError(err, "list assigned monitors")
 	}
 
 	monitors, err := collectionlist.ReduceErrList(
@@ -145,14 +144,14 @@ func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) 
 		func(out *collectionlist.List[model.Monitor], _ int, record monitorRecord) (*collectionlist.List[model.Monitor], error) {
 			monitor, mapErr := record.model()
 			if mapErr != nil {
-				return nil, fmt.Errorf("map assigned monitor: %w", mapErr)
+				return nil, wrapError(mapErr, "map assigned monitor")
 			}
 			out.Add(monitor)
 			return out, nil
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build assigned monitors: %w", err)
+		return nil, wrapError(err, "build assigned monitors")
 	}
 	return monitors.Values(), nil
 }
@@ -160,7 +159,7 @@ func (s *monitorStore) ListAssignedEnabled(ctx context.Context, agentID string) 
 func (s *monitorStore) Get(ctx context.Context, id string) (model.Monitor, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return model.Monitor{}, fmt.Errorf("%w: monitor id is required", ErrInvalidInput)
+		return model.Monitor{}, wrapError(ErrInvalidInput, "monitor id is required")
 	}
 
 	monitor, err := s.getMonitor(ctx, id)
@@ -190,7 +189,7 @@ func (s *monitorStore) insertMonitor(ctx context.Context, id string, normalized 
 		UpdatedAt:         formatTime(now),
 	}
 	if err := s.repositories.monitors.Create(ctx, &row); err != nil {
-		return fmt.Errorf("insert monitor: %w", err)
+		return wrapError(err, "insert monitor")
 	}
 	return nil
 }
@@ -217,7 +216,7 @@ func (s *monitorStore) updateDiscoveredMonitor(ctx context.Context, id string, n
 			Where(schema.ID.Eq(id)),
 	)
 	if err != nil {
-		return fmt.Errorf("update discovered monitor: %w", err)
+		return wrapError(err, "update discovered monitor")
 	}
 	return nil
 }
@@ -226,25 +225,25 @@ func (s *monitorStore) getMonitor(ctx context.Context, id string) (model.Monitor
 	record, err := s.repositories.monitors.FirstSpec(ctx, repository.Where(monitorsSchema.ID.Eq(id)))
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return model.Monitor{}, fmt.Errorf("%w: monitor %s", ErrNotFound, id)
+			return model.Monitor{}, wrapErrorf(ErrNotFound, "monitor %s", id)
 		}
-		return model.Monitor{}, fmt.Errorf("get monitor: %w", err)
+		return model.Monitor{}, wrapError(err, "get monitor")
 	}
 	return record.model()
 }
 
 func (s *monitorStore) assignMonitorOwner(ctx context.Context, monitorID, agentID string) error {
 	if s == nil {
-		return fmt.Errorf("%w: monitor store is not available", ErrInvalidInput)
+		return wrapError(ErrInvalidInput, "monitor store is not available")
 	}
 	if strings.TrimSpace(monitorID) == "" {
-		return fmt.Errorf("%w: monitor id is required", ErrInvalidInput)
+		return wrapError(ErrInvalidInput, "monitor id is required")
 	}
 	if strings.TrimSpace(agentID) == "" {
-		return fmt.Errorf("%w: agent id is required", ErrInvalidInput)
+		return wrapError(ErrInvalidInput, "agent id is required")
 	}
 	if s.db == nil {
-		return fmt.Errorf("%w: db is not available", ErrInvalidInput)
+		return wrapError(ErrInvalidInput, "db is not available")
 	}
 
 	_, err := s.db.ExecContext(
@@ -259,7 +258,7 @@ func (s *monitorStore) assignMonitorOwner(ctx context.Context, monitorID, agentI
 		if isCodeEntityConflict(err) {
 			return nil
 		}
-		return fmt.Errorf("assign monitor owner: %w", err)
+		return wrapError(err, "assign monitor owner")
 	}
 	return nil
 }

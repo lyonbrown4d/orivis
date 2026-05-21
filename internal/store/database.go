@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -37,14 +38,14 @@ func OpenDB(cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
 	case "mysql":
 		return openDatabase(cfg, logger, "mysql", mysql.New(), false)
 	default:
-		return nil, fmt.Errorf("unsupported database driver %q: supported drivers are sqlite, mysql, pgx", cfg.DB.Driver)
+		return nil, newErrorf("unsupported database driver %q: supported drivers are sqlite, mysql, pgx", cfg.DB.Driver)
 	}
 }
 
 func openDatabase(cfg config.Config, logger *slog.Logger, driver string, d dialect.Dialect, forSQLite bool) (*dbx.DB, error) {
 	dsn := normalizeDatabaseDSN(driver, cfg.DB.DSN)
 	if strings.TrimSpace(dsn) == "" {
-		return nil, fmt.Errorf("%w: db.dsn is required", ErrInvalidInput)
+		return nil, wrapError(ErrInvalidInput, "db.dsn is required")
 	}
 
 	database, err := dbx.Open(
@@ -57,7 +58,7 @@ func openDatabase(cfg config.Config, logger *slog.Logger, driver string, d diale
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("open database store: %w", err)
+		return nil, wrapError(err, "open database store")
 	}
 
 	configureConnectionPool(database, cfg)
@@ -65,7 +66,7 @@ func openDatabase(cfg config.Config, logger *slog.Logger, driver string, d diale
 		configureSQLiteConnection(database, cfg.DB.DSN)
 		if err := configureSQLitePragmas(context.Background(), database, cfg); err != nil {
 			if closeErr := database.Close(); closeErr != nil {
-				return nil, fmt.Errorf("%w; close database store: %w", err, closeErr)
+				return nil, errors.Join(err, wrapError(closeErr, "close database store"))
 			}
 			return nil, err
 		}
@@ -117,7 +118,7 @@ func configureSQLitePragmas(ctx context.Context, database *dbx.DB, cfg config.Co
 
 func execSQLitePragma(ctx context.Context, database *dbx.DB, query string) error {
 	if _, err := database.ExecContext(ctx, query); err != nil {
-		return fmt.Errorf("configure sqlite pragma %q: %w", query, err)
+		return wrapErrorf(err, "configure sqlite pragma %q", query)
 	}
 	return nil
 }

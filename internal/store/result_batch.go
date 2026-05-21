@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
@@ -34,11 +33,11 @@ func (s *resultStore) monitorLookupForAgentBatch(
 	}
 	rows, err := queryer.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("find monitors for agents: %w", err)
+		return nil, wrapError(err, "find monitors for agents")
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil && err == nil {
-			err = fmt.Errorf("close monitors for agents rows: %w", closeErr)
+			err = wrapError(closeErr, "close monitors for agents rows")
 		}
 	}()
 	monitors, err = scanMonitorForAgentRows(rows)
@@ -106,7 +105,7 @@ func scanMonitorForAgentRows(rows *sql.Rows) (map[string]model.Monitor, error) {
 			&rec.UpdatedAt,
 			&agentID,
 		); err != nil {
-			return nil, fmt.Errorf("scan monitor for agent: %w", err)
+			return nil, wrapError(err, "scan monitor for agent")
 		}
 		monitor, err := rec.model()
 		if err != nil {
@@ -115,7 +114,7 @@ func scanMonitorForAgentRows(rows *sql.Rows) (map[string]model.Monitor, error) {
 		monitors[monitorAgentKey(rec.ID, agentID)] = monitor
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate monitors for agents: %w", err)
+		return nil, wrapError(err, "iterate monitors for agents")
 	}
 	return monitors, nil
 }

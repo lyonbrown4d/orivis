@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -51,7 +50,7 @@ func (s *agentStore) Register(ctx context.Context, params RegisterAgentParams) (
 func (s *agentStore) RecordHeartbeat(ctx context.Context, params AgentHeartbeatParams) (model.Agent, error) {
 	agentID := strings.TrimSpace(params.AgentID)
 	if agentID == "" {
-		return model.Agent{}, fmt.Errorf("%w: agent id is required", ErrInvalidInput)
+		return model.Agent{}, wrapError(ErrInvalidInput, "agent id is required")
 	}
 
 	seenAt := params.SeenAt.UTC()
@@ -75,7 +74,7 @@ func (s *agentStore) RecordHeartbeat(ctx context.Context, params AgentHeartbeatP
 			).
 			Where(schema.ID.Eq(agentID)),
 	); err != nil {
-		return model.Agent{}, fmt.Errorf("record heartbeat: %w", err)
+		return model.Agent{}, wrapError(err, "record heartbeat")
 	}
 
 	return s.Get(ctx, agentID)
@@ -87,7 +86,7 @@ func (s *agentStore) Authenticate(ctx context.Context, agentID, token string) (m
 		return model.Agent{}, err
 	}
 	if agent.Status == model.AgentStatusDisabled {
-		return model.Agent{}, fmt.Errorf("%w: agent is disabled", ErrUnauthorized)
+		return model.Agent{}, wrapError(ErrUnauthorized, "agent is disabled")
 	}
 	if err := verifyAgentToken(agent.TokenHash, token); err != nil {
 		return model.Agent{}, err
@@ -98,7 +97,7 @@ func (s *agentStore) Authenticate(ctx context.Context, agentID, token string) (m
 func (s *agentStore) Get(ctx context.Context, id string) (model.Agent, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return model.Agent{}, fmt.Errorf("%w: agent id is required", ErrInvalidInput)
+		return model.Agent{}, wrapError(ErrInvalidInput, "agent id is required")
 	}
 
 	rec, err := s.getAgentRecord(ctx, id)

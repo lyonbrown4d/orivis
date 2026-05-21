@@ -1,15 +1,12 @@
 package config
 
 import (
-	"errors"
-	"fmt"
 	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/hashicorp/hcl/v2/hclsimple"
 	"github.com/lyonbrown4d/orivis/internal/discovery"
 	"github.com/samber/mo"
-	"github.com/samber/oops"
 )
 
 type agentHCLFile struct {
@@ -99,13 +96,13 @@ func (agentHCLParser) Unmarshal(raw []byte) (map[string]any, error) {
 }
 
 func (agentHCLParser) Marshal(map[string]any) ([]byte, error) {
-	return nil, errors.New("agent HCL marshal is not supported")
+	return nil, newError("agent HCL marshal is not supported")
 }
 
 func decodeAgentHCL(filename string, raw []byte) (map[string]any, error) {
 	var file agentHCLFile
 	if err := hclsimple.Decode(filename, raw, nil, &file); err != nil {
-		return nil, fmt.Errorf("%w", oops.Wrapf(err, "load agent HCL config %s", filename))
+		return nil, wrapErrorf(err, "load agent HCL config %s", filename)
 	}
 	return file.defaults()
 }
@@ -218,14 +215,14 @@ func (discoveryConfig agentHCLDiscovery) staticMonitors() ([]discovery.StaticMon
 		func(acc *collectionlist.List[discovery.StaticMonitor], _ int, probe agentHCLProbe) (*collectionlist.List[discovery.StaticMonitor], error) {
 			monitor, err := probe.staticMonitor()
 			if err != nil {
-				return nil, fmt.Errorf("%w", oops.Wrapf(err, "decode agent HCL probe %q", probe.Name))
+				return nil, wrapErrorf(err, "decode agent HCL probe %q", probe.Name)
 			}
 			acc.Add(monitor)
 			return acc, nil
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build hcl static monitors: %w", err)
+		return nil, wrapError(err, "build hcl static monitors")
 	}
 	return monitors.Values(), nil
 }

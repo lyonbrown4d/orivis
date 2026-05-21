@@ -3,7 +3,6 @@ package notification
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -14,7 +13,7 @@ func (m *Manager) nextWebhookPayload(ctx context.Context, result model.ProbeResu
 	now := time.Now().UTC()
 	cooldown, err := parseDuration(m.cfg.Notification.Webhook.Cooldown, 5*time.Minute)
 	if err != nil {
-		return webhookPayload{}, false, fmt.Errorf("parse notification webhook cooldown: %w", err)
+		return webhookPayload{}, false, wrapError(err, "parse notification webhook cooldown")
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -69,14 +68,14 @@ func (m *Manager) loadAlertState(ctx context.Context, monitorID string) (alertSt
 	}
 	raw, ok, err := m.cache.Get(ctx, alertStateCacheKey(monitorID))
 	if err != nil {
-		return alertState{}, fmt.Errorf("load alert state: %w", err)
+		return alertState{}, wrapError(err, "load alert state")
 	}
 	if !ok {
 		return alertState{}, nil
 	}
 	var state alertState
 	if err := json.Unmarshal(raw, &state); err != nil {
-		return alertState{}, fmt.Errorf("decode alert state: %w", err)
+		return alertState{}, wrapError(err, "decode alert state")
 	}
 	return state, nil
 }
@@ -88,10 +87,10 @@ func (m *Manager) storeAlertState(ctx context.Context, monitorID string, state a
 	}
 	raw, err := json.Marshal(state)
 	if err != nil {
-		return fmt.Errorf("encode alert state: %w", err)
+		return wrapError(err, "encode alert state")
 	}
 	if err := m.cache.Set(ctx, alertStateCacheKey(monitorID), raw, alertStateTTL(cooldown)); err != nil {
-		return fmt.Errorf("store alert state: %w", err)
+		return wrapError(err, "store alert state")
 	}
 	return nil
 }

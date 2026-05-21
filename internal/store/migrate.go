@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -21,12 +20,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 	}
 
 	if _, err := s.DB.ExecContext(ctx, migrationsTableSQL); err != nil {
-		return fmt.Errorf("ensure migrations table: %w", err)
+		return wrapError(err, "ensure migrations table")
 	}
 
 	files, err := migrations.All()
 	if err != nil {
-		return fmt.Errorf("load migrations: %w", err)
+		return wrapError(err, "load migrations")
 	}
 	return s.applyPendingMigrations(ctx, files)
 }
@@ -50,7 +49,7 @@ func (s *Store) applyPendingMigrations(ctx context.Context, files []migrations.F
 func (s *Store) migrationApplied(ctx context.Context, version string) (bool, error) {
 	var count int
 	if err := s.DB.QueryRowContext(ctx, "SELECT COUNT(1) FROM schema_migrations WHERE version = ?", version).Scan(&count); err != nil {
-		return false, fmt.Errorf("check migration %s: %w", version, err)
+		return false, wrapErrorf(err, "check migration %s", version)
 	}
 	return count > 0, nil
 }
@@ -58,7 +57,7 @@ func (s *Store) migrationApplied(ctx context.Context, version string) (bool, err
 func (s *Store) applyMigration(ctx context.Context, file migrations.File) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("begin migration %s: %w", file.Version, err)
+		return wrapErrorf(err, "begin migration %s", file.Version)
 	}
 	committed := false
 	defer func() {
@@ -72,7 +71,7 @@ func (s *Store) applyMigration(ctx context.Context, file migrations.File) error 
 
 	for _, stmt := range splitSQLScript(file.SQL) {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("apply migration %s: %w", file.Version, err)
+			return wrapErrorf(err, "apply migration %s", file.Version)
 		}
 	}
 
@@ -82,11 +81,11 @@ func (s *Store) applyMigration(ctx context.Context, file migrations.File) error 
 		file.Version,
 		formatTime(time.Now().UTC()),
 	); err != nil {
-		return fmt.Errorf("record migration %s: %w", file.Version, err)
+		return wrapErrorf(err, "record migration %s", file.Version)
 	}
 
 	if err := tx.CommitContext(ctx); err != nil {
-		return fmt.Errorf("commit migration %s: %w", file.Version, err)
+		return wrapErrorf(err, "commit migration %s", file.Version)
 	}
 	committed = true
 	return nil

@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/arcgolabs/dbx"
@@ -107,7 +106,7 @@ func (s *Store) RecordNotificationDelivery(ctx context.Context, params Notificat
 	}
 	id, err := s.ids.NewID(ctx, "ntf")
 	if err != nil {
-		return fmt.Errorf("new notification delivery id: %w", err)
+		return wrapError(err, "new notification delivery id")
 	}
 	now := time.Now().UTC()
 	row := notificationDeliveryRow{
@@ -129,7 +128,7 @@ func (s *Store) RecordNotificationDelivery(ctx context.Context, params Notificat
 		CreatedAt:     formatTime(now),
 	}
 	if err := s.repositories.notificationDeliveries.Create(ctx, &row); err != nil {
-		return fmt.Errorf("record notification delivery: %w", err)
+		return wrapError(err, "record notification delivery")
 	}
 	return nil
 }
@@ -149,7 +148,7 @@ func (s *Store) DashboardNotifications(ctx context.Context, limit int) ([]Dashbo
 			Limit(limit),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list dashboard notifications: %w", err)
+		return nil, wrapError(err, "list dashboard notifications")
 	}
 	rowsValues := rows.Values()
 	notifications := make([]DashboardNotification, 0, len(rowsValues))

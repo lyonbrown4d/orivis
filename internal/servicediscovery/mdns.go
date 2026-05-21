@@ -61,7 +61,7 @@ func (a *MDNSAdvertiser) Start(context.Context) error {
 		return nil
 	}
 	if a.cfg.Port <= 0 {
-		return errors.New("mDNS advertise port is required")
+		return newError("mDNS advertise port is required")
 	}
 	text := []string{
 		"role=server",
@@ -70,11 +70,11 @@ func (a *MDNSAdvertiser) Start(context.Context) error {
 	}
 	service, err := mdns.NewMDNSService(a.cfg.Instance, normalizeService(a.cfg.Service), normalizeDomain(a.cfg.Domain), "", a.cfg.Port, nil, text)
 	if err != nil {
-		return fmt.Errorf("create mDNS service: %w", err)
+		return wrapError(err, "create mDNS service")
 	}
 	server, err := mdns.NewServer(&mdns.Config{Zone: service})
 	if err != nil {
-		return fmt.Errorf("start mDNS server: %w", err)
+		return wrapError(err, "start mDNS server")
 	}
 	a.server = server
 	if a.logger != nil {
@@ -88,7 +88,7 @@ func (a *MDNSAdvertiser) Stop(context.Context) error {
 		return nil
 	}
 	if err := a.server.Shutdown(); err != nil {
-		return fmt.Errorf("stop mDNS server: %w", err)
+		return wrapError(err, "stop mDNS server")
 	}
 	if a.logger != nil {
 		a.logger.Info("mDNS server discovery stopped", "service", normalizeService(a.cfg.Service), "instance", a.cfg.Instance)
@@ -137,13 +137,13 @@ func receiveMDNSEvent(ctx context.Context, entries <-chan *mdns.ServiceEntry, er
 	case err := <-errCh:
 		return ServerEndpoint{}, false, wrapMDNSQueryError(err)
 	case <-ctx.Done():
-		return ServerEndpoint{}, false, fmt.Errorf("resolve mDNS server: %w", ctx.Err())
+		return ServerEndpoint{}, false, wrapError(ctx.Err(), "resolve mDNS server")
 	}
 }
 
 func serverEndpointFromMDNSEntry(entry *mdns.ServiceEntry, channelOpen bool, defaultScheme string, logger *slog.Logger) (ServerEndpoint, bool, error) {
 	if !channelOpen {
-		return ServerEndpoint{}, false, errors.New("mDNS entries closed before server was discovered")
+		return ServerEndpoint{}, false, newError("mDNS entries closed before server was discovered")
 	}
 	endpoint, ok := endpointFromEntry(entry, defaultScheme)
 	if !ok {
@@ -159,7 +159,7 @@ func wrapMDNSQueryError(err error) error {
 	if err == nil || errors.Is(err, context.Canceled) {
 		return nil
 	}
-	return fmt.Errorf("browse mDNS service: %w", err)
+	return wrapError(err, "browse mDNS service")
 }
 
 func HTTPPortFromAddr(addr string, fallback int) int {

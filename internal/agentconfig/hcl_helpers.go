@@ -1,12 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/samber/mo"
-	"github.com/samber/oops"
 )
 
 func setOptional[T any](values map[string]any, key string, value *T) {
@@ -22,7 +20,7 @@ func parseAgentHCLDuration(value string) (time.Duration, error) {
 	}
 	duration, err := time.ParseDuration(value)
 	if err != nil {
-		return 0, fmt.Errorf("%w", oops.Wrapf(err, "parse agent HCL duration %q", value))
+		return 0, wrapErrorf(err, "parse agent HCL duration %q", value)
 	}
 	return duration, nil
 }

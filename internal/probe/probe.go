@@ -43,6 +43,16 @@ func New() *Checker {
 	}
 }
 
+func (c *Checker) Close() error {
+	if c == nil || c.httpClient == nil {
+		return nil
+	}
+	if err := c.httpClient.Close(); err != nil {
+		return wrapError(err, "close HTTP probe client")
+	}
+	return nil
+}
+
 func (c *Checker) Check(ctx context.Context, task protocol.AgentTask) Result {
 	start := time.Now().UTC()
 	checkCtx, cancel := context.WithTimeout(ctx, taskTimeout(task))

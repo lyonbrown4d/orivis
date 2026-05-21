@@ -1,4 +1,4 @@
-package retention
+package servicediscovery
 
 import (
 	"errors"
@@ -11,5 +11,8 @@ func newError(message string) error {
 }
 
 func wrapError(err error, message string) error {
-	return oops.In("retention").Wrapf(err, "%s", message)
+	if err == nil {
+		return nil
+	}
+	return oops.In("servicediscovery").Wrapf(err, "%s", message)
 }

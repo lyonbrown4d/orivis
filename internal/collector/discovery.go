@@ -3,8 +3,6 @@ package collector
 import (
 	"context"
 	"log/slog"
-	"strconv"
-	"strings"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	collectionset "github.com/arcgolabs/collectionx/set"
@@ -120,24 +118,4 @@ func deduplicateMonitors(monitors []protocol.AgentDiscoveredMonitor) []protocol.
 		out.Add(monitors[i])
 	}
 	return out.Values()
-}
-
-func discoveredMonitorKey(m protocol.AgentDiscoveredMonitor) string {
-	enabled := "nil"
-	if m.Enabled != nil {
-		enabled = strconv.FormatBool(*m.Enabled)
-	}
-	return strings.Join([]string{
-		m.SourceKey,
-		m.Name,
-		m.Type,
-		m.Target,
-		m.GroupName,
-		m.EnvironmentCode,
-		strconv.Itoa(m.IntervalSeconds),
-		strconv.Itoa(m.TimeoutSeconds),
-		strconv.Itoa(m.RetryCount),
-		m.AggregationPolicy,
-		enabled,
-	}, "\x1f")
 }

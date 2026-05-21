@@ -130,11 +130,19 @@ func firstQueryValues(values url.Values) map[string]string {
 	}
 	result := make(map[string]string, len(values))
 	for key, items := range values {
-		if len(items) > 0 {
-			result[key] = items[0]
+		value, ok := firstQueryValue(items)
+		if ok {
+			result[key] = value
 		}
 	}
 	return result
+}
+
+func firstQueryValue(items []string) (string, bool) {
+	if len(items) == 0 {
+		return "", false
+	}
+	return items[0], true
 }
 
 func trimDatabasePrefix(target string) string {

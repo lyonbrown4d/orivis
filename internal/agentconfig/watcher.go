@@ -3,13 +3,11 @@ package config
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/arcgolabs/configx"
-	"github.com/samber/oops"
 	"github.com/spf13/pflag"
 )
 
@@ -48,7 +46,7 @@ func (w *Watcher) OnChange(fn func(Config, error)) {
 func (w *Watcher) Start(ctx context.Context) error {
 	if w == nil || w.start == nil {
 		<-ctx.Done()
-		return fmt.Errorf("agent config watcher stopped: %w", ctx.Err())
+		return wrapError(ctx.Err(), "agent config watcher stopped")
 	}
 	return w.start(ctx)
 }
@@ -82,15 +80,15 @@ func newConfigxWatcher(flags *pflag.FlagSet, configFile string, opts ...configx.
 
 	raw, err := configx.NewWatcherT[Config](loadOptions...)
 	if err != nil {
-		return nil, fmt.Errorf("create agent config watcher: %w", err)
+		return nil, wrapError(err, "create agent config watcher")
 	}
 
 	cfg, err := finalizeConfig(raw.Config())
 	if err != nil {
 		if closeErr := raw.Close(); closeErr != nil {
-			return nil, errors.Join(err, fmt.Errorf("close agent config watcher: %w", closeErr))
+			return nil, errors.Join(err, wrapError(closeErr, "close agent config watcher"))
 		}
-		return nil, fmt.Errorf("finalize agent config watcher: %w", err)
+		return nil, wrapError(err, "finalize agent config watcher")
 	}
 
 	watcher := &Watcher{
@@ -151,7 +149,7 @@ type fileSignature struct {
 func (w *pollingWatcher) start(ctx context.Context, watcher *Watcher) error {
 	if w.configFile == "" {
 		<-ctx.Done()
-		return fmt.Errorf("agent config watcher stopped: %w", ctx.Err())
+		return wrapError(ctx.Err(), "agent config watcher stopped")
 	}
 
 	ticker := time.NewTicker(fallbackWatchInterval)
@@ -160,7 +158,7 @@ func (w *pollingWatcher) start(ctx context.Context, watcher *Watcher) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("agent config watcher stopped: %w", ctx.Err())
+			return wrapError(ctx.Err(), "agent config watcher stopped")
 		case <-ticker.C:
 			w.reloadIfChanged(watcher)
 		}
@@ -176,7 +174,7 @@ func (w *pollingWatcher) reloadIfChanged(watcher *Watcher) {
 
 	cfg, err := LoadFromFlags(w.flags, w.configFile, w.opts...)
 	if err != nil {
-		watcher.notify(Config{}, oops.Wrapf(err, "reload agent config"))
+		watcher.notify(Config{}, wrapError(err, "reload agent config"))
 		return
 	}
 	watcher.update(cfg)

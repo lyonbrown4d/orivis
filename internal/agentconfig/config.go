@@ -1,8 +1,6 @@
 package config
 
 import (
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,7 +96,7 @@ func finalizeConfig(cfg Config) (Config, error) {
 	}
 	hclMonitors, err := discovery.LoadStaticMonitorsHCL(cfg.Discovery.Static.HCLFiles)
 	if err != nil {
-		return Config{}, fmt.Errorf("load static monitors HCL: %w", err)
+		return Config{}, wrapError(err, "load static monitors HCL")
 	}
 	cfg.Discovery.Static.Monitors = normalizeStaticMonitors(cfg.Discovery.Static.Monitor, cfg.Discovery.Static.Monitors, hclMonitors)
 	return cfg, nil
@@ -178,7 +176,7 @@ func normalizeBufferConfig(cfg *Config) error {
 	case "memory", "persistent":
 		return nil
 	default:
-		return fmt.Errorf("unsupported buffer driver %q", cfg.Buffer.Driver)
+		return newErrorf("unsupported buffer driver %q", cfg.Buffer.Driver)
 	}
 }
 
@@ -194,11 +192,11 @@ func normalizeDiscoveryConfig(cfg *Config) error {
 			return nil
 		}
 		if cfg.Discovery.Docker.Mode == "" {
-			return errors.New("discovery provider must be set when docker discovery is enabled")
+			return newError("discovery provider must be set when docker discovery is enabled")
 		}
 		return nil
 	default:
-		return fmt.Errorf("unsupported discovery provider %q", cfg.Discovery.Provider)
+		return newErrorf("unsupported discovery provider %q", cfg.Discovery.Provider)
 	}
 }
 
@@ -209,7 +207,7 @@ func normalizeDockerDiscovery(cfg *Config) error {
 		cfg.Runtime = "docker"
 	}
 	if cfg.Discovery.Docker.Mode == "" {
-		return errors.New("discovery docker mode is required when provider is docker")
+		return newError("discovery docker mode is required when provider is docker")
 	}
 	return nil
 }
