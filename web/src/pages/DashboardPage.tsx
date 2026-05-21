@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, ArrowLeft, BellRing, CircleAlert, Cpu, ExternalLink, RadioTower, Timer } from 'lucide-react';
+import { Activity, ArrowLeft, BellRing, CheckCircle2, CircleAlert, Cpu, ExternalLink, Layers3, RadioTower, Sparkles, Timer, WifiOff } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
 import { PreferenceControls } from '@/components/PreferenceControls';
 import { StatusBadge, StatusLights } from '@/components/status';
@@ -76,6 +76,8 @@ function DashboardView({
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
       <section className="space-y-6">
+        <CommandCenter snapshot={snapshot} formatTime={formatTime} />
+
         <div className="grid gap-4 md:grid-cols-4">
           <SummaryCard label={t('monitors')} value={snapshot.summary.monitors} tone="slate" />
           <SummaryCard label={t('up')} value={snapshot.summary.up} tone="emerald" />
@@ -83,10 +85,13 @@ function DashboardView({
           <SummaryCard label={t('unknown')} value={snapshot.summary.unknown} tone="amber" />
         </div>
 
-        <Card className="border-white/60 bg-white/80 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/65">
+        <Card className="overflow-visible border-white/60 bg-white/80 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-950/65">
           <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <CardTitle className="text-xl font-black">{t('recentUptime')}</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-xl font-black">
+                <Sparkles className="h-5 w-5 text-teal-600 dark:text-teal-300" />
+                {t('recentUptime')}
+              </CardTitle>
               <p className="text-sm text-slate-500 dark:text-slate-400">{isFetching ? t('refreshing') : `${t('updated')}: ${formatTime(snapshot.generated_at)}`}</p>
             </div>
             <Badge className="w-fit rounded-full px-3 py-1 text-xs uppercase tracking-wide">
@@ -123,7 +128,7 @@ function DashboardView({
             <CardTitle className="text-xl font-black">{t('groups')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {snapshot.groups.map((group) => (
+            {snapshot.groups.length === 0 ? <EmptyState text={t('noGroups')} /> : snapshot.groups.map((group) => (
               <Link key={group.slug} to={`/${group.slug}`} className="block rounded-3xl border border-slate-200 bg-white/75 p-4 transition hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/70">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -189,6 +194,50 @@ function DashboardView({
           </CardContent>
         </Card>
       </aside>
+    </div>
+  );
+}
+
+function CommandCenter({ snapshot, formatTime }: { snapshot: DashboardSnapshot; formatTime: (value?: string) => string }) {
+  const { t } = useTranslation();
+  const down = snapshot.summary.down;
+  const unknown = snapshot.summary.unknown;
+  const monitors = snapshot.summary.monitors;
+  const rate = monitors > 0 ? Math.round((snapshot.summary.up / monitors) * 100) : 0;
+  const healthy = down === 0 && unknown === 0;
+  const Icon = healthy ? CheckCircle2 : WifiOff;
+
+  return (
+    <Card className="overflow-hidden border-white/70 bg-slate-950 text-white shadow-2xl shadow-teal-950/20 dark:border-slate-800">
+      <CardContent className="relative p-6 md:p-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(45,212,191,0.32),_transparent_34rem),radial-gradient(circle_at_bottom_left,_rgba(251,191,36,0.22),_transparent_24rem)]" />
+        <div className="relative grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-teal-100 ring-1 ring-white/15">
+              <Icon className="h-4 w-4" />
+              {healthy ? t('operational') : t('attentionRequired')}
+            </div>
+            <h2 className="mt-5 max-w-2xl text-4xl font-black tracking-tight md:text-6xl">{t('healthOverview')}</h2>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
+              {t('updated')}: {formatTime(snapshot.generated_at)}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <HeroMetric label={t('availabilityRate')} value={`${rate}%`} />
+            <HeroMetric label={t('activeAgents')} value={snapshot.summary.agents} />
+            <HeroMetric label={t('trackedChecks')} value={snapshot.status_lights.length} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeroMetric({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-3xl bg-white/10 px-4 py-3 ring-1 ring-white/15 backdrop-blur">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">{label}</p>
+      <p className="mt-2 text-3xl font-black text-white">{value}</p>
     </div>
   );
 }
@@ -303,7 +352,7 @@ function MonitorRow({ monitor, formatTime }: { monitor: Monitor; formatTime: (va
         <IconMetric icon={<Cpu className="h-4 w-4" />} label={t('environment')} value={monitor.environment_code || '-'} />
         <IconMetric icon={<RadioTower className="h-4 w-4" />} label={t('source')} value={monitor.source || monitor.discovery_source || '-'} />
         <IconMetric icon={<Timer className="h-4 w-4" />} label={t('latency')} value={monitor.latest ? `${monitor.latest.latency_ms}ms` : '-'} />
-        <IconMetric icon={<Activity className="h-4 w-4" />} label={t('checkedAt')} value={formatTime(monitor.latest?.checked_at)} />
+        <IconMetric icon={<Layers3 className="h-4 w-4" />} label={t('checkedAt')} value={formatTime(monitor.latest?.checked_at)} />
       </div>
       {monitor.latest?.error_message && (
         <div className="mt-4 flex items-start gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-300">

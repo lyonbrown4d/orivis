@@ -22,7 +22,7 @@ export function AppShell({ snapshot, children }: { snapshot?: DashboardSnapshot;
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.16),_transparent_30%),linear-gradient(135deg,_#f8fafc,_#eef2ff_48%,_#ecfeff)] text-slate-950 dark:bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.12),_transparent_30%),linear-gradient(135deg,_#020617,_#0f172a_48%,_#111827)] dark:text-slate-50">
       <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <aside className="border-b border-white/50 bg-white/65 p-5 shadow-xl shadow-slate-200/40 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/70 dark:shadow-black/20 lg:border-b-0 lg:border-r">
+        <aside className="border-b border-white/50 bg-white/70 p-5 shadow-xl shadow-slate-200/40 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/75 dark:shadow-black/20 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto lg:border-b-0 lg:border-r">
           <Link to="/" className="flex items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-teal-500/20 dark:bg-white dark:text-slate-950">
               <Activity className="h-5 w-5" />
@@ -57,14 +57,22 @@ export function AppShell({ snapshot, children }: { snapshot?: DashboardSnapshot;
               {t('allServices')}
               <span>{snapshot?.all_monitors ?? 0}</span>
             </Link>
+            {snapshot?.groups.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">{t('noGroups')}</div>
+            )}
             {snapshot?.groups.map((group) => (
               <Link
                 key={group.slug}
                 to={`/${group.slug}`}
-                className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white/50 px-4 py-3 text-sm transition hover:bg-white dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900"
+                className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-white/50 px-4 py-3 text-sm transition hover:-translate-y-0.5 hover:bg-white hover:shadow-lg dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900"
               >
-                <span className="font-semibold text-slate-700 dark:text-slate-200">{group.name}</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">{group.count}</span>
+                <span>
+                  <span className="block font-semibold text-slate-700 dark:text-slate-200">{group.name}</span>
+                  <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                    {group.up}/{group.count} {t('up')}
+                  </span>
+                </span>
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-black text-slate-600 dark:bg-slate-800 dark:text-slate-300">{group.count}</span>
               </Link>
             ))}
           </div>
