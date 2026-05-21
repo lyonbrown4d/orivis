@@ -39,10 +39,11 @@ type Config struct {
 		Workers  int           `mapstructure:"workers"`
 	} `mapstructure:"poll"`
 	Buffer struct {
-		Enabled  bool   `mapstructure:"enabled"`
-		Driver   string `mapstructure:"driver"`
-		Path     string `mapstructure:"path"`
-		Capacity int    `mapstructure:"capacity" validate:"min=0"`
+		Enabled        bool   `mapstructure:"enabled"`
+		Driver         string `mapstructure:"driver"`
+		Path           string `mapstructure:"path"`
+		Capacity       int    `mapstructure:"capacity"       validate:"min=0"`
+		FlushBatchSize int    `mapstructure:"flushbatchsize" validate:"min=0"`
 	} `mapstructure:"buffer"`
 	Transport struct {
 		RequestTimeout        time.Duration `mapstructure:"requesttimeout"`
@@ -169,6 +170,9 @@ func normalizeBufferConfig(cfg *Config) error {
 	cfg.Buffer.Path = strings.TrimSpace(cfg.Buffer.Path)
 	if cfg.Buffer.Path == "" && cfg.Buffer.Driver == "persistent" {
 		cfg.Buffer.Path = filepath.Join(os.TempDir(), "orivis-agent-buffer")
+	}
+	if cfg.Buffer.FlushBatchSize <= 0 {
+		cfg.Buffer.FlushBatchSize = 100
 	}
 	switch cfg.Buffer.Driver {
 	case "memory", "persistent":

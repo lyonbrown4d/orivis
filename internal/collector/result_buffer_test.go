@@ -104,7 +104,7 @@ func assertPush(t *testing.T, buffer collector.ResultQueue, monitorID string, dr
 }
 
 func bufferedResult(monitorID string) protocol.AgentResultRequest {
-	return protocol.AgentResultRequest{MonitorID: monitorID, Status: "up"}
+	return protocol.AgentResultRequest{ResultID: "result-" + monitorID, MonitorID: monitorID, Status: "up"}
 }
 
 func assertBufferedMonitor(t *testing.T, buffer collector.ResultQueue, monitorID string) {

@@ -79,6 +79,9 @@ func assertDefaultBufferConfig(t *testing.T, cfg config.Config) {
 	if cfg.Buffer.Driver != "persistent" || cfg.Buffer.Path != filepath.Join(os.TempDir(), "orivis-agent-buffer") {
 		t.Fatalf("unexpected buffer storage defaults: %#v", cfg.Buffer)
 	}
+	if cfg.Buffer.FlushBatchSize != 100 {
+		t.Fatalf("unexpected buffer flush batch size: %#v", cfg.Buffer)
+	}
 }
 
 func isolateOrivisEnv(t *testing.T) {
@@ -101,6 +104,7 @@ func isolateOrivisEnv(t *testing.T) {
 		"ORIVIS_BUFFER__DRIVER",
 		"ORIVIS_BUFFER__PATH",
 		"ORIVIS_BUFFER__CAPACITY",
+		"ORIVIS_BUFFER__FLUSHBATCHSIZE",
 		"ORIVIS_TRANSPORT__REQUESTTIMEOUT",
 		"ORIVIS_TRANSPORT__MAXIDLECONNS",
 		"ORIVIS_TRANSPORT__MAXIDLECONNSPERHOST",

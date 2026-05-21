@@ -23,6 +23,7 @@ type ResultStore interface {
 
 type RecordProbeResultParams struct {
 	Agent        model.Agent
+	ResultID     string
 	MonitorID    string
 	Status       model.Status
 	Latency      time.Duration
@@ -59,7 +60,7 @@ func (s *resultStore) RecordBatch(ctx context.Context, params []RecordProbeResul
 
 	var results []model.ProbeResult
 	err := s.repositories.probeResults.InTx(ctx, nil, func(tx *dbx.Tx, repo *repository.Base[probeResultRow, probeResultSchema]) error {
-		nextResults, rows, err := s.prepareProbeResultRows(ctx, tx, params)
+		nextResults, rows, err := s.prepareProbeResultRows(ctx, tx, repo, params)
 		if err != nil {
 			return err
 		}
@@ -94,21 +95,28 @@ func (s *resultStore) DeleteBefore(ctx context.Context, before time.Time) (int64
 func (s *resultStore) prepareProbeResultRows(
 	ctx context.Context,
 	queryer resultQueryer,
+	repo *repository.Base[probeResultRow, probeResultSchema],
 	params []RecordProbeResultParams,
 ) ([]model.ProbeResult, []*probeResultRow, error) {
 	normalized, err := normalizeProbeResultParamList(params)
 	if err != nil {
 		return nil, nil, err
 	}
-	monitors, err := s.monitorLookupForAgentBatch(ctx, queryer, normalized.Values())
+	existing, err := existingProbeResultsByResultID(ctx, repo, normalized)
+	if err != nil {
+		return nil, nil, err
+	}
+	existingResults := orderedExistingProbeResults(normalized, existing)
+	pending := pendingProbeResults(normalized, existing)
+	monitors, err := s.monitorLookupForAgentBatch(ctx, queryer, pending.Values())
 	if err != nil {
 		return nil, nil, err
 	}
 	prepared, err := collectionlist.ReduceErrList(
-		normalized,
+		pending,
 		preparedProbeResultRows{
-			results: collectionlist.NewListWithCapacity[model.ProbeResult](len(params)),
-			rows:    collectionlist.NewListWithCapacity[*probeResultRow](len(params)),
+			results: collectionlist.NewList(existingResults...),
+			rows:    collectionlist.NewListWithCapacity[*probeResultRow](pending.Len()),
 		},
 		func(out preparedProbeResultRows, _ int, params normalizedProbeResultParams) (preparedProbeResultRows, error) {
 			monitor, ok := monitors[monitorAgentKey(params.MonitorID, params.Agent.ID)]
@@ -149,6 +157,7 @@ func (s *resultStore) prepareProbeResultRowWithMonitor(
 
 	return model.ProbeResult{
 		ID:            id,
+		ResultID:      normalized.ResultID,
 		MonitorID:     monitor.ID,
 		AgentID:       normalized.Agent.ID,
 		RegionID:      normalized.Agent.RegionID,
@@ -164,6 +173,7 @@ func (s *resultStore) prepareProbeResultRowWithMonitor(
 
 type normalizedProbeResultParams struct {
 	Agent        model.Agent
+	ResultID     string
 	MonitorID    string
 	Status       model.Status
 	Latency      time.Duration
@@ -175,6 +185,7 @@ type normalizedProbeResultParams struct {
 func normalizeProbeResultParams(params RecordProbeResultParams) (normalizedProbeResultParams, error) {
 	out := normalizedProbeResultParams{
 		Agent:        params.Agent,
+		ResultID:     strings.TrimSpace(params.ResultID),
 		MonitorID:    strings.TrimSpace(params.MonitorID),
 		Status:       params.Status,
 		Latency:      params.Latency,

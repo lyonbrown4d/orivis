@@ -76,6 +76,7 @@ type AgentMonitorSyncResponse struct {
 type AgentResultRequest struct {
 	AgentID      string    `json:"agent_id"                validate:"required"`
 	Token        string    `json:"token,omitempty"`
+	ResultID     string    `json:"result_id,omitempty"`
 	MonitorID    string    `json:"monitor_id"              validate:"required"`
 	Status       string    `json:"status"                  validate:"required"`
 	LatencyMS    int64     `json:"latency_ms,omitempty"`
@@ -85,6 +86,7 @@ type AgentResultRequest struct {
 }
 
 type AgentResult struct {
+	ResultID     string    `json:"result_id,omitempty"`
 	MonitorID    string    `json:"monitor_id"              validate:"required"`
 	Status       string    `json:"status"                  validate:"required"`
 	LatencyMS    int64     `json:"latency_ms,omitempty"`
@@ -105,6 +107,7 @@ type AgentResultBatchResponse struct {
 
 func AgentResultFromRequest(req AgentResultRequest) AgentResult {
 	return AgentResult{
+		ResultID:     req.ResultID,
 		MonitorID:    req.MonitorID,
 		Status:       req.Status,
 		LatencyMS:    req.LatencyMS,

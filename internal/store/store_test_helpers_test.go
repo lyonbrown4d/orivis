@@ -63,11 +63,11 @@ func assertRegisteredAgent(t *testing.T, agent model.Agent) {
 	}
 }
 
-func createTestMonitor(t *testing.T, storage *store.Store, agent model.Agent, name string) model.Monitor {
+func createTestMonitor(t *testing.T, storage *store.Store, agent model.Agent) model.Monitor {
 	t.Helper()
 	environmentID := singleEnvironmentID(t, agent)
 	monitor, err := storage.MonitorStore().Create(context.Background(), store.CreateMonitorParams{
-		Name:              name,
+		Name:              "API health",
 		Type:              model.MonitorHTTP,
 		Target:            "https://example.com/health",
 		EnvironmentID:     environmentID,
@@ -109,6 +109,7 @@ func recordTestResult(t *testing.T, storage *store.Store, agent model.Agent, mon
 	t.Helper()
 	result, err := storage.ResultStore().Record(context.Background(), store.RecordProbeResultParams{
 		Agent:     agent,
+		ResultID:  "test-result-" + monitorID,
 		MonitorID: monitorID,
 		Status:    model.StatusUp,
 		Latency:   42 * time.Millisecond,
@@ -124,6 +125,10 @@ func assertProbeResult(t *testing.T, result model.ProbeResult, agent model.Agent
 	if result.MonitorID != monitorID || result.AgentID != agent.ID || result.RegionID != agent.RegionID {
 		t.Fatalf("unexpected result: %#v", result)
 	}
+}
+
+func storeStatusUp() model.Status {
+	return model.StatusUp
 }
 
 func newTestStore(t *testing.T) *store.Store {

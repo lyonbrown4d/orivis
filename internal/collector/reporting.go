@@ -18,7 +18,7 @@ func (r *Runner) runTask(ctx context.Context, task protocol.AgentTask) {
 	}
 
 	result := r.checker.Check(ctx, task)
-	req := protocol.AgentResultRequest{
+	req := ensureAgentResultID(protocol.AgentResultRequest{
 		AgentID:      r.agentID,
 		Token:        r.cfg.Agent.Token,
 		MonitorID:    task.MonitorID,
@@ -27,10 +27,10 @@ func (r *Runner) runTask(ctx context.Context, task protocol.AgentTask) {
 		ErrorMessage: result.ErrorMessage,
 		CheckedAt:    result.CheckedAt,
 		RawDetail:    result.RawDetail,
-	}
+	})
 
 	if r.cfg.Buffer.Enabled {
-		if !r.queueResult(req) {
+		if !r.queueResult(ctx, req) {
 			r.reportResultDirect(ctx, req)
 		}
 		r.logTaskResult(ctx, task, result.Status, result.Latency)
@@ -58,7 +58,7 @@ func (r *Runner) logTaskResult(ctx context.Context, task protocol.AgentTask, sta
 	)
 }
 
-func (r *Runner) queueResult(req protocol.AgentResultRequest) bool {
+func (r *Runner) queueResult(ctx context.Context, req protocol.AgentResultRequest) bool {
 	if r.results == nil {
 		return false
 	}
@@ -68,12 +68,17 @@ func (r *Runner) queueResult(req protocol.AgentResultRequest) bool {
 		r.logger.Warn("agent result buffer write failed", "monitor_id", req.MonitorID, "error", result.err)
 		return false
 	}
+	r.metrics.observeBufferLength(ctx, result.size)
 	if !result.buffered {
 		r.logger.Debug("agent result dropped; buffer capacity is zero", "monitor_id", req.MonitorID, "buffer_size", result.size)
 		return false
 	}
+	if result.droppedOldest {
+		r.metrics.observeBufferDropped(ctx)
+	}
 	r.logger.Debug(
 		"agent result queued for flush",
+		"result_id", req.ResultID,
 		"monitor_id", req.MonitorID,
 		"buffer_size", result.size,
 		"dropped_oldest", result.droppedOldest,
@@ -95,12 +100,23 @@ func (r *Runner) flushBufferedResults(ctx context.Context) {
 	r.flushMu.Lock()
 	defer r.flushMu.Unlock()
 
-	batch, err := r.results.PeekBatch(defaultResultFlushBatchSize)
+	now := time.Now()
+	if !r.flushBackoff.CanAttempt(now) {
+		r.logger.Debug(
+			"agent buffered result flush skipped by backoff",
+			"remaining", r.results.Len(),
+			"next_attempt", r.flushBackoff.nextAttempt,
+		)
+		return
+	}
+
+	batch, err := r.results.PeekBatch(resultFlushBatchSize(r.cfg.Buffer.FlushBatchSize, r.cfg.Buffer.Capacity))
 	if err != nil {
-		r.logger.Warn("agent buffered result read failed", "remaining", r.results.Len(), "error", err)
+		r.recordFlushFailure(ctx, now, "agent buffered result read failed", 0, err)
 		return
 	}
 	if len(batch) == 0 {
+		r.flushBackoff.Reset()
 		return
 	}
 
@@ -116,12 +132,40 @@ func (r *Runner) flushBufferedResults(ctx context.Context) {
 	}
 	resp, err := r.client.ReportResults(ctx, req)
 	if err != nil {
-		r.logger.Warn("agent buffered result batch flush failed", "count", len(batch), "remaining", r.results.Len(), "error", err)
+		r.recordFlushFailure(ctx, now, "agent buffered result batch flush failed", len(batch), err)
 		return
 	}
 	if err := r.results.DropBatch(len(batch)); err != nil {
-		r.logger.Warn("agent buffered result batch drop failed", "count", len(batch), "remaining", r.results.Len(), "error", err)
+		r.recordFlushFailure(ctx, now, "agent buffered result batch drop failed", len(batch), err)
 		return
 	}
+	r.flushBackoff.Reset()
+	r.metrics.observeFlushSuccess(ctx, resp.Accepted)
+	r.metrics.observeBufferLength(ctx, r.results.Len())
 	r.logger.Info("agent buffered results flushed", "count", resp.Accepted, "remaining", r.results.Len())
+}
+
+func (r *Runner) recordFlushFailure(ctx context.Context, now time.Time, message string, count int, err error) {
+	delay := r.flushBackoff.RecordFailure(now)
+	r.metrics.observeFlushFailure(ctx, delay)
+	r.metrics.observeBufferLength(ctx, r.results.Len())
+	r.logger.Warn(
+		message,
+		"count", count,
+		"remaining", r.results.Len(),
+		"retry_after", delay,
+		"next_attempt", r.flushBackoff.nextAttempt,
+		"error", err,
+	)
+}
+
+func resultFlushBatchSize(configured, capacity int) int {
+	size := configured
+	if size <= 0 {
+		size = defaultResultFlushBatchSize
+	}
+	if capacity > 0 {
+		size = min(size, capacity)
+	}
+	return max(1, size)
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	collectionmapping "github.com/arcgolabs/collectionx/mapping"
+	"github.com/arcgolabs/observabilityx"
 	"github.com/go-co-op/gocron"
 	agentclient "github.com/lyonbrown4d/orivis/internal/agentclient"
 	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
@@ -20,6 +21,7 @@ type Runner struct {
 	client                    *agentclient.Client
 	checker                   *probe.Checker
 	discovery                 MonitorDiscoverer
+	metrics                   runnerMetrics
 	agentID                   string
 	stop                      context.CancelFunc
 	taskPool                  *ants.Pool
@@ -27,6 +29,7 @@ type Runner struct {
 	tasks                     *collectionmapping.Map[string, scheduledTask]
 	results                   ResultQueue
 	flushMu                   sync.Mutex
+	flushBackoff              resultFlushBackoff
 	discoverySignatureMu      sync.Mutex
 	lastDiscoverySignature    string
 	lastDiscoveryMonitorCount int
@@ -41,7 +44,15 @@ type scheduledTask struct {
 	signature string
 }
 
-func NewRunner(cfg config.Config, logger *slog.Logger, client *agentclient.Client, taskPool *ants.Pool, discoverer MonitorDiscoverer, results ResultQueue) *Runner {
+func NewRunner(
+	cfg config.Config,
+	logger *slog.Logger,
+	obs observabilityx.Observability,
+	client *agentclient.Client,
+	taskPool *ants.Pool,
+	discoverer MonitorDiscoverer,
+	results ResultQueue,
+) *Runner {
 	runner := &Runner{
 		cfg:       cfg,
 		logger:    logger,
@@ -50,6 +61,7 @@ func NewRunner(cfg config.Config, logger *slog.Logger, client *agentclient.Clien
 		checker:   probe.New(),
 		tasks:     collectionmapping.NewMap[string, scheduledTask](),
 		discovery: discoverer,
+		metrics:   newRunnerMetrics(obs, logger),
 		results:   results,
 	}
 	return runner

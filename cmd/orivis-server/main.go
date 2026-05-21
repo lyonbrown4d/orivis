@@ -112,7 +112,7 @@ func newServerApp(cmd *cobra.Command, configFile string) *dix.App {
 
 	securityModule := newServerSecurityModule(configModule, loggingModule, observabilityModule)
 
-	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule)
+	endpointModule := newServerEndpointModule(configModule, storeModule, ingestModule, observabilityModule)
 
 	httpModule := dix.NewModule("http",
 		dix.WithModuleImports(configModule, loggingModule, storeModule, cacheModule, securityModule, observabilityModule, endpointModule),
@@ -275,13 +275,14 @@ func newServerIngestModule(configModule, loggingModule, storeModule, eventModule
 	)
 }
 
-func newServerEndpointModule(configModule, storeModule, ingestModule dix.Module) dix.Module {
+func newServerEndpointModule(configModule, storeModule, ingestModule, observabilityModule dix.Module) dix.Module {
 	return dix.NewModule("http-endpoints",
-		dix.WithModuleImports(configModule, storeModule, ingestModule),
+		dix.WithModuleImports(configModule, storeModule, ingestModule, observabilityModule),
 		dix.WithModuleProviders(
+			dix.Provider2(api.NewAgentEndpointDeps),
 			dix.Contribute2[httpx.Endpoint, serverconfig.Config, *store.Store](api.NewMetadataEndpoint, dix.Order(10)),
 			dix.Contribute0[httpx.Endpoint](api.NewHealthEndpoint, dix.Order(20)),
-			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, *ingest.ResultIngestor](api.NewAgentEndpoint, dix.Order(30)),
+			dix.Contribute3[httpx.Endpoint, serverconfig.Config, *store.Store, api.AgentEndpointDeps](api.NewAgentEndpoint, dix.Order(30)),
 		),
 	)
 }

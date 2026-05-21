@@ -119,6 +119,7 @@ type Monitor struct {
 
 type ProbeResult struct {
 	ID            string        `json:"id"`
+	ResultID      string        `json:"result_id,omitempty"`
 	MonitorID     string        `json:"monitor_id"`
 	AgentID       string        `json:"agent_id"`
 	RegionID      string        `json:"region_id"`

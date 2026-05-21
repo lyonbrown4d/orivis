@@ -60,6 +60,7 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 	postJSON[map[string]string](t, handler, "/api/agent/results", protocol.AgentResultRequest{
 		AgentID:   agent.ID,
 		Token:     "agent-token",
+		ResultID:  "api-result-single-1",
 		MonitorID: monitor.ID,
 		Status:    string(model.StatusUp),
 		LatencyMS: 35,
@@ -68,6 +69,7 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 	postGzipJSON[map[string]string](t, handler, "/api/agent/results", protocol.AgentResultRequest{
 		AgentID:   agent.ID,
 		Token:     "agent-token",
+		ResultID:  "api-result-single-2",
 		MonitorID: monitor.ID,
 		Status:    string(model.StatusUp),
 		LatencyMS: 42,
@@ -78,12 +80,14 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 		Token:   "agent-token",
 		Results: []protocol.AgentResult{
 			{
+				ResultID:  "api-result-batch-1",
 				MonitorID: monitor.ID,
 				Status:    string(model.StatusUp),
 				LatencyMS: 48,
 				CheckedAt: time.Now().UTC(),
 			},
 			{
+				ResultID:  "api-result-batch-2",
 				MonitorID: monitor.ID,
 				Status:    string(model.StatusDown),
 				LatencyMS: 500,
@@ -94,6 +98,22 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 	if batchResp.Accepted != 2 {
 		t.Fatalf("expected two accepted batch results, got %d", batchResp.Accepted)
 	}
+	duplicateResp := postJSON[protocol.AgentResultBatchResponse](t, handler, "/api/agent/results/batch", protocol.AgentResultBatchRequest{
+		AgentID: agent.ID,
+		Token:   "agent-token",
+		Results: []protocol.AgentResult{
+			{
+				ResultID:  "api-result-batch-1",
+				MonitorID: monitor.ID,
+				Status:    string(model.StatusUp),
+				LatencyMS: 48,
+				CheckedAt: time.Now().UTC(),
+			},
+		},
+	}, http.StatusOK)
+	if duplicateResp.Accepted != 1 {
+		t.Fatalf("expected duplicate batch result to be accepted, got %d", duplicateResp.Accepted)
+	}
 
 	var count int
 	err := storage.DB.QueryRowContext(ctx, "SELECT COUNT(1) FROM probe_results WHERE monitor_id = ? AND agent_id = ?", monitor.ID, agent.ID).Scan(&count)
@@ -103,6 +123,33 @@ func TestAgentTasksAndResultsAPI(t *testing.T) {
 	if count != 4 {
 		t.Fatalf("expected four probe results, got %d", count)
 	}
+}
+
+func TestAgentResultsBatchRejectsOversizedBatch(t *testing.T) {
+	storage := newAPITestStore(t)
+	cfg := agentAPITestConfig()
+	cfg.Ingest.MaxRequestBatchSize = 1
+	handler := newAgentAPIHandlerWithConfig(storage, cfg)
+
+	agent := registerAPIAgent(t, handler, storage, "agent-api-batch-limit-01")
+	monitor := createAPIMonitor(t, storage, agent)
+
+	postJSON[map[string]any](t, handler, "/api/agent/results/batch", protocol.AgentResultBatchRequest{
+		AgentID: agent.ID,
+		Token:   "agent-token",
+		Results: []protocol.AgentResult{
+			{
+				ResultID:  "api-limit-1",
+				MonitorID: monitor.ID,
+				Status:    string(model.StatusUp),
+			},
+			{
+				ResultID:  "api-limit-2",
+				MonitorID: monitor.ID,
+				Status:    string(model.StatusUp),
+			},
+		},
+	}, http.StatusBadRequest)
 }
 
 func TestAgentMonitorSyncAPI(t *testing.T) {
@@ -156,7 +203,11 @@ func TestAgentRegisterRejectsInvalidBootstrapToken(t *testing.T) {
 }
 
 func newAgentAPIHandler(storage *store.Store) httpHandler {
-	server := newAPITestServer(agentAPITestConfig(), storage)
+	return newAgentAPIHandlerWithConfig(storage, agentAPITestConfig())
+}
+
+func newAgentAPIHandlerWithConfig(storage *store.Store, cfg config.Config) httpHandler {
+	server := newAPITestServer(cfg, storage)
 	return server.Runtime().HumaAPI().Adapter()
 }
 
@@ -165,6 +216,7 @@ func agentAPITestConfig() config.Config {
 	cfg.App.Env = "test"
 	cfg.DB.Driver = "sqlite"
 	cfg.Auth.Agent.Token = "agent-token"
+	cfg.Ingest.MaxRequestBatchSize = 1000
 	return cfg
 }
 

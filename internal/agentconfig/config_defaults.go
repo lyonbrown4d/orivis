@@ -25,10 +25,11 @@ type defaultConfigValues struct {
 		Workers  int           `json:"workers"`
 	} `json:"poll"`
 	Buffer struct {
-		Enabled  bool   `json:"enabled"`
-		Driver   string `json:"driver"`
-		Path     string `json:"path"`
-		Capacity int    `json:"capacity"`
+		Enabled        bool   `json:"enabled"`
+		Driver         string `json:"driver"`
+		Path           string `json:"path"`
+		Capacity       int    `json:"capacity"`
+		FlushBatchSize int    `json:"flushbatchsize"`
 	} `json:"buffer"`
 	Transport struct {
 		RequestTimeout        time.Duration `json:"requesttimeout"`
@@ -79,6 +80,7 @@ func defaultConfig() defaultConfigValues {
 	cfg.Buffer.Driver = "persistent"
 	cfg.Buffer.Path = ""
 	cfg.Buffer.Capacity = 1024
+	cfg.Buffer.FlushBatchSize = 100
 	cfg.Transport.RequestTimeout = 10 * time.Second
 	cfg.Transport.MaxIdleConns = 100
 	cfg.Transport.MaxIdleConnsPerHost = 16

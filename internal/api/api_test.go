@@ -129,7 +129,7 @@ func newAPITestStore(t *testing.T) *store.Store {
 
 func newAPITestServer(cfg config.Config, storage *store.Store) *api.Server {
 	deps := api.ServerRuntimeDeps{}
-	return api.NewServer(cfg, testLogger(), storage, deps, api.NewDefaultEndpoints(cfg, storage))
+	return api.NewServer(cfg, testLogger(), storage, deps, api.NewDefaultEndpoints(cfg, storage, nil))
 }
 
 func testLogger() *slog.Logger {

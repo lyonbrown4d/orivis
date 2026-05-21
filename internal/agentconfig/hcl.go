@@ -41,10 +41,11 @@ type agentHCLPoll struct {
 }
 
 type agentHCLBuffer struct {
-	Enabled  *bool  `hcl:"enabled,optional"`
-	Driver   string `hcl:"driver,optional"`
-	Path     string `hcl:"path,optional"`
-	Capacity *int   `hcl:"capacity,optional"`
+	Enabled        *bool  `hcl:"enabled,optional"`
+	Driver         string `hcl:"driver,optional"`
+	Path           string `hcl:"path,optional"`
+	Capacity       *int   `hcl:"capacity,optional"`
+	FlushBatchSize *int   `hcl:"flush_batch_size,optional"`
 }
 
 type agentHCLLog struct {
@@ -164,6 +165,7 @@ func (file agentHCLFile) applyBuffer(values map[string]any) {
 	setString(values, "buffer.driver", file.Buffer.Driver)
 	setString(values, "buffer.path", file.Buffer.Path)
 	setOptional(values, "buffer.capacity", file.Buffer.Capacity)
+	setOptional(values, "buffer.flushbatchsize", file.Buffer.FlushBatchSize)
 }
 
 func (file agentHCLFile) applyLog(values map[string]any) {

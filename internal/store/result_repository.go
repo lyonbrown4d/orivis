@@ -12,6 +12,7 @@ import (
 
 type probeResultRow struct {
 	ID            string `dbx:"id"`
+	ResultID      string `dbx:"result_id"`
 	MonitorID     string `dbx:"monitor_id"`
 	AgentID       string `dbx:"agent_id"`
 	RegionID      string `dbx:"region_id"`
@@ -27,6 +28,7 @@ type probeResultRow struct {
 type probeResultSchema struct {
 	schemax.Schema[probeResultRow]
 	ID            columnx.Column[probeResultRow, string] `dbx:"id,pk"`
+	ResultID      columnx.Column[probeResultRow, string] `dbx:"result_id"`
 	MonitorID     columnx.Column[probeResultRow, string] `dbx:"monitor_id"`
 	AgentID       columnx.Column[probeResultRow, string] `dbx:"agent_id"`
 	RegionID      columnx.Column[probeResultRow, string] `dbx:"region_id"`
@@ -47,6 +49,31 @@ func probeResultSchemaResource() probeResultSchema {
 	return schemax.MustSchema("probe_results", probeResultSchema{})
 }
 
+func (r probeResultRow) model() (model.ProbeResult, error) {
+	checkedAt, err := parseTime(r.CheckedAt)
+	if err != nil {
+		return model.ProbeResult{}, err
+	}
+	createdAt, err := parseTime(r.CreatedAt)
+	if err != nil {
+		return model.ProbeResult{}, err
+	}
+	return model.ProbeResult{
+		ID:            r.ID,
+		ResultID:      r.ResultID,
+		MonitorID:     r.MonitorID,
+		AgentID:       r.AgentID,
+		RegionID:      r.RegionID,
+		EnvironmentID: r.EnvironmentID,
+		Status:        model.Status(r.Status),
+		Latency:       time.Duration(r.LatencyMS) * time.Millisecond,
+		ErrorMessage:  r.ErrorMessage,
+		CheckedAt:     checkedAt,
+		RawDetail:     append([]byte(nil), r.RawDetail...),
+		CreatedAt:     createdAt,
+	}, nil
+}
+
 func newProbeResultRow(
 	id string,
 	normalized normalizedProbeResultParams,
@@ -55,6 +82,7 @@ func newProbeResultRow(
 ) *probeResultRow {
 	return &probeResultRow{
 		ID:            id,
+		ResultID:      normalized.ResultID,
 		MonitorID:     monitor.ID,
 		AgentID:       normalized.Agent.ID,
 		RegionID:      normalized.Agent.RegionID,

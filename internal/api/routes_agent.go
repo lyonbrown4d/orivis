@@ -184,6 +184,7 @@ func (e *agentEndpoint) reportResult(ctx context.Context, input *agentResultsInp
 	}
 	params := store.RecordProbeResultParams{
 		Agent:        agent,
+		ResultID:     input.Body.ResultID,
 		MonitorID:    input.Body.MonitorID,
 		Status:       modelStatus(input.Body.Status),
 		Latency:      time.Duration(input.Body.LatencyMS) * time.Millisecond,
@@ -207,6 +208,10 @@ func (e *agentEndpoint) reportResultsBatch(ctx context.Context, input *agentResu
 	if err != nil {
 		return nil, apiError(err)
 	}
+	requested := len(input.Body.Results)
+	if validateErr := e.validateResultBatchSize(ctx, requested); validateErr != nil {
+		return nil, validateErr
+	}
 
 	results := collectionlist.NewList(input.Body.Results...)
 	accepted, err := collectionlist.ReduceErrList(
@@ -222,6 +227,7 @@ func (e *agentEndpoint) reportResultsBatch(ctx context.Context, input *agentResu
 	if err != nil {
 		return nil, apiError(err)
 	}
+	e.metrics.observeBatch(ctx, requested, accepted)
 
 	out := &agentResultsBatchOutput{}
 	out.Body.Accepted = accepted
@@ -231,6 +237,7 @@ func (e *agentEndpoint) reportResultsBatch(ctx context.Context, input *agentResu
 func agentResultParams(agent model.Agent, result protocol.AgentResult) store.RecordProbeResultParams {
 	return store.RecordProbeResultParams{
 		Agent:        agent,
+		ResultID:     result.ResultID,
 		MonitorID:    result.MonitorID,
 		Status:       modelStatus(result.Status),
 		Latency:      time.Duration(result.LatencyMS) * time.Millisecond,
@@ -250,6 +257,18 @@ func (e *agentEndpoint) recordProbeResult(ctx context.Context, params store.Reco
 	_, err := e.store.ResultStore().Record(ctx, params)
 	if err != nil {
 		return fmt.Errorf("record probe result: %w", err)
+	}
+	return nil
+}
+
+func (e *agentEndpoint) validateResultBatchSize(ctx context.Context, size int) error {
+	limit := e.cfg.Ingest.MaxRequestBatchSize
+	if limit <= 0 {
+		limit = 1000
+	}
+	if size > limit {
+		e.metrics.observeBatchRejected(ctx)
+		return huma.Error400BadRequest(fmt.Sprintf("result batch size %d exceeds limit %d", size, limit))
 	}
 	return nil
 }

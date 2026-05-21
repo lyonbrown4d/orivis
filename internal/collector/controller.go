@@ -147,6 +147,7 @@ func (c *RuntimeController) buildRuntime(ctx context.Context, cfg config.Config)
 		runner: NewRunner(
 			cfg,
 			c.logger,
+			c.obs,
 			client,
 			c.taskPool,
 			discovery,

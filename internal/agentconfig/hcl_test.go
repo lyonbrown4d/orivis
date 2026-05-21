@@ -70,7 +70,7 @@ func assertHCLAgentIdentity(t *testing.T, cfg config.Config) {
 
 func assertHCLBuffer(t *testing.T, cfg config.Config) {
 	t.Helper()
-	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 42 || cfg.Buffer.Driver != "persistent" || cfg.Buffer.Path != "agent-buffer" {
+	if !cfg.Buffer.Enabled || cfg.Buffer.Capacity != 42 || cfg.Buffer.FlushBatchSize != 17 || cfg.Buffer.Driver != "persistent" || cfg.Buffer.Path != "agent-buffer" {
 		t.Fatalf("unexpected HCL buffer config: %#v", cfg.Buffer)
 	}
 }
@@ -124,6 +124,7 @@ buffer {
   driver = "persistent"
   path = "agent-buffer"
   capacity = 42
+  flush_batch_size = 17
 }
 
 transport {

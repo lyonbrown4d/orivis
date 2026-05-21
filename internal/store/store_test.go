@@ -108,16 +108,79 @@ func TestAgentHeartbeatRejectsWrongToken(t *testing.T) {
 func TestMonitorTasksAndProbeResults(t *testing.T) {
 	storage := newTestStore(t)
 	agent := registerTestAgent(t, storage, "agent-task-01", []string{"dev"})
-	monitor := createTestMonitor(t, storage, agent, "API health")
+	monitor := createTestMonitor(t, storage, agent)
 	assertAssignedTask(t, storage, agent.ID, monitor.ID)
 	result := recordTestResult(t, storage, agent, monitor.ID)
 	assertProbeResult(t, result, agent, monitor.ID)
 }
 
+func TestProbeResultRecordIsIdempotentByResultID(t *testing.T) {
+	ctx := context.Background()
+	storage := newTestStore(t)
+	agent := registerTestAgent(t, storage, "agent-result-idempotent-01", []string{"dev"})
+	monitor := createTestMonitor(t, storage, agent)
+
+	params := store.RecordProbeResultParams{
+		Agent:     agent,
+		ResultID:  "agent-result-1",
+		MonitorID: monitor.ID,
+		Status:    storeStatusUp(),
+		Latency:   42 * time.Millisecond,
+	}
+	first, err := storage.ResultStore().Record(ctx, params)
+	if err != nil {
+		t.Fatalf("record first result: %v", err)
+	}
+	second, err := storage.ResultStore().Record(ctx, params)
+	if err != nil {
+		t.Fatalf("record duplicate result: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("expected duplicate result to return existing id %q, got %q", first.ID, second.ID)
+	}
+
+	var count int
+	err = storage.DB.QueryRowContext(ctx, "SELECT COUNT(1) FROM probe_results WHERE result_id = ?", params.ResultID).Scan(&count)
+	if err != nil {
+		t.Fatalf("count result ids: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one stored result, got %d", count)
+	}
+}
+
+func TestProbeResultRecordBatchDeduplicatesResultIDs(t *testing.T) {
+	ctx := context.Background()
+	storage := newTestStore(t)
+	agent := registerTestAgent(t, storage, "agent-result-batch-idempotent-01", []string{"dev"})
+	monitor := createTestMonitor(t, storage, agent)
+
+	results, err := storage.ResultStore().RecordBatch(ctx, []store.RecordProbeResultParams{
+		{
+			Agent:     agent,
+			ResultID:  "agent-result-batch-1",
+			MonitorID: monitor.ID,
+			Status:    storeStatusUp(),
+		},
+		{
+			Agent:     agent,
+			ResultID:  "agent-result-batch-1",
+			MonitorID: monitor.ID,
+			Status:    storeStatusUp(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("record duplicate result batch: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected one unique result, got %#v", results)
+	}
+}
+
 func TestMonitorAssignmentIsIdempotent(t *testing.T) {
 	storage := newTestStore(t)
 	agent := registerTestAgent(t, storage, "agent-assign-01", []string{"dev"})
-	monitor := createTestMonitor(t, storage, agent, "API health")
+	monitor := createTestMonitor(t, storage, agent)
 
 	monitorIDs := []string{monitor.ID, monitor.ID, "", "   "}
 	if err := storage.MonitorStore().AssignMonitors(context.Background(), monitorIDs); err != nil {

@@ -53,9 +53,10 @@ type Config struct {
 		SnapshotTTL string `mapstructure:"snapshotttl" validate:"required"`
 	} `mapstructure:"dashboard"`
 	Ingest struct {
-		QueueSize     int    `mapstructure:"queuesize"`
-		BatchSize     int    `mapstructure:"batchsize"`
-		FlushInterval string `mapstructure:"flushinterval" validate:"required"`
+		QueueSize           int    `mapstructure:"queuesize"`
+		BatchSize           int    `mapstructure:"batchsize"`
+		MaxRequestBatchSize int    `mapstructure:"maxrequestbatchsize"`
+		FlushInterval       string `mapstructure:"flushinterval"       validate:"required"`
 	} `mapstructure:"ingest"`
 	Retention struct {
 		Enabled         bool   `mapstructure:"enabled"`
@@ -151,9 +152,10 @@ type defaultConfigValues struct {
 		SnapshotTTL string `json:"snapshotttl"`
 	} `json:"dashboard"`
 	Ingest struct {
-		QueueSize     int    `json:"queuesize"`
-		BatchSize     int    `json:"batchsize"`
-		FlushInterval string `json:"flushinterval"`
+		QueueSize           int    `json:"queuesize"`
+		BatchSize           int    `json:"batchsize"`
+		MaxRequestBatchSize int    `json:"maxrequestbatchsize"`
+		FlushInterval       string `json:"flushinterval"`
 	} `json:"ingest"`
 	Retention struct {
 		Enabled         bool   `json:"enabled"`
@@ -228,6 +230,7 @@ func defaultConfig() defaultConfigValues {
 	cfg.Dashboard.SnapshotTTL = "1s"
 	cfg.Ingest.QueueSize = 4096
 	cfg.Ingest.BatchSize = 100
+	cfg.Ingest.MaxRequestBatchSize = 1000
 	cfg.Ingest.FlushInterval = "1s"
 	cfg.Retention.Enabled = true
 	cfg.Retention.ResultTTL = "168h"
