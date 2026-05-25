@@ -6,8 +6,6 @@ bin/
 tmp/
 dist/
 release/
-web/dist/
-web/node_modules/
 coverage.out
 *.db
 *.sqlite

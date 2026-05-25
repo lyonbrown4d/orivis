@@ -33,7 +33,7 @@ $env:ORIVIS_HTTP_PORT = "18080"
 docker compose -f deployments/docker-compose/compose.yml up -d
 ```
 
-The server image already enables the bundled SPA and serves `/app/web`, so `ORIVIS_WEB__ENABLED` and `ORIVIS_WEB__ROOT` are intentionally not part of `server.env`.
+The server image serves the embedded template UI, so frontend root path settings are intentionally not part of `server.env`.
 
 ## Production database storage
 

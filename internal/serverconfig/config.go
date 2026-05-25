@@ -26,10 +26,6 @@ type Config struct {
 		Scheme   string `mapstructure:"scheme"   validate:"required"`
 		Port     int    `mapstructure:"port"`
 	} `mapstructure:"mdns"`
-	Web struct {
-		Enabled bool   `mapstructure:"enabled"`
-		Root    string `mapstructure:"root"    validate:"required"`
-	} `mapstructure:"web"`
 	Log struct {
 		Level string `mapstructure:"level" validate:"required"`
 	} `mapstructure:"log"`
@@ -132,9 +128,6 @@ type defaultConfigValues struct {
 		Scheme   string `json:"scheme"`
 		Port     int    `json:"port"`
 	} `json:"mdns"`
-	Web struct {
-		Root string `json:"root"`
-	} `json:"web"`
 	Log struct {
 		Level string `json:"level"`
 	} `json:"log"`
@@ -219,7 +212,6 @@ func defaultConfig() defaultConfigValues {
 	cfg.MDNS.Instance = "orivis-server"
 	cfg.MDNS.Scheme = "http"
 	cfg.MDNS.Port = 0
-	cfg.Web.Root = "web/dist"
 	cfg.Log.Level = "info"
 	cfg.DB.Driver = "sqlite"
 	cfg.DB.DSN = DefaultSQLiteDSN

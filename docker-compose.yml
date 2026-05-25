@@ -9,8 +9,6 @@ services:
     environment:
       ORIVIS_APP__ENV: production
       ORIVIS_HTTP__ADDR: :8080
-      ORIVIS_WEB__ENABLED: "true"
-      ORIVIS_WEB__ROOT: /app/web
       ORIVIS_LOG__LEVEL: info
       ORIVIS_DB__DRIVER: sqlite
       ORIVIS_DB__DSN: file:/data/orivis.db?cache=shared

@@ -118,15 +118,15 @@ Discussion points:
 
 ### Dashboard API efficiency
 
-Status: initial implementation completed. Snapshot endpoints now emit stable semantic ETags and the React client sends `If-None-Match` during polling, reusing cached data on `304 Not Modified`.
+Status: initial implementation completed. Snapshot endpoints now emit stable semantic ETags, allowing dashboard clients to send `If-None-Match` during polling and reuse cached data on `304 Not Modified`.
 
 - Add `ETag` or `Last-Modified` support for dashboard snapshot endpoints.
 - Consider splitting summary and history into separate endpoints.
-- Keep React Query polling, but reduce payload churn.
+- Keep polling efficient while reducing payload churn.
 
 Discussion points:
 
-- Snapshot payload compatibility matters because the frontend is now separated.
+- Snapshot payload compatibility matters for dashboard clients.
 - ETag should include group and result-limit inputs.
 
 ### Notification history UI
@@ -144,12 +144,12 @@ Discussion points:
 
 ### Dashboard detail views
 
-Status: initial implementation completed. The React dashboard now exposes a per-monitor detail route with recent probe history and notification delivery drill-down sourced from the existing snapshot payload.
+Status: initial implementation completed. The dashboard now exposes a per-monitor detail route with recent probe history and notification delivery drill-down sourced from the existing snapshot payload.
 
 - Add a per-monitor detail route.
 - Show recent probe history for the selected monitor.
 - Show notification deliveries for the selected monitor.
-- Keep the first implementation frontend-only while snapshot data volume remains small.
+- Keep the first implementation snapshot-backed while data volume remains small.
 
 ## Current recommended next batch
 

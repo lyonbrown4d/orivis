@@ -1,20 +1,3 @@
-task web_build {
-  inputs = [
-    "web/package.json",
-    "web/pnpm-lock.yaml",
-    "web/index.html",
-    "web/public/**",
-    "web/src/**",
-    "web/components.json",
-    "web/vite.config.ts",
-    "web/tailwind.config.ts",
-    "web/postcss.config.js",
-    "web/tsconfig*.json",
-  ]
-  outputs = ["web/dist"]
-  command = ["pnpm", "-C", "web", "build"]
-}
-
 task go_test {
   inputs = [
     "build.bu1ld",
@@ -39,7 +22,7 @@ task go_lint {
 }
 
 task build {
-  deps = [web_build, go_test, go_lint]
+  deps = [go_test, go_lint]
   command = []
 }
 
@@ -52,16 +35,6 @@ task docker_server {
     "cmd/**",
     "internal/**",
     "migrations/**",
-    "web/package.json",
-    "web/pnpm-lock.yaml",
-    "web/index.html",
-    "web/public/**",
-    "web/src/**",
-    "web/components.json",
-    "web/vite.config.ts",
-    "web/tailwind.config.ts",
-    "web/postcss.config.js",
-    "web/tsconfig*.json",
   ]
   command = [
     "docker",

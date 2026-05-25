@@ -66,7 +66,10 @@ func NewServer(
 	})
 	app.Use(requestid.New())
 	app.Use(fiberrecover.New())
-	app.Use(helmet.New())
+	app.Use(helmet.New(helmet.Config{
+		CrossOriginEmbedderPolicy: "unsafe-none",
+		CrossOriginResourcePolicy: "cross-origin",
+	}))
 	app.Use(gzipRequestMiddleware(bodyLimit))
 	app.Use(compress.New())
 
@@ -99,7 +102,6 @@ func NewServer(
 	}
 	server.registerEndpoints(endpoints)
 	server.registerDashboardRoutes()
-	server.registerSPARoutes()
 	return server
 }
 

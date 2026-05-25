@@ -28,6 +28,7 @@ func (s *Server) registerDashboardRoutes() {
 	s.app.Post("/api/auth/logout", endpoint.fiberLogout)
 	s.app.Get("/api/auth/me", endpoint.fiberAuthMe)
 	s.app.Get("/api/dashboard/snapshot", endpoint.fiberDashboardSnapshot)
+	endpoint.registerTemplateRoutes(s.app)
 }
 
 func dashboardSnapshotCacheTTL(cfg config.Config) time.Duration {

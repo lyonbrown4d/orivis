@@ -1350,7 +1350,7 @@ MySQL 作为兼容目标
 
 V1 应接受这个限制，把重点放在核心模型和 Agent 能力上。
 
-后续如果 UI 复杂度上来，再迁移到 React / refine / shadcn/ui。
+后续如果 UI 复杂度上来，优先扩展 server template、CDN UI 库和 htmx 交互，而不是默认迁移到完整前端工具链。
 
 ---
 

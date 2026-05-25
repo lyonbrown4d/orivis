@@ -4,8 +4,6 @@
 /tmp/
 .codex-smoke/
 .bu1ld/
-web/dist/
-web/node_modules/
 *.exe
 *.test
 *.out

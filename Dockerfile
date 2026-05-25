@@ -1,15 +1,4 @@
 ARG GO_VERSION=1.26-alpine
-ARG NODE_VERSION=22-alpine
-ARG PNPM_VERSION=10.29.2
-
-FROM node:${NODE_VERSION} AS web-build
-ARG PNPM_VERSION
-WORKDIR /src/web
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
-COPY web/package.json web/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-COPY web/ ./
-RUN pnpm build
 
 FROM golang:${GO_VERSION} AS go-build
 WORKDIR /src
@@ -40,8 +29,5 @@ ENTRYPOINT ["orivis-agent"]
 
 FROM runtime AS server
 COPY --from=go-build /out/orivis-server /usr/local/bin/orivis-server
-COPY --from=web-build /src/web/dist /app/web
-ENV ORIVIS_WEB__ENABLED=true
-ENV ORIVIS_WEB__ROOT=/app/web
 USER orivis
 ENTRYPOINT ["orivis-server"]

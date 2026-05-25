@@ -26,8 +26,6 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	assertEqual(t, "mDNS service", cfg.MDNS.Service, "orivis")
 	assertEqual(t, "mDNS domain", cfg.MDNS.Domain, "local.")
 	assertEqual(t, "mDNS port", cfg.MDNS.Port, 0)
-	assertEqual(t, "web enabled", cfg.Web.Enabled, false)
-	assertEqual(t, "web root", cfg.Web.Root, "web/dist")
 	assertEqual(t, "db driver", cfg.DB.Driver, "sqlite")
 	assertEqual(t, "db dsn", cfg.DB.DSN, config.DefaultSQLiteDSN)
 	assertEqual(t, "cache driver", cfg.Cache.Driver, "memory")
@@ -50,8 +48,6 @@ func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_MDNS__ENABLED", "false")
 	t.Setenv("ORIVIS_MDNS__SERVICE", "orivis-test")
 	t.Setenv("ORIVIS_MDNS__PORT", "9090")
-	t.Setenv("ORIVIS_WEB__ENABLED", "true")
-	t.Setenv("ORIVIS_WEB__ROOT", "/app/web")
 	t.Setenv("ORIVIS_LOG__LEVEL", "debug")
 	t.Setenv("ORIVIS_DB__DRIVER", "sqlite")
 	t.Setenv("ORIVIS_DB__DSN", "file:orivis.db")
@@ -78,8 +74,6 @@ func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	assertEqual(t, "db dsn", cfg.DB.DSN, "file:orivis.db")
 	assertEqual(t, "cache driver", cfg.Cache.Driver, "memory")
 	assertEqual(t, "cache prefix", cfg.Cache.Prefix, "unit-test")
-	assertEqual(t, "web enabled", cfg.Web.Enabled, true)
-	assertEqual(t, "web root", cfg.Web.Root, "/app/web")
 }
 
 func assertEqual[T comparable](t *testing.T, name string, got, want T) {

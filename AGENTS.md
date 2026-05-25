@@ -16,7 +16,7 @@ This file captures the project-specific rules that should be followed by coding 
 - After each implementation iteration, run tests before lint.
 - Use `go test ./...` for Go validation.
 - Use `golangci-lint run ./...` for Go linting.
-- For frontend changes, also run `pnpm -C web build`.
+- Frontend UI changes are server-rendered templates and should be covered by Go tests.
 - Do not change lint configuration to make code pass.
 - Do not add `nolint` suppressions.
 - Run `gofmt -w` on touched Go files before tests.
@@ -87,19 +87,17 @@ This file captures the project-specific rules that should be followed by coding 
 
 ## Frontend rules
 
-- The active frontend stack is Vite, React, TypeScript, Tailwind CSS, shadcn/ui, axios, React Query, and i18next.
-- Do not reintroduce the old template-based dashboard frontend.
-- Do not edit generated shadcn/ui component source directly.
-- Extend shadcn/ui through composition wrappers or page-level components.
-- Keep frontend and backend independently runnable in development.
-- Production server image may serve the built SPA through Fiber static serving.
-- Use polling for dashboard refresh unless the user explicitly requests SSE or WebSocket.
-- Keep dashboard empty states robust. API arrays may be empty and should not crash the UI.
+- The active frontend is the server-rendered template UI embedded under `internal/ui`.
+- Do not reintroduce a full frontend build toolchain unless the user explicitly reverses this decision.
+- CDN-only UI helpers are acceptable, for example Bootstrap, Tailwind CDN, or htmx.
+- Keep CSS and small browser scripts as embedded static assets.
+- Do not require users to configure frontend root paths in production containers.
+- Keep dashboard empty states robust. API arrays and template slices may be empty and should not crash the UI.
 
 ## Docker, release, and deployment rules
 
 - Server and agent are separate images.
-- The server image should include the built web UI so users do not configure frontend paths.
+- The server image should include the embedded template UI so users do not configure frontend paths.
 - Use the standard Dockerfiles and existing release pipeline.
 - Use GoReleaser for releases and packages.
 - Keep production docker compose examples current with supported environment variables and label syntax.

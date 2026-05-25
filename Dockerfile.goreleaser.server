@@ -19,10 +19,6 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 
 COPY --from=compress /tmp/orivis /usr/local/bin/orivis
-COPY web/dist /app/web
-
-ENV ORIVIS_WEB__ENABLED=true
-ENV ORIVIS_WEB__ROOT=/app/web
 
 USER orivis
 
