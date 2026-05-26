@@ -9,10 +9,10 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="/ui/static/app.css" rel="stylesheet">
 </head>
-<body class="min-h-screen bg-slate-100 text-slate-950 antialiased">
-  <div class="{{ if .Public }}min-h-screen bg-slate-950{{ else }}min-h-screen lg:flex{{ end }}">
+<body class="orivis-shell min-h-screen antialiased">
+  <div class="{{ if .Public }}min-h-screen{{ else }}min-h-screen lg:flex{{ end }}">
     {{ if not .Public }}{{ template "nav" . }}{{ end }}
-    <main class="{{ if .Public }}min-h-screen{{ else }}min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8{{ end }}"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-trigger="every 10s" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
+    <main class="{{ if .Public }}orivis-shell-main min-h-screen{{ else }}orivis-shell-main min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8{{ end }}"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-trigger="every 10s" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
       {{ block "content" . }}{{ end }}
     </main>
   </div>

@@ -55,10 +55,83 @@ body.orivis-shell {
   border-radius: 0.5rem;
 }
 
+.orivis-shell-main {
+  width: min(120rem, 100%);
+  margin-inline: auto;
+}
+
+.orivis-card-header {
+  border-bottom: 1px solid var(--orivis-line);
+  padding: 1.25rem 1.25rem 1rem;
+}
+
 .orivis-navbar {
   background: color-mix(in srgb, var(--orivis-panel-solid) 82%, transparent);
   border-bottom: 1px solid var(--orivis-line);
   backdrop-filter: blur(16px);
+}
+
+.orivis-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.orivis-btn:hover {
+  background-color: rgba(2, 6, 23, 0.06);
+}
+
+.orivis-btn-brand {
+  color: #fff;
+  background: linear-gradient(135deg, #047857, #0ea5e9);
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  box-shadow: 0 12px 20px rgba(14, 165, 233, 0.28);
+}
+
+.orivis-btn-brand:hover {
+  filter: brightness(0.98);
+}
+
+.orivis-btn-ghost {
+  border: 1px solid var(--orivis-line);
+  background: var(--orivis-panel-solid);
+}
+
+.orivis-sidebar {
+  background: color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent);
+  border-right-color: var(--orivis-line);
+  border-right-style: solid;
+  border-right-width: 1px;
+  backdrop-filter: blur(14px);
+}
+
+.orivis-sidebar-stats {
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel) 72%, transparent);
+  padding: 1rem;
+  border-radius: 1.5rem;
+}
+
+.orivis-sidebar-auth {
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 96%, transparent);
+  padding: 1rem;
+  border-radius: 1.25rem;
+}
+
+.orivis-card {
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(135deg, var(--orivis-panel), color-mix(in srgb, var(--orivis-accent-soft) 55%, transparent)),
+    var(--orivis-panel-solid);
+  border: 1px solid var(--orivis-line);
+  box-shadow: var(--orivis-shadow);
 }
 
 .orivis-hero,
@@ -66,11 +139,6 @@ body.orivis-shell {
 .orivis-card {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(135deg, var(--orivis-panel), color-mix(in srgb, var(--orivis-accent-soft) 55%, transparent)),
-    var(--orivis-panel-solid);
-  border: 1px solid var(--orivis-line);
-  box-shadow: var(--orivis-shadow);
 }
 
 .orivis-hero::after,
@@ -97,7 +165,12 @@ body.orivis-shell {
   display: grid;
   gap: 0.35rem;
   padding: 1.25rem;
-  border-radius: 1rem;
+  border-radius: 1.25rem;
+}
+
+.orivis-hero-summary {
+  min-height: 130px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .orivis-stat-card strong {
@@ -112,8 +185,40 @@ body.orivis-shell {
 
 .orivis-monitor-card {
   min-height: 100%;
-  padding: 1rem;
-  border-radius: 1rem;
+  padding: 1rem 1rem 1.1rem;
+  border-radius: 1.25rem;
+}
+
+.orivis-card-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.orivis-form-input {
+  border-radius: 0.85rem;
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 94%, transparent);
+  padding: 0.7rem 0.95rem;
+  outline: none;
+  color: var(--orivis-ink);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.orivis-form-input::placeholder {
+  color: var(--orivis-muted);
+}
+
+.orivis-form-input:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14);
+}
+
+.orivis-auth-hero {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.55), rgba(15, 118, 110, 0.26)),
+    radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.4), transparent 35%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--orivis-shadow);
 }
 
 .orivis-muted {
@@ -127,7 +232,7 @@ body.orivis-shell {
 .orivis-light-track {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(0.42rem, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(0.38rem, 0.42rem));
   gap: 0.18rem;
   align-items: stretch;
   width: 100%;
@@ -142,7 +247,7 @@ body.orivis-shell {
 
 .orivis-status-light {
   display: block;
-  min-width: 0.42rem;
+  width: 0.42rem;
   height: 1.25rem;
   border-radius: 999px;
   background: var(--orivis-unknown);
