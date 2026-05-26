@@ -67,14 +67,20 @@ func (m *Manager) recordDeliveryAttempt(
 	duration time.Duration,
 	deliveryErr error,
 ) {
-	if m.storage == nil {
-		return
-	}
 	status := store.NotificationStatusSuccess
 	errMessage := ""
 	if deliveryErr != nil {
 		status = store.NotificationStatusFailed
 		errMessage = deliveryErr.Error()
+	}
+	channelName := delivery.channel.channelName()
+	if deliveryErr != nil {
+		m.metrics.observeWebhookDeliveryFailure(ctx, channelName)
+	} else {
+		m.metrics.observeWebhookDeliverySuccess(ctx, channelName)
+	}
+	if m.storage == nil {
+		return
 	}
 	payload := delivery.payload
 	if err := m.storage.RecordNotificationDelivery(context.WithoutCancel(ctx), store.NotificationDeliveryParams{

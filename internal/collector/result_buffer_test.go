@@ -1,6 +1,7 @@
 package collector_test
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -27,8 +28,8 @@ func TestBadgerResultBufferPersistsFIFO(t *testing.T) {
 		t.Fatalf("reopen persistent result buffer: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := reopened.Close(); err != nil {
-			t.Errorf("close reopened badger result buffer: %v", err)
+		if closeErr := reopened.Close(); closeErr != nil {
+			t.Errorf("close reopened badger result buffer: %v", closeErr)
 		}
 	})
 	assertBufferedMonitor(t, reopened, "second")
@@ -51,8 +52,8 @@ func TestBadgerMemoryResultBuffer(t *testing.T) {
 		t.Fatalf("new memory badger result buffer: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := buffer.Close(); err != nil {
-			t.Errorf("close memory badger result buffer: %v", err)
+		if closeErr := buffer.Close(); closeErr != nil {
+			t.Errorf("close memory badger result buffer: %v", closeErr)
 		}
 	})
 
@@ -87,12 +88,45 @@ func TestBadgerResultBufferCapacityShrink(t *testing.T) {
 		t.Fatalf("reopen persistent result buffer: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := reopened.Close(); err != nil {
-			t.Errorf("close reopened badger result buffer: %v", err)
+		if closeErr := reopened.Close(); closeErr != nil {
+			t.Errorf("close reopened badger result buffer: %v", closeErr)
 		}
 	})
 	assertPush(t, reopened, "fourth", true, 1)
 	assertBufferedBatch(t, reopened, []string{"fourth"})
+}
+
+func TestBadgerResultBufferCompactionThrottle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "agent-buffer-compaction.badger")
+	buffer, err := collector.NewPersistentResultBuffer(path, 10)
+	if err != nil {
+		t.Fatalf("new memory badger result buffer: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := buffer.Close(); closeErr != nil {
+			t.Errorf("close memory badger result buffer: %v", closeErr)
+		}
+	})
+
+	var compactable interface {
+		Compact(context.Context) (bool, error)
+	} = buffer
+
+	attempted, err := compactable.Compact(context.Background())
+	if err != nil {
+		t.Fatalf("compact badger result buffer: %v", err)
+	}
+	if !attempted {
+		t.Fatalf("expected compacting attempt")
+	}
+
+	attempted, err = compactable.Compact(context.Background())
+	if err != nil {
+		t.Fatalf("compact badger result buffer: %v", err)
+	}
+	if attempted {
+		t.Fatal("expected compacting throttle to skip immediate subsequent attempt")
+	}
 }
 
 func assertPush(t *testing.T, buffer collector.ResultQueue, monitorID string, droppedOldest bool, size int) {

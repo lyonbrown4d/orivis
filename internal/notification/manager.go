@@ -11,6 +11,7 @@ import (
 	clienthttp "github.com/arcgolabs/clientx/http"
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/eventx"
+	"github.com/arcgolabs/observabilityx"
 	"github.com/lyonbrown4d/orivis/internal/buildinfo"
 	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	"github.com/lyonbrown4d/orivis/internal/ingest"
@@ -29,6 +30,7 @@ type Manager struct {
 	mu            sync.Mutex
 	states        map[string]alertState
 	deliveries    chan webhookDelivery
+	metrics       notificationMetrics
 	stop          chan struct{}
 	done          chan struct{}
 	stopOnce      sync.Once
@@ -62,7 +64,14 @@ type webhookDelivery struct {
 	channel webhookChannel
 }
 
-func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, cacheStore cachex.Store, storage *store.Store) (*Manager, error) {
+func NewManager(
+	cfg config.Config,
+	logger *slog.Logger,
+	bus eventx.BusRuntime,
+	cacheStore cachex.Store,
+	storage *store.Store,
+	obs observabilityx.Observability,
+) (*Manager, error) {
 	channels, err := webhookChannelsFromConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -89,6 +98,7 @@ func NewManager(cfg config.Config, logger *slog.Logger, bus eventx.BusRuntime, c
 		cache:         cacheStore,
 		storage:       storage,
 		client:        httpClient,
+		metrics:       newNotificationMetrics(obs, logger),
 		states:        make(map[string]alertState),
 		deliveries:    make(chan webhookDelivery, webhookQueueSize(cfg)),
 		stop:          make(chan struct{}),
@@ -207,10 +217,15 @@ func (m *Manager) handleProbeResult(ctx context.Context, result model.ProbeResul
 	if err != nil {
 		return err
 	}
+	if len(channels) == 0 {
+		m.metrics.observeWebhookUnrouted(ctx)
+		return nil
+	}
 	_, err = collectionlist.ReduceErrList(
 		collectionlist.NewList(channels...),
 		struct{}{},
 		func(empty struct{}, _ int, channel webhookChannel) (struct{}, error) {
+			m.metrics.observeWebhookRouteMatched(ctx, channel.channelName())
 			if enqueueErr := m.enqueueWebhook(ctx, payload, channel); enqueueErr != nil {
 				return empty, enqueueErr
 			}
@@ -250,8 +265,10 @@ func (m *Manager) enqueueWebhook(ctx context.Context, payload webhookPayload, ch
 	case <-ctx.Done():
 		return wrapError(ctx.Err(), "enqueue webhook notification")
 	case m.deliveries <- webhookDelivery{payload: payload, channel: channel}:
+		m.metrics.observeWebhookRouteEnqueued(ctx, channel.channelName())
 		return nil
 	default:
+		m.metrics.observeWebhookQueueFull(ctx)
 		return newError("webhook notification delivery queue is full")
 	}
 }

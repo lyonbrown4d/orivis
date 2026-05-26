@@ -153,6 +153,6 @@ Status: initial implementation completed. The dashboard now exposes a per-monito
 
 ## Current recommended next batch
 
-1. Agent file spool hardening: add compaction metrics and corruption recovery.
+1. Agent file spool hardening: add compaction metrics and corruption recovery. (completed)
 2. Notification routing hardening: add route-level observability and group routing integration tests.
 3. Dashboard detail views: add dedicated server endpoints when snapshot-level history is no longer enough.
