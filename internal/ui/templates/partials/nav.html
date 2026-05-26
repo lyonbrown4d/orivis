@@ -17,7 +17,7 @@
   </div>
 </header>
 
-<aside class="orivis-sidebar-shell orivis-sidebar orivis-nav-shell hidden lg:col-span-3 lg:flex lg:w-full lg:min-h-screen lg:flex-col lg:sticky lg:top-0 lg:overflow-y-auto px-5 py-6">
+<aside class="orivis-sidebar-shell orivis-sidebar orivis-nav-shell hidden lg:flex lg:w-[18rem] lg:flex-col lg:sticky lg:top-0 lg:overflow-y-auto lg:h-screen lg:px-5 lg:py-6">
   <a class="flex flex-none items-center gap-3" href="{{ .Links.Dashboard }}">
     <span class="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-base font-bold text-white shadow-lg shadow-slate-950/20">O</span>
     <span>
@@ -26,7 +26,7 @@
     </span>
   </a>
 
-  <nav class="mt-10 space-y-2" aria-label="Primary">
+  <nav class="orivis-nav-list mt-10 space-y-1" aria-label="Primary">
     <a class="orivis-btn orivis-btn-brand group flex items-center gap-3" href="{{ .Links.Dashboard }}">
       <span class="size-2 rounded-full bg-emerald-400"></span>
       <span>{{ .Text.Dashboard }}</span>
@@ -37,7 +37,7 @@
     </a>
   </nav>
 
-  <div class="mt-8 border-t border-slate-200 pt-4">
+  <div class="orivis-sidebar-section mt-8 border-t border-slate-200 pt-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
         <span class="size-2 rounded-full bg-emerald-500"></span>
@@ -81,7 +81,7 @@
   </div>
 
   {{ if .AuthEnabled }}
-  <div class="mt-auto orivis-sidebar-auth">
+  <div class="orivis-sidebar-auth mt-6">
     {{ if .User }}
     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{{ .Text.Auth }}</p>
     <p class="mt-2 truncate text-sm font-semibold text-slate-950">{{ .User.Name }}</p>

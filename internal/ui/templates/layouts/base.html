@@ -16,9 +16,9 @@
     {{ block "content" . }}{{ end }}
   </main>
   {{ else }}
-  <div class="min-h-screen lg:grid lg:grid-cols-12">
+  <div class="orivis-layout-shell min-h-screen lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
     {{ template "nav" . }}
-    <main class="orivis-shell-main orivis-shell-main-public min-h-screen min-w-0 px-4 py-6 sm:px-6 lg:col-span-9 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
+    <main class="orivis-shell-main orivis-shell-main-public min-h-screen min-w-0 px-4 py-6 sm:px-6 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
       {{ block "content" . }}{{ end }}
     </main>
   </div>
