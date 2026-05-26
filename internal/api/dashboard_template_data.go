@@ -110,34 +110,59 @@ func dashboardTemplateMonitors(monitors []dashboardMonitorView, lights []dashboa
 	out := make([]dashboardTemplateMonitor, 0, len(monitors))
 	for index := range monitors {
 		monitor := &monitors[index]
-		status, className, checkedAt, latency, errMessage := dashboardTemplateLatest(monitor.Latest)
+		latest := dashboardTemplateLatestMetrics(monitor.Latest)
 		out = append(out, dashboardTemplateMonitor{
-			Name:        monitor.Name,
-			Type:        string(monitor.Type),
-			Target:      monitor.Target,
-			Group:       dashboardGroupName(monitor.GroupName),
-			Environment: dashboardEnvironmentName(monitor.EnvironmentCode),
-			Source:      string(monitor.Source),
-			Status:      status,
-			StatusClass: className,
-			CheckedAt:   checkedAt,
-			Latency:     latency,
-			Error:       errMessage,
-			Lights:      lightsByMonitor[monitor.Name],
+			Name:          monitor.Name,
+			Type:          string(monitor.Type),
+			Target:        monitor.Target,
+			Group:         dashboardGroupName(monitor.GroupName),
+			Environment:   dashboardEnvironmentName(monitor.EnvironmentCode),
+			Source:        string(monitor.Source),
+			Status:        latest.Status,
+			StatusClass:   latest.StatusClass,
+			CheckedAt:     latest.CheckedAt,
+			CheckedAtUnix: latest.CheckedAtUnix,
+			Latency:       latest.Latency,
+			LatencyMs:     latest.LatencyMS,
+			Error:         latest.ErrorMessage,
+			Lights:        lightsByMonitor[monitor.Name],
 		})
 	}
 	return out
 }
 
-func dashboardTemplateLatest(result *dashboardResultView) (string, string, string, string, string) {
+type dashboardTemplateLatestView struct {
+	Status        string
+	StatusClass   string
+	CheckedAt     string
+	Latency       string
+	ErrorMessage  string
+	LatencyMS     int64
+	CheckedAtUnix int64
+}
+
+func dashboardTemplateLatestMetrics(result *dashboardResultView) dashboardTemplateLatestView {
 	if result == nil {
-		return string(model.StatusUnknown), "secondary", "-", "-", ""
+		return dashboardTemplateLatestView{
+			Status:        string(model.StatusUnknown),
+			StatusClass:   "secondary",
+			CheckedAt:     "-",
+			Latency:       "-",
+			ErrorMessage:  "",
+			LatencyMS:     0,
+			CheckedAtUnix: 0,
+		}
 	}
-	return string(result.Status),
-		dashboardTemplateStatusClass(result.Status),
-		dashboardTemplateTime(result.CheckedAt),
-		dashboardTemplateDuration(result.Latency),
-		result.ErrorMessage
+
+	return dashboardTemplateLatestView{
+		Status:        string(result.Status),
+		StatusClass:   dashboardTemplateStatusClass(result.Status),
+		CheckedAt:     dashboardTemplateTime(result.CheckedAt),
+		Latency:       dashboardTemplateDuration(result.Latency),
+		ErrorMessage:  result.ErrorMessage,
+		LatencyMS:     result.Latency.Milliseconds(),
+		CheckedAtUnix: result.CheckedAt.Unix(),
+	}
 }
 
 func dashboardTemplateResults(results []dashboardResultView) []dashboardTemplateResult {

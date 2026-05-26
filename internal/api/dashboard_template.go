@@ -46,7 +46,7 @@ func (e *dashboardEndpoint) registerTemplateRoutes(app *fiber.App) {
 		return
 	}
 
-	app.Get("/ui/static/:file", renderer.staticAsset)
+	app.Use("/ui/static", renderer.staticAsset)
 	app.Get(loginRoute, e.loginPage(renderer))
 	app.Post(loginRoute, e.loginSubmit(renderer))
 	app.Get(logoutRoute, e.logoutPage)
@@ -63,8 +63,15 @@ func unavailableDashboardTemplate(err error) fiber.Handler {
 }
 
 func (r *dashboardTemplateRenderer) staticAsset(ctx *fiber.Ctx) error {
-	name := path.Clean(strings.TrimSpace(ctx.Params("file")))
-	if name == "." || strings.Contains(name, "/") {
+	rawName := strings.TrimSpace(ctx.Path())
+	if rawName == "" {
+		return fiber.ErrNotFound
+	}
+
+	name := strings.TrimPrefix(path.Clean(rawName), "/ui/static/")
+	name = strings.TrimPrefix(name, "ui/static/")
+	name = strings.TrimPrefix(name, "static/")
+	if name == "." || strings.HasPrefix(name, "../") || strings.Contains(name, "/../") {
 		return fiber.ErrNotFound
 	}
 

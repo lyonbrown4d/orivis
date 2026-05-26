@@ -28,7 +28,7 @@ var Templates embed.FS
 // Static contains small UI assets that can be served by the server when the UI
 // routes are wired later.
 //
-//go:embed static/*
+//go:embed static/* static/css/*
 var Static embed.FS
 
 // ParseTemplate parses one page entry with the shared layout and partials.

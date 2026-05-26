@@ -53,36 +53,54 @@ type dashboardTemplateUser struct {
 }
 
 type dashboardTemplateText struct {
-	Overview        string
-	Dashboard       string
-	Status          string
-	Login           string
-	Logout          string
-	Username        string
-	Password        string
-	Auth            string
-	LoginHeading    string
-	LoginIntro      string
-	LoginFailed     string
-	TotalMonitors   string
-	HealthyMonitors string
-	FailingMonitors string
-	UnknownMonitors string
-	Agents          string
-	Groups          string
-	Monitors        string
-	RecentResults   string
-	PublicStatus    string
-	CurrentStatus   string
-	EmptyMonitors   string
-	EmptyResults    string
-	Target          string
-	Environment     string
-	Source          string
-	Latency         string
-	CheckedAt       string
-	GeneratedAt     string
-	Refresh         string
+	Overview            string
+	Dashboard           string
+	Status              string
+	All                 string
+	Login               string
+	Logout              string
+	Username            string
+	Password            string
+	Auth                string
+	LoginHeading        string
+	LoginIntro          string
+	LoginFailed         string
+	Search              string
+	SearchPlaceholder   string
+	ClearFilters        string
+	StatusUp            string
+	StatusDown          string
+	StatusUnknown       string
+	StatusOther         string
+	NoMatches           string
+	SortBy              string
+	SortByNameAsc       string
+	SortByNameDesc      string
+	SortByChecked       string
+	SortByCheckedNewest string
+	SortByCheckedOldest string
+	SortByLatency       string
+	SortByLatencySlow   string
+	SortByLatencyFast   string
+	TotalMonitors       string
+	HealthyMonitors     string
+	FailingMonitors     string
+	UnknownMonitors     string
+	Agents              string
+	Groups              string
+	Monitors            string
+	RecentResults       string
+	PublicStatus        string
+	CurrentStatus       string
+	EmptyMonitors       string
+	EmptyResults        string
+	Target              string
+	Environment         string
+	Source              string
+	Latency             string
+	CheckedAt           string
+	GeneratedAt         string
+	Refresh             string
 }
 
 type dashboardTemplateSummary struct {
@@ -103,18 +121,20 @@ type dashboardTemplateAgent struct {
 }
 
 type dashboardTemplateMonitor struct {
-	Name        string
-	Type        string
-	Target      string
-	Group       string
-	Environment string
-	Source      string
-	Status      string
-	StatusClass string
-	CheckedAt   string
-	Latency     string
-	Error       string
-	Lights      []dashboardTemplateLight
+	Name          string
+	Type          string
+	Target        string
+	Group         string
+	Environment   string
+	Source        string
+	Status        string
+	StatusClass   string
+	CheckedAt     string
+	CheckedAtUnix int64
+	Latency       string
+	LatencyMs     int64
+	Error         string
+	Lights        []dashboardTemplateLight
 }
 
 type dashboardTemplateResult struct {

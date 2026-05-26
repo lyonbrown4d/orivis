@@ -1,34 +1,12 @@
 {{ template "base" . }}
 
 {{ define "content" }}
-<section class="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-8 py-6 lg:grid-cols-[1fr_30rem]">
-  <div class="orivis-auth-hero hidden overflow-hidden rounded-[2rem] p-8 text-white shadow-2xl shadow-slate-950/20 lg:block">
-    <div class="relative isolate min-h-[34rem]">
-      <div class="absolute inset-0 -z-10 rounded-[1.5rem] bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.35),transparent_28%),radial-gradient(circle_at_80%_35%,rgba(14,165,233,0.28),transparent_25%),linear-gradient(145deg,rgba(255,255,255,0.12),transparent_45%)]"></div>
-      <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">Orivis</p>
-      <h1 class="mt-5 max-w-sm text-4xl font-semibold tracking-tight">{{ .Text.LoginHeading }}</h1>
-      <p class="mt-4 max-w-sm text-sm leading-6 text-slate-300">{{ .Text.LoginIntro }}</p>
-      <div class="absolute bottom-0 left-0 right-0 rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur">
-        <div class="flex items-center gap-3">
-          <span class="size-3 rounded-full bg-emerald-400"></span>
-          <span class="text-sm font-medium text-slate-100">{{ .Text.Dashboard }}</span>
-        </div>
-        <div class="mt-4 flex items-center gap-1 overflow-hidden rounded-full bg-slate-900 p-1.5">
-          <span class="h-3 flex-1 rounded-full bg-emerald-400"></span>
-          <span class="h-3 flex-1 rounded-full bg-emerald-400"></span>
-          <span class="h-3 flex-1 rounded-full bg-amber-400"></span>
-          <span class="h-3 flex-1 rounded-full bg-emerald-400"></span>
-          <span class="h-3 flex-1 rounded-full bg-slate-600"></span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="orivis-card orivis-login-card p-6 sm:p-8">
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.24em] text-sky-600">{{ .Text.Auth }}</p>
-      <h1 class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{{ .Text.LoginHeading }}</h1>
-      <p class="mt-3 text-sm leading-6 text-slate-500">{{ .Text.LoginIntro }}</p>
+<section class="mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-6 sm:px-6">
+  <div class="orivis-card orivis-login-card w-full max-w-lg p-6 sm:p-8">
+    <div class="orivis-auth-hero mb-6 rounded-2xl p-6 text-white">
+      <p class="text-xs font-semibold uppercase tracking-[0.26em] text-white/75">{{ .Text.Auth }}</p>
+      <h1 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{{ .Text.LoginHeading }}</h1>
+      <p class="mt-2 text-sm text-white/80">{{ .Text.LoginIntro }}</p>
     </div>
 
     {{ if .Error }}
@@ -38,14 +16,15 @@
     <form class="mt-8 space-y-5" method="post" action="{{ .Links.LoginSubmit }}">
       <div>
         <label class="text-sm font-semibold text-slate-700" for="username">{{ .Text.Username }}</label>
-      <input class="orivis-form-input mt-2 w-full" id="username" name="username" autocomplete="username" required>
+        <input class="orivis-form-input mt-2 w-full" id="username" name="username" autocomplete="username" required>
       </div>
       <div>
         <label class="text-sm font-semibold text-slate-700" for="password">{{ .Text.Password }}</label>
-      <input class="orivis-form-input mt-2 w-full" id="password" name="password" type="password" autocomplete="current-password" required>
+        <input class="orivis-form-input mt-2 w-full" id="password" name="password" type="password" autocomplete="current-password" required>
       </div>
       <button class="orivis-btn orivis-btn-brand mt-2 w-full" type="submit">{{ .Text.Login }}</button>
     </form>
+    <p class="mt-5 text-center text-xs text-slate-500">{{ .Text.Dashboard }} · {{ .Text.Login }}</p>
   </div>
 </section>
 {{ end }}

@@ -1,0 +1,786 @@
+:root {
+  color-scheme: light;
+
+  --orivis-bg: #f5f7fb;
+  --orivis-bg-glow: rgba(20, 184, 166, 0.16);
+  --orivis-bg-warm: rgba(245, 158, 11, 0.11);
+  --orivis-ink: #111827;
+  --orivis-muted: #64748b;
+  --orivis-panel: rgba(255, 255, 255, 0.86);
+  --orivis-panel-solid: #ffffff;
+  --orivis-line: rgba(15, 23, 42, 0.11);
+  --orivis-line-strong: rgba(15, 23, 42, 0.18);
+  --orivis-accent: #0f766e;
+  --orivis-accent-soft: rgba(20, 184, 166, 0.14);
+  --orivis-success: #16a34a;
+  --orivis-warning: #f59e0b;
+  --orivis-danger: #dc2626;
+  --orivis-unknown: #94a3b8;
+  --orivis-focus-ring: rgba(14, 165, 233, 0.36);
+  --orivis-shadow: 0 18px 50px rgba(15, 23, 42, 0.09);
+  --orivis-shadow-hover: 0 22px 60px rgba(15, 23, 42, 0.14);
+}
+
+html {
+  min-height: 100%;
+}
+
+body.orivis-shell {
+  min-height: 100vh;
+  color: var(--orivis-ink);
+  background-color: var(--orivis-bg);
+  background-image:
+    radial-gradient(circle at 10% 0%, var(--orivis-bg-glow), transparent 26rem),
+    radial-gradient(circle at 90% 8%, var(--orivis-bg-warm), transparent 24rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), var(--orivis-bg) 42%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, auto, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  color: #042f2e;
+  background: rgba(45, 212, 191, 0.38);
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 3px solid var(--orivis-focus-ring);
+  outline-offset: 3px;
+}
+
+:where(a, button):focus-visible {
+  border-radius: 0.5rem;
+}
+
+.orivis-card-header {
+  border-bottom: 1px solid var(--orivis-line);
+  padding: 1.25rem 1.25rem 1rem;
+}
+
+.orivis-navbar {
+  background: color-mix(in srgb, var(--orivis-panel-solid) 82%, transparent);
+  border-bottom: 1px solid var(--orivis-line);
+  backdrop-filter: blur(16px);
+}
+
+.orivis-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.orivis-btn:hover {
+  background-color: rgba(2, 6, 23, 0.06);
+}
+
+.orivis-btn.is-disabled,
+.orivis-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+.orivis-btn-brand {
+  color: #fff;
+  background: linear-gradient(135deg, #047857, #0ea5e9);
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  box-shadow: 0 12px 20px rgba(14, 165, 233, 0.28);
+}
+
+.orivis-btn-brand:hover {
+  filter: brightness(0.98);
+}
+
+.orivis-btn-ghost {
+  border: 1px solid var(--orivis-line);
+  background: var(--orivis-panel-solid);
+}
+
+.orivis-sidebar {
+  background: color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent);
+  border-right-color: var(--orivis-line);
+  border-right-style: solid;
+  border-right-width: 1px;
+  backdrop-filter: blur(14px);
+}
+
+.orivis-sidebar-stats {
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel) 72%, transparent);
+  padding: 1rem;
+  border-radius: 1.5rem;
+}
+
+.orivis-sidebar-auth {
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 96%, transparent);
+  padding: 1rem;
+  border-radius: 1.25rem;
+}
+
+.orivis-card {
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(135deg, var(--orivis-panel), color-mix(in srgb, var(--orivis-accent-soft) 55%, transparent)),
+    var(--orivis-panel-solid);
+  border: 1px solid var(--orivis-line);
+  box-shadow: var(--orivis-shadow);
+}
+
+.orivis-hero,
+.orivis-status-header,
+.orivis-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.orivis-hero::after,
+.orivis-status-header::after,
+.orivis-card::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.38), transparent 38%);
+}
+
+.orivis-stat-card,
+.orivis-login-card,
+.orivis-monitor-card {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent), var(--orivis-panel)),
+    var(--orivis-panel-solid);
+  border: 1px solid var(--orivis-line);
+  box-shadow: var(--orivis-shadow);
+}
+
+.orivis-stat-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1.25rem;
+  border-radius: 1.25rem;
+}
+
+.orivis-hero-summary {
+  min-height: 130px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.orivis-stat-card strong {
+  font-size: clamp(2rem, 7vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.orivis-login-card {
+  border-radius: 1.25rem;
+}
+
+.orivis-monitor-card {
+  min-height: 100%;
+  padding: 1rem 1rem 1.1rem;
+  border-radius: 1.25rem;
+}
+
+.orivis-card-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.orivis-form-input {
+  border-radius: 0.85rem;
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 94%, transparent);
+  padding: 0.7rem 0.95rem;
+  outline: none;
+  color: var(--orivis-ink);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.orivis-form-input::placeholder {
+  color: var(--orivis-muted);
+}
+
+.orivis-form-input:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14);
+}
+
+.orivis-form-input.is-active {
+  border-color: var(--orivis-accent);
+  box-shadow: 0 0 0 5px rgba(45, 212, 191, 0.18);
+}
+
+.orivis-input-wrap {
+  display: flex;
+  min-width: 220px;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.orivis-dashboard-toolbar {
+  display: grid;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.orivis-page-shell {
+  position: relative;
+  animation: orivis-page-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.orivis-nav-shell {
+  backdrop-filter: blur(10px);
+}
+
+.orivis-link {
+  color: var(--orivis-ink);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.orivis-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.2rem;
+  height: 1px;
+  transform: scaleX(0.24);
+  transform-origin: left;
+  background: linear-gradient(90deg, transparent, var(--orivis-accent), transparent);
+  opacity: 0;
+  transition: all 200ms ease;
+}
+
+.orivis-link:hover::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.orivis-fade-up {
+  animation: orivis-fade-up 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.orivis-kpi-panel {
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--orivis-panel) 80%, transparent), var(--orivis-panel-solid));
+}
+
+.orivis-status-summary-grid > div {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--orivis-line-strong) 25%, transparent);
+}
+
+.orivis-status-summary-grid > div:hover {
+  transform: translateY(-1px);
+}
+
+.orivis-float-button {
+  box-shadow: var(--orivis-shadow);
+  background: linear-gradient(130deg, var(--orivis-panel-solid), var(--orivis-accent-soft));
+}
+
+.orivis-float-button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--orivis-shadow-hover);
+}
+
+.orivis-monitor-meta,
+.orivis-meta-pill {
+  transition: transform 140ms ease, opacity 140ms ease;
+}
+
+.orivis-monitor-card:hover .orivis-meta-pill {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
+.orivis-sort-wrap {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.orivis-select {
+  border-radius: 0.85rem;
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 94%, transparent);
+  color: var(--orivis-ink);
+  padding: 0.58rem 0.9rem;
+  outline: none;
+  font-size: 0.83rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.orivis-select:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.14);
+}
+
+.orivis-select--light {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ecfeff;
+}
+
+.orivis-select--light option {
+  color: #0f172a;
+}
+
+.orivis-kpi-grid {
+  margin-top: 0.8rem;
+}
+
+.orivis-monitor-meta {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.orivis-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--orivis-line) 70%, transparent);
+  background: color-mix(in srgb, var(--orivis-panel) 84%, transparent);
+  padding: 0.24rem 0.65rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--orivis-ink);
+}
+
+.orivis-auth-hero {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.55), rgba(15, 118, 110, 0.26)),
+    radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.4), transparent 35%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--orivis-shadow);
+}
+
+.orivis-filter-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.orivis-filter-chip {
+  border-radius: 9999px;
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 85%, transparent);
+  padding: 0.45rem 0.85rem;
+  color: var(--orivis-ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.orivis-filter-chip:hover {
+  background: color-mix(in srgb, var(--orivis-line) 18%, transparent);
+}
+
+.orivis-filter-chip.is-active {
+  border-color: transparent;
+  color: #ffffff;
+  background: linear-gradient(130deg, #0f766e, #0ea5e9);
+  box-shadow: 0 11px 24px rgba(14, 165, 233, 0.22);
+}
+
+.orivis-filter-chip-success {
+  --chip-accent: var(--orivis-success);
+}
+
+.orivis-filter-chip-success.is-active {
+  border-color: #22c55e;
+  background: linear-gradient(130deg, #16a34a, #22c55e);
+}
+
+.orivis-filter-chip-danger {
+  --chip-accent: var(--orivis-danger);
+}
+
+.orivis-filter-chip-danger.is-active {
+  border-color: #f43f5e;
+  background: linear-gradient(130deg, #e11d48, #fb7185);
+}
+
+.orivis-filter-chip-warning {
+  --chip-accent: var(--orivis-warning);
+}
+
+.orivis-filter-chip-warning.is-active {
+  border-color: #f59e0b;
+  background: linear-gradient(130deg, #f59e0b, #f97316);
+}
+
+.orivis-filter-chip-secondary {
+  --chip-accent: var(--orivis-unknown);
+}
+
+.orivis-filter-chip-secondary.is-active {
+  border-color: #94a3b8;
+  background: linear-gradient(130deg, #64748b, #94a3b8);
+}
+
+.orivis-muted {
+  color: var(--orivis-muted);
+}
+
+.orivis-divider {
+  border-color: var(--orivis-line);
+}
+
+.orivis-light-track {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0.18rem;
+  width: 100%;
+  max-width: 100%;
+  min-height: 1.25rem;
+  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.orivis-light-track::-webkit-scrollbar {
+  display: none;
+}
+
+.orivis-light-track-public {
+  min-height: 1.5rem;
+}
+
+.orivis-status-light {
+  display: block;
+  width: 0.42rem;
+  min-width: 0.42rem;
+  flex: 0 0 auto;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--orivis-unknown);
+  opacity: 0.95;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.24),
+    0 0.45rem 1rem rgba(15, 23, 42, 0.18);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    filter 160ms ease;
+}
+
+.orivis-light-track-public .orivis-status-light {
+  height: 1.5rem;
+}
+
+.orivis-status-light:hover {
+  z-index: 1;
+  opacity: 1;
+  filter: saturate(1.18);
+  transform: scaleY(1.18);
+}
+
+.orivis-status-light-success {
+  background: linear-gradient(180deg, #86efac 0%, #22c55e 55%, #15803d 100%);
+}
+
+.orivis-status-light-danger {
+  background: linear-gradient(180deg, #fda4af 0%, #f43f5e 55%, #be123c 100%);
+}
+
+.orivis-status-light-warning {
+  background: linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #b45309 100%);
+}
+
+.orivis-status-light-primary,
+.orivis-status-light-info {
+  background: linear-gradient(180deg, #7dd3fc 0%, #0ea5e9 55%, #0369a1 100%);
+}
+
+.orivis-status-light-secondary {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 55%, #334155 100%);
+}
+
+.orivis-monitor-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.orivis-monitor-card {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.orivis-monitor-card.is-hidden {
+  display: none;
+}
+
+.orivis-status-badge {
+  display: inline-flex;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--orivis-panel) 72%, transparent);
+  padding: 0.35rem 0.72rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.orivis-status-badge-success {
+  color: #166534;
+  border-color: rgba(22, 163, 74, 0.4);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(34, 197, 94, 0.25));
+}
+
+.orivis-status-badge-danger {
+  color: #b91c1c;
+  border-color: rgba(220, 38, 38, 0.34);
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.18), rgba(251, 113, 133, 0.3));
+}
+
+.orivis-status-badge-warning {
+  color: #92400e;
+  border-color: rgba(217, 119, 6, 0.34);
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.16), rgba(245, 158, 11, 0.25));
+}
+
+.orivis-status-badge-secondary {
+  color: #334155;
+  border-color: rgba(71, 85, 105, 0.36);
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.18), rgba(100, 116, 139, 0.24));
+}
+
+.orivis-group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.8rem;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0.45rem 0.75rem;
+  color: var(--orivis-ink);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.orivis-group-item.is-active {
+  border-color: rgba(14, 165, 233, 0.35);
+  background: color-mix(in srgb, var(--orivis-accent-soft) 72%, transparent);
+  color: #0c4a6e;
+  font-weight: 700;
+}
+
+.orivis-group-item:hover {
+  background: color-mix(in srgb, var(--orivis-line) 24%, transparent);
+}
+
+.orivis-agent-card {
+  border: 1px solid var(--orivis-line);
+  border-radius: 0.95rem;
+  padding: 0.8rem;
+  background: color-mix(in srgb, var(--orivis-panel-solid) 90%, transparent);
+}
+
+.orivis-empty-state {
+  min-height: 7rem;
+  border-radius: 1rem;
+  border: 1px dashed var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel) 70%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--orivis-muted);
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.orivis-empty-state.is-hidden {
+  display: none;
+}
+
+.orivis-filter-summary {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--orivis-line) 66%, transparent);
+  background: color-mix(in srgb, var(--orivis-panel) 80%, transparent);
+  padding: 0.3rem 0.75rem;
+  max-width: 20rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 768px) {
+  .orivis-monitor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .orivis-monitor-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.orivis-hx-error {
+  color: #9f1239;
+  background: rgba(255, 241, 242, 0.94);
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  border-radius: 0.875rem;
+  box-shadow: 0 12px 28px rgba(159, 18, 57, 0.08);
+}
+
+.orivis-refresh-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.orivis-refresh-indicator::before {
+  content: "";
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--orivis-accent-soft) 70%, transparent);
+  border-top-color: var(--orivis-accent);
+  opacity: 0.92;
+  transition: border-color 160ms ease;
+}
+
+.orivis-refresh-indicator.is-refreshing::before {
+  border-top-color: var(--orivis-accent);
+  animation: orivis-spin 0.8s linear infinite;
+}
+
+.orivis-refresh-indicator.is-refreshing {
+  color: #0369a1;
+  animation: orivis-pulse 1.35s ease-in-out infinite;
+}
+
+.orivis-monitor-card-enter {
+  opacity: 0;
+  transform: translateY(8px) scale(0.985);
+  animation: orivis-monitor-enter 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.orivis-monitor-card {
+  will-change: transform, opacity;
+}
+
+@keyframes orivis-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orivis-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.84;
+  }
+
+  50% {
+    transform: scale(1.01);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.84;
+  }
+}
+
+@keyframes orivis-monitor-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes orivis-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes orivis-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orivis-refresh-indicator::before,
+  .orivis-refresh-indicator.is-refreshing,
+  .orivis-monitor-card-enter,
+  .orivis-page-enter,
+  .orivis-fade-up,
+  .orivis-card-enter {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .orivis-stat-card,
+  .orivis-login-card,
+  .orivis-monitor-card,
+  .orivis-card {
+    transition:
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms ease;
+  }
+
+  .orivis-stat-card:hover,
+  .orivis-login-card:hover,
+  .orivis-monitor-card:hover,
+  .orivis-card:hover {
+    border-color: var(--orivis-line-strong);
+    box-shadow: var(--orivis-shadow-hover);
+    transform: translateY(-1px);
+  }
+}
+

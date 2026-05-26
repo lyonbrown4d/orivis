@@ -4,20 +4,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
   <title>{{ .Title }} - Orivis</title>
   <link rel="preconnect" href="https://cdn.tailwindcss.com">
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com" defer></script>
   <link href="/ui/static/app.css" rel="stylesheet">
 </head>
-<body class="orivis-shell min-h-screen antialiased">
-  <div class="{{ if .Public }}min-h-screen{{ else }}min-h-screen lg:flex{{ end }}">
-    {{ if not .Public }}{{ template "nav" . }}{{ end }}
-    <main class="{{ if .Public }}orivis-shell-main min-h-screen{{ else }}orivis-shell-main min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8{{ end }}"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-trigger="every 10s" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
+<body class="orivis-shell min-h-screen antialiased overflow-x-hidden">
+  {{ if .Public }}
+  <main class="min-h-screen w-full px-4 py-6 sm:px-6 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-trigger="every 10s" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
+    {{ block "content" . }}{{ end }}
+  </main>
+  {{ else }}
+  <div class="min-h-screen lg:grid lg:grid-cols-12">
+    {{ template "nav" . }}
+    <main class="orivis-shell-main orivis-shell-main-public min-h-screen min-w-0 px-4 py-6 sm:px-6 lg:col-span-9 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
       {{ block "content" . }}{{ end }}
     </main>
   </div>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-  <script src="/ui/static/app.js"></script>
+  {{ end }}
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  <script src="/ui/static/app.js" defer></script>
 </body>
 </html>
 {{ end }}
