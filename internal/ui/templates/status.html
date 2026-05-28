@@ -1,36 +1,46 @@
 {{ template "base" . }}
 
 {{ define "content" }}
-<div class="relative isolate min-h-[calc(100vh-4rem)] overflow-hidden px-4 py-8 sm:px-6 lg:px-8">
-  <div class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_32%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.13),transparent_32%),linear-gradient(180deg,var(--orivis-bg),var(--orivis-bg))]"></div>
-
-  <section class="mx-auto max-w-[1550px]">
-    <section class="orivis-card orivis-status-header orivis-fade-up px-6 py-6 sm:px-8 sm:py-8">
-      <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">{{ .Text.PublicStatus }}</p>
-          <h1 class="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">{{ if .SelectedGroup }}{{ .SelectedGroup }}{{ else }}{{ .Text.CurrentStatus }}{{ end }}</h1>
-          <p class="mt-3 text-sm text-slate-500">{{ .Text.GeneratedAt }}: {{ .GeneratedAt }}</p>
+<div class="orivis-workspace min-h-screen px-4 py-6 sm:px-6 lg:px-8">
+  <section class="mx-auto max-w-[1320px] space-y-6">
+    <section class="orivis-public-header orivis-fade-up">
+      <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div class="min-w-0">
+          <p class="orivis-eyebrow">{{ .Text.PublicStatus }}</p>
+          <h1 class="orivis-display-title">{{ if .SelectedGroup }}{{ .SelectedGroup }}{{ else }}{{ .Text.CurrentStatus }}{{ end }}</h1>
+          <p class="orivis-muted mt-3 text-sm">{{ .Text.GeneratedAt }} {{ .GeneratedAt }}</p>
         </div>
-        <div class="orivis-status-summary-grid grid min-w-64 grid-cols-1 gap-2 rounded-3xl bg-white/5 p-3 ring-1 ring-white/10 sm:grid-cols-3">
-          <div class="rounded-2xl bg-white/10 p-3">
-            <p class="text-xs uppercase tracking-[0.16em] text-slate-200">{{ .Text.HealthyMonitors }}</p>
-            <p class="mt-2 text-2xl font-semibold text-emerald-200">{{ .Summary.Up }}</p>
-          </div>
-          <div class="rounded-2xl bg-white/10 p-3">
-            <p class="text-xs uppercase tracking-[0.16em] text-slate-200">{{ .Text.FailingMonitors }}</p>
-            <p class="mt-2 text-2xl font-semibold text-rose-200">{{ .Summary.Down }}</p>
-          </div>
-          <div class="rounded-2xl bg-white/10 p-3">
-            <p class="text-xs uppercase tracking-[0.16em] text-slate-200">{{ .Text.UnknownMonitors }}</p>
-            <p class="mt-2 text-2xl font-semibold text-amber-200">{{ .Summary.Unknown }}</p>
-          </div>
-        </div>
+        {{ if eq .Summary.Down 0 }}
+        <span class="orivis-state-pill orivis-state-pill-success">{{ .Text.StatusUp }}</span>
+        {{ else }}
+        <span class="orivis-state-pill orivis-state-pill-danger">{{ .Text.StatusDown }}</span>
+        {{ end }}
       </div>
 
-      <div class="orivis-dashboard-toolbar mt-7">
+      <div class="orivis-metric-strip mt-7">
+        <div class="orivis-metric-card">
+          <span class="orivis-metric-label">{{ .Text.TotalMonitors }}</span>
+          <strong>{{ .Summary.Monitors }}</strong>
+        </div>
+        <div class="orivis-metric-card orivis-metric-card-success">
+          <span class="orivis-metric-label">{{ .Text.HealthyMonitors }}</span>
+          <strong>{{ .Summary.Up }}</strong>
+        </div>
+        <div class="orivis-metric-card orivis-metric-card-danger">
+          <span class="orivis-metric-label">{{ .Text.FailingMonitors }}</span>
+          <strong>{{ .Summary.Down }}</strong>
+        </div>
+        <div class="orivis-metric-card orivis-metric-card-warning">
+          <span class="orivis-metric-label">{{ .Text.UnknownMonitors }}</span>
+          <strong>{{ .Summary.Unknown }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="orivis-control-panel orivis-fade-up" aria-label="{{ .Text.Search }}">
+      <div class="orivis-dashboard-toolbar">
         <label class="orivis-input-wrap" for="orivis-monitor-search">
-          <span class="text-xs font-semibold text-slate-300">{{ .Text.Search }}</span>
+          <span>{{ .Text.Search }}</span>
           <input id="orivis-monitor-search" class="orivis-form-input orivis-monitor-search" type="text" placeholder="{{ .Text.SearchPlaceholder }}" autocomplete="off" aria-label="{{ .Text.Search }}">
         </label>
 
@@ -43,8 +53,8 @@
         </div>
 
         <div class="orivis-sort-wrap">
-          <span class="text-xs font-semibold text-slate-300">{{ .Text.SortBy }}</span>
-          <select id="orivis-monitor-sort" class="orivis-select orivis-select--light" aria-label="{{ .Text.SortBy }}">
+          <span>{{ .Text.SortBy }}</span>
+          <select id="orivis-monitor-sort" class="orivis-select" aria-label="{{ .Text.SortBy }}">
             <option value="checked-desc">{{ .Text.SortByCheckedNewest }}</option>
             <option value="checked-asc">{{ .Text.SortByCheckedOldest }}</option>
             <option value="name-asc">{{ .Text.SortByNameAsc }}</option>
@@ -54,27 +64,28 @@
           </select>
         </div>
 
-        <button id="orivis-clear-filters" class="orivis-btn" type="button">{{ .Text.ClearFilters }}</button>
+        <button id="orivis-clear-filters" class="orivis-btn orivis-btn-ghost" type="button">{{ .Text.ClearFilters }}</button>
       </div>
 
-      <div class="orivis-status-legend mt-4 flex flex-wrap items-center gap-2" role="status" aria-live="polite">
-        <span class="orivis-status-chip orivis-status-chip-success">{{ .Text.StatusUp }}</span>
-        <span class="orivis-status-chip orivis-status-chip-danger">{{ .Text.StatusDown }}</span>
-        <span class="orivis-status-chip orivis-status-chip-warning">{{ .Text.StatusUnknown }}</span>
-        <span class="orivis-status-chip orivis-status-chip-secondary">{{ .Text.StatusOther }}</span>
-      </div>
-      <div class="orivis-dashboard-meta mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+      <div class="orivis-dashboard-meta mt-4 flex flex-wrap items-center gap-3 text-xs">
         <span id="orivis-monitor-visible-count" data-monitor-total="{{ .Summary.Monitors }}">{{ .Summary.Monitors }} / {{ .Summary.Monitors }}</span>
-        <span id="orivis-monitor-filter-summary" class="text-slate-500" aria-live="polite">{{ .Summary.Monitors }} monitors</span>
-        <span id="orivis-refresh-indicator" class="orivis-refresh-indicator" data-orivis-refresh-idle="{{ .Text.Refresh }}" aria-live="polite">{{ .Text.Refresh }}</span>
-        <span>{{ .Text.GeneratedAt }} {{ .GeneratedAt }}</span>
+        <span id="orivis-monitor-filter-summary" class="orivis-filter-summary" aria-live="polite">{{ .Summary.Monitors }} monitors</span>
+        <span id="orivis-refresh-indicator" class="orivis-refresh-indicator ml-auto" data-orivis-refresh-idle="{{ .Text.Refresh }}" aria-live="polite">{{ .Text.Refresh }}</span>
       </div>
     </section>
 
-    <section class="orivis-card orivis-fade-up mt-6 px-5 py-6">
-      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-lg font-semibold text-slate-900">{{ .Text.Monitors }}</h2>
-        <span class="rounded-full bg-slate-100 px-3 py-1 text-[0.72rem] font-semibold text-slate-600">{{ .Summary.Monitors }}</span>
+    <section class="orivis-panel orivis-fade-up" aria-label="{{ .Text.Monitors }}">
+      <div class="orivis-section-heading">
+        <div>
+          <p class="orivis-eyebrow">{{ .Text.RecentResults }}</p>
+          <h2>{{ .Text.Monitors }}</h2>
+        </div>
+        <div class="orivis-status-legend" role="status" aria-live="polite">
+          <span class="orivis-status-chip orivis-status-chip-success">{{ .Text.StatusUp }}</span>
+          <span class="orivis-status-chip orivis-status-chip-danger">{{ .Text.StatusDown }}</span>
+          <span class="orivis-status-chip orivis-status-chip-warning">{{ .Text.StatusUnknown }}</span>
+          <span class="orivis-status-chip orivis-status-chip-secondary">{{ .Text.StatusOther }}</span>
+        </div>
       </div>
 
       <div data-orivis-monitor-root data-orivis-monitor-no-matches="{{ .Text.NoMatches }}" data-monitor-total="{{ .Summary.Monitors }}">
@@ -92,54 +103,49 @@
             data-monitor-latency-ms="{{ .LatencyMs }}"
             data-monitor-checked-at="{{ .CheckedAtUnix }}"
           >
-            <div class="space-y-3">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                <div class="min-w-0">
-                  <h3 class="text-lg font-semibold text-slate-950">{{ .Name }}</h3>
-                  <p class="mt-1 text-sm text-slate-500">{{ .Target }}</p>
+            <div class="orivis-monitor-card-head">
+              <div class="min-w-0">
+                <div class="orivis-monitor-title-line">
+                  <span class="orivis-status-dot orivis-status-dot-{{ .StatusClass }}"></span>
+                  <h3>{{ .Name }}</h3>
                 </div>
-                <span class="orivis-status-badge orivis-status-badge-{{ .StatusClass }} shrink-0">{{ .Status }}</span>
+                <p class="orivis-monitor-target">{{ .Target }}</p>
               </div>
-
-              <div class="orivis-monitor-meta">
-                <span class="orivis-meta-pill">{{ .Source }}</span>
-                <span class="orivis-meta-pill">{{ .Environment }}</span>
-                <span class="orivis-meta-pill">{{ .Type }}</span>
-              </div>
-
-              <dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <dt class="text-slate-500">{{ $.Text.Environment }}</dt>
-                  <dd class="mt-1 font-medium text-slate-900">{{ .Environment }}</dd>
-                </div>
-                <div>
-                  <dt class="text-slate-500">{{ $.Text.Target }}</dt>
-                  <dd class="mt-1 truncate font-medium text-slate-900">{{ .Target }}</dd>
-                </div>
-                <div>
-                  <dt class="text-slate-500">{{ $.Text.Latency }}</dt>
-                  <dd class="mt-1 font-medium text-slate-900">{{ .Latency }}</dd>
-                </div>
-                <div>
-                  <dt class="text-slate-500">{{ $.Text.CheckedAt }}</dt>
-                  <dd class="mt-1 font-medium text-slate-900">{{ .CheckedAt }}</dd>
-                </div>
-              </dl>
-              {{ if .Error }}
-              <p class="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ .Error }}</p>
-              {{ end }}
+              <span class="orivis-status-badge orivis-status-badge-{{ .StatusClass }}">{{ .Status }}</span>
             </div>
-            <div class="orivis-light-track orivis-light-track-public orivis-light-track--shadow mt-4 max-w-full min-h-5 overflow-x-hidden">
+
+            <div class="orivis-monitor-meta">
+              <span class="orivis-meta-pill">{{ .Source }}</span>
+              <span class="orivis-meta-pill">{{ .Environment }}</span>
+              <span class="orivis-meta-pill">{{ .Type }}</span>
+            </div>
+
+            <dl class="orivis-monitor-facts">
+              <div>
+                <dt>{{ $.Text.Latency }}</dt>
+                <dd>{{ .Latency }}</dd>
+              </div>
+              <div>
+                <dt>{{ $.Text.CheckedAt }}</dt>
+                <dd>{{ .CheckedAt }}</dd>
+              </div>
+            </dl>
+
+            {{ if .Error }}
+            <p class="orivis-error-note">{{ .Error }}</p>
+            {{ end }}
+
+            <div class="orivis-light-track orivis-light-track-public orivis-light-track--shadow" aria-label="{{ $.Text.RecentResults }}">
               {{ range .Lights }}
               <span class="orivis-status-light orivis-status-light-{{ .Class }}" title="{{ .Title }}"></span>
               {{ else }}
-              <span class="text-xs text-slate-400">{{ $.Text.EmptyResults }}</span>
+              <span class="orivis-empty-inline">{{ $.Text.EmptyResults }}</span>
               {{ end }}
             </div>
           </article>
           {{ else }}
           <div class="orivis-empty-state" data-orivis-monitor-empty-all>
-            <div class="orivis-empty-state-illustration" aria-hidden="true">◯</div>
+            <div class="orivis-empty-state-illustration" aria-hidden="true"></div>
             <div>{{ .Text.EmptyMonitors }}</div>
           </div>
           {{ end }}

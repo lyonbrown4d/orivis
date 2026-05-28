@@ -7,7 +7,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/lyonbrown4d/orivis/internal/ui"
 	"github.com/samber/oops"
 )
@@ -57,12 +57,12 @@ func (e *dashboardEndpoint) registerTemplateRoutes(app *fiber.App) {
 }
 
 func unavailableDashboardTemplate(err error) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
+	return func(ctx fiber.Ctx) error {
 		return oops.Wrapf(err, "render dashboard template")
 	}
 }
 
-func (r *dashboardTemplateRenderer) staticAsset(ctx *fiber.Ctx) error {
+func (r *dashboardTemplateRenderer) staticAsset(ctx fiber.Ctx) error {
 	rawName := strings.TrimSpace(ctx.Path())
 	if rawName == "" {
 		return fiber.ErrNotFound
@@ -94,14 +94,14 @@ func (r *dashboardTemplateRenderer) staticAsset(ctx *fiber.Ctx) error {
 }
 
 func (e *dashboardEndpoint) dashboardPage(renderer *dashboardTemplateRenderer) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
+	return func(ctx fiber.Ctx) error {
 		if !e.dashboardAuthenticated(ctx) {
-			if err := ctx.Redirect(loginRoute); err != nil {
+			if err := ctx.Redirect().Status(fiber.StatusFound).To(loginRoute); err != nil {
 				return oops.Wrapf(err, "redirect dashboard login")
 			}
 			return nil
 		}
-		view, err := e.dashboardView(ctx.UserContext(), "")
+		view, err := e.dashboardView(ctx.Context(), "")
 		if err != nil {
 			return oops.Wrapf(err, "load dashboard view")
 		}
@@ -111,12 +111,12 @@ func (e *dashboardEndpoint) dashboardPage(renderer *dashboardTemplateRenderer) f
 }
 
 func (e *dashboardEndpoint) statusPage(renderer *dashboardTemplateRenderer) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
+	return func(ctx fiber.Ctx) error {
 		group := strings.TrimSpace(ctx.Params("group"))
 		if group != "" && dashboardReservedSlug(group) {
 			return fiber.ErrNotFound
 		}
-		view, err := e.dashboardView(ctx.UserContext(), group)
+		view, err := e.dashboardView(ctx.Context(), group)
 		if err != nil {
 			return oops.Wrapf(err, "load status view")
 		}
@@ -126,9 +126,9 @@ func (e *dashboardEndpoint) statusPage(renderer *dashboardTemplateRenderer) fibe
 }
 
 func (e *dashboardEndpoint) loginPage(renderer *dashboardTemplateRenderer) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
+	return func(ctx fiber.Ctx) error {
 		if !e.cfg.Auth.Dashboard.Enabled || e.dashboardAuthenticated(ctx) {
-			if err := ctx.Redirect(dashboardRoute); err != nil {
+			if err := ctx.Redirect().Status(fiber.StatusFound).To(dashboardRoute); err != nil {
 				return oops.Wrapf(err, "redirect dashboard")
 			}
 			return nil
@@ -138,36 +138,36 @@ func (e *dashboardEndpoint) loginPage(renderer *dashboardTemplateRenderer) fiber
 }
 
 func (e *dashboardEndpoint) loginSubmit(renderer *dashboardTemplateRenderer) fiber.Handler {
-	return func(ctx *fiber.Ctx) error {
-		token, err := e.loginDashboard(ctx.UserContext(), ctx.FormValue("username"), ctx.FormValue("password"))
+	return func(ctx fiber.Ctx) error {
+		token, err := e.loginDashboard(ctx.Context(), ctx.FormValue("username"), ctx.FormValue("password"))
 		if err != nil {
 			ctx.Status(fiber.StatusUnauthorized)
 			return renderer.render(ctx, renderer.login, newLoginTemplatePage(ctx, e, dashboardTemplateTexts(ctx).LoginFailed))
 		}
 		ctx.Set(fiber.HeaderSetCookie, e.dashboardJWTSetCookie(token, false))
-		if err := ctx.Redirect(dashboardRoute); err != nil {
+		if err := ctx.Redirect().Status(fiber.StatusFound).To(dashboardRoute); err != nil {
 			return oops.Wrapf(err, "redirect dashboard after login")
 		}
 		return nil
 	}
 }
 
-func (e *dashboardEndpoint) logoutPage(ctx *fiber.Ctx) error {
+func (e *dashboardEndpoint) logoutPage(ctx fiber.Ctx) error {
 	ctx.Set(fiber.HeaderSetCookie, e.dashboardJWTSetCookie("", true))
-	if err := ctx.Redirect(loginRoute); err != nil {
+	if err := ctx.Redirect().Status(fiber.StatusFound).To(loginRoute); err != nil {
 		return oops.Wrapf(err, "redirect dashboard logout")
 	}
 	return nil
 }
 
-func (e *dashboardEndpoint) dashboardAuthenticated(ctx *fiber.Ctx) bool {
+func (e *dashboardEndpoint) dashboardAuthenticated(ctx fiber.Ctx) bool {
 	if !e.cfg.Auth.Dashboard.Enabled {
 		return true
 	}
-	return e.authenticateDashboardJWT(ctx.UserContext(), ctx.Cookies(dashboardAuthCookie))
+	return e.authenticateDashboardJWT(ctx.Context(), ctx.Cookies(dashboardAuthCookie))
 }
 
-func (r *dashboardTemplateRenderer) render(ctx *fiber.Ctx, tmpl *template.Template, data dashboardTemplatePage) error {
+func (r *dashboardTemplateRenderer) render(ctx fiber.Ctx, tmpl *template.Template, data dashboardTemplatePage) error {
 	var body bytes.Buffer
 	if err := tmpl.Execute(&body, data); err != nil {
 		return oops.Wrapf(err, "execute dashboard template")

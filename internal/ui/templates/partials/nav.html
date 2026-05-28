@@ -1,9 +1,9 @@
 {{ define "nav" }}
 <header class="orivis-navbar orivis-nav-shell sticky top-0 z-40 px-4 py-3 lg:hidden">
   <div class="mx-auto flex max-w-[68rem] items-center justify-between gap-4">
-    <a class="flex items-center gap-3 font-semibold tracking-tight text-slate-950" href="{{ .Links.Dashboard }}">
-      <span class="grid size-9 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-sm font-bold text-white">O</span>
-      <span>Orivis</span>
+    <a class="orivis-brand-link" href="{{ .Links.Dashboard }}">
+      <span class="orivis-brand-mark">O</span>
+      <span class="orivis-brand-name">Orivis</span>
     </a>
     <div class="flex items-center gap-2 text-sm font-medium">
       <a class="orivis-btn" href="{{ .Links.Dashboard }}">{{ .Text.Dashboard }}</a>
@@ -18,21 +18,21 @@
 </header>
 
 <aside class="orivis-sidebar-shell orivis-sidebar orivis-nav-shell hidden lg:flex lg:w-[18rem] lg:flex-col lg:sticky lg:top-0 lg:overflow-y-auto lg:h-screen lg:px-5 lg:py-6">
-  <a class="flex flex-none items-center gap-3" href="{{ .Links.Dashboard }}">
-    <span class="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-emerald-500 to-sky-500 text-base font-bold text-white shadow-lg shadow-slate-950/20">O</span>
+  <a class="orivis-brand-link flex-none" href="{{ .Links.Dashboard }}">
+    <span class="orivis-brand-mark orivis-brand-mark-lg">O</span>
     <span>
-      <span class="block text-lg font-semibold tracking-tight text-slate-950">Orivis</span>
-      <span class="block text-xs font-medium uppercase tracking-[0.22em] text-slate-400">Observability</span>
+      <span class="orivis-brand-name block">Orivis</span>
+      <span class="orivis-brand-caption block">Observability</span>
     </span>
   </a>
 
   <nav class="orivis-nav-list mt-10 space-y-1" aria-label="Primary">
-    <a class="orivis-btn orivis-btn-brand group flex items-center gap-3" href="{{ .Links.Dashboard }}">
-      <span class="size-2 rounded-full bg-emerald-400"></span>
+    <a class="orivis-nav-item is-primary group" href="{{ .Links.Dashboard }}">
+      <span class="orivis-nav-dot orivis-nav-dot-success"></span>
       <span>{{ .Text.Dashboard }}</span>
     </a>
-    <a class="orivis-btn group flex items-center gap-3" href="{{ .Links.Status }}">
-      <span class="size-2 rounded-full bg-sky-400 transition group-hover:bg-slate-950"></span>
+    <a class="orivis-nav-item group" href="{{ .Links.Status }}">
+      <span class="orivis-nav-dot orivis-nav-dot-info"></span>
       <span>{{ .Text.Status }}</span>
     </a>
   </nav>

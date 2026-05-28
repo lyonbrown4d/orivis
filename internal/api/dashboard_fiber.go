@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/arcgolabs/authx"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	cachex "github.com/lyonbrown4d/orivis/internal/cache"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
@@ -39,7 +39,7 @@ func dashboardSnapshotCacheTTL(cfg config.Config) time.Duration {
 	return ttl
 }
 
-func (e *dashboardEndpoint) fiberLogin(ctx *fiber.Ctx) error {
+func (e *dashboardEndpoint) fiberLogin(ctx fiber.Ctx) error {
 	if !e.cfg.Auth.Dashboard.Enabled {
 		if err := ctx.JSON(fiber.Map{"ok": true}); err != nil {
 			return fmt.Errorf("write dashboard login response: %w", err)
@@ -51,10 +51,10 @@ func (e *dashboardEndpoint) fiberLogin(ctx *fiber.Ctx) error {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := ctx.BodyParser(&payload); err != nil {
+	if err := ctx.Bind().Body(&payload); err != nil {
 		return fiber.ErrBadRequest
 	}
-	token, err := e.loginDashboard(ctx.UserContext(), payload.Username, payload.Password)
+	token, err := e.loginDashboard(ctx.Context(), payload.Username, payload.Password)
 	if err != nil {
 		return fiber.ErrUnauthorized
 	}
@@ -65,7 +65,7 @@ func (e *dashboardEndpoint) fiberLogin(ctx *fiber.Ctx) error {
 	return nil
 }
 
-func (e *dashboardEndpoint) fiberLogout(ctx *fiber.Ctx) error {
+func (e *dashboardEndpoint) fiberLogout(ctx fiber.Ctx) error {
 	ctx.Set(fiber.HeaderSetCookie, e.dashboardJWTSetCookie("", true))
 	if err := ctx.JSON(fiber.Map{"ok": true}); err != nil {
 		return fmt.Errorf("write dashboard logout response: %w", err)
@@ -73,7 +73,7 @@ func (e *dashboardEndpoint) fiberLogout(ctx *fiber.Ctx) error {
 	return nil
 }
 
-func (e *dashboardEndpoint) fiberAuthMe(ctx *fiber.Ctx) error {
+func (e *dashboardEndpoint) fiberAuthMe(ctx fiber.Ctx) error {
 	if !e.cfg.Auth.Dashboard.Enabled {
 		if err := ctx.JSON(fiber.Map{"authenticated": true, "username": "public"}); err != nil {
 			return fmt.Errorf("write dashboard auth response: %w", err)
@@ -93,11 +93,11 @@ func (e *dashboardEndpoint) fiberAuthMe(ctx *fiber.Ctx) error {
 	return nil
 }
 
-func (e *dashboardEndpoint) fiberDashboardSnapshot(ctx *fiber.Ctx) error {
-	if !e.authenticateDashboardJWT(ctx.UserContext(), ctx.Cookies(dashboardAuthCookie)) {
+func (e *dashboardEndpoint) fiberDashboardSnapshot(ctx fiber.Ctx) error {
+	if !e.authenticateDashboardJWT(ctx.Context(), ctx.Cookies(dashboardAuthCookie)) {
 		return fiber.ErrUnauthorized
 	}
-	out, err := e.dashboardSnapshotResponse(ctx.UserContext(), ctx.Query("group"))
+	out, err := e.dashboardSnapshotResponse(ctx.Context(), ctx.Query("group"))
 	if err != nil {
 		return err
 	}

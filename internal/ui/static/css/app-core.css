@@ -820,8 +820,428 @@ body.orivis-shell {
   text-overflow: ellipsis;
 }
 
+.orivis-workspace {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.44), transparent 18rem),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: auto, 40px 40px, 40px 40px;
+}
+
+.orivis-command-center,
+.orivis-public-header,
+.orivis-control-panel,
+.orivis-panel {
+  border: 1px solid var(--orivis-line);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--orivis-panel-solid) 95%, transparent), color-mix(in srgb, var(--orivis-accent-soft) 42%, transparent)),
+    var(--orivis-panel-solid);
+  box-shadow: var(--orivis-shadow);
+  border-radius: 1.15rem;
+}
+
+.orivis-command-center,
+.orivis-public-header {
+  padding: clamp(1.15rem, 2vw, 1.8rem);
+  position: relative;
+  overflow: hidden;
+}
+
+.orivis-command-center::before,
+.orivis-public-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.28rem;
+  background: linear-gradient(90deg, var(--orivis-success), #0ea5e9, var(--orivis-warning), var(--orivis-danger));
+}
+
+.orivis-control-panel,
+.orivis-panel {
+  padding: clamp(1rem, 1.8vw, 1.45rem);
+}
+
+.orivis-eyebrow {
+  color: var(--orivis-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.orivis-display-title {
+  color: var(--orivis-ink);
+  font-size: clamp(2rem, 4vw, 3.75rem);
+  font-weight: 750;
+  line-height: 0.98;
+  margin-top: 0.55rem;
+}
+
+.orivis-state-pill,
+.orivis-count-pill,
+.orivis-agent-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--orivis-line);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 84%, transparent);
+  color: var(--orivis-ink);
+  font-size: 0.78rem;
+  font-weight: 750;
+  min-height: 2.25rem;
+  padding: 0.52rem 0.9rem;
+}
+
+.orivis-state-pill::before,
+.orivis-agent-state::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.45rem;
+  border-radius: 999px;
+  background: var(--orivis-unknown);
+}
+
+.orivis-state-pill-success::before {
+  background: var(--orivis-success);
+  box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--orivis-success) 14%, transparent);
+}
+
+.orivis-state-pill-danger::before {
+  background: var(--orivis-danger);
+  box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--orivis-danger) 14%, transparent);
+}
+
+.orivis-metric-strip {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.orivis-metric-card {
+  border: 1px solid color-mix(in srgb, var(--orivis-line) 78%, transparent);
+  background: color-mix(in srgb, var(--orivis-panel-solid) 78%, transparent);
+  border-radius: 0.95rem;
+  min-height: 7rem;
+  padding: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.orivis-metric-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 1rem 1rem auto;
+  width: 3rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: var(--orivis-unknown);
+  opacity: 0.62;
+}
+
+.orivis-metric-card-success::after {
+  background: var(--orivis-success);
+}
+
+.orivis-metric-card-danger::after {
+  background: var(--orivis-danger);
+}
+
+.orivis-metric-card-warning::after {
+  background: var(--orivis-warning);
+}
+
+.orivis-metric-label {
+  color: var(--orivis-muted);
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.orivis-metric-card strong {
+  color: var(--orivis-ink);
+  display: block;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 780;
+  line-height: 0.95;
+  margin-top: 1rem;
+}
+
+.orivis-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.orivis-section-heading h2 {
+  color: var(--orivis-ink);
+  font-size: 1.2rem;
+  font-weight: 760;
+  line-height: 1.2;
+  margin-top: 0.25rem;
+}
+
+.orivis-dashboard-toolbar {
+  grid-template-columns: minmax(16rem, 1.3fr) minmax(16rem, 2fr) minmax(12rem, 0.9fr) max-content;
+}
+
+.orivis-input-wrap > span,
+.orivis-sort-wrap > span {
+  color: var(--orivis-muted);
+  font-size: 0.72rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.orivis-dashboard-meta {
+  color: var(--orivis-muted);
+}
+
+.orivis-monitor-card {
+  border: 1px solid var(--orivis-line);
+  border-left: 1px solid var(--orivis-line);
+  border-top: 3px solid var(--orivis-unknown);
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--orivis-panel-solid) 94%, transparent), color-mix(in srgb, var(--orivis-panel) 88%, transparent)),
+    var(--orivis-panel-solid);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.07);
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.orivis-monitor-card::before {
+  opacity: 0;
+}
+
+.orivis-monitor-card-success {
+  border-top-color: var(--orivis-success);
+}
+
+.orivis-monitor-card-danger {
+  border-top-color: var(--orivis-danger);
+}
+
+.orivis-monitor-card-warning {
+  border-top-color: var(--orivis-warning);
+}
+
+.orivis-monitor-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.9rem;
+  justify-content: space-between;
+}
+
+.orivis-monitor-title-line {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.orivis-monitor-title-line h3,
+.orivis-agent-card h3 {
+  color: var(--orivis-ink);
+  font-size: 1rem;
+  font-weight: 760;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.orivis-monitor-target {
+  color: var(--orivis-muted);
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orivis-status-dot {
+  display: inline-flex;
+  width: 0.68rem;
+  height: 0.68rem;
+  border-radius: 999px;
+  background: var(--orivis-unknown);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--orivis-unknown) 15%, transparent);
+  flex: 0 0 auto;
+}
+
+.orivis-status-dot-success {
+  background: var(--orivis-success);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--orivis-success) 15%, transparent);
+}
+
+.orivis-status-dot-danger {
+  background: var(--orivis-danger);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--orivis-danger) 15%, transparent);
+}
+
+.orivis-status-dot-warning {
+  background: var(--orivis-warning);
+  box-shadow: 0 0 0 0.28rem color-mix(in srgb, var(--orivis-warning) 18%, transparent);
+}
+
+.orivis-monitor-facts {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.orivis-monitor-facts div {
+  border: 1px solid color-mix(in srgb, var(--orivis-line) 64%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--orivis-panel) 68%, transparent);
+  padding: 0.7rem;
+  min-width: 0;
+}
+
+.orivis-monitor-facts dt {
+  color: var(--orivis-muted);
+  font-size: 0.7rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.orivis-monitor-facts dd {
+  color: var(--orivis-ink);
+  font-size: 0.84rem;
+  font-weight: 700;
+  margin-top: 0.3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orivis-error-note {
+  border: 1px solid color-mix(in srgb, var(--orivis-danger) 25%, transparent);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--orivis-danger) 8%, transparent);
+  color: color-mix(in srgb, var(--orivis-danger) 82%, var(--orivis-ink));
+  font-size: 0.82rem;
+  padding: 0.75rem;
+}
+
+.orivis-empty-inline {
+  color: var(--orivis-muted);
+  font-size: 0.78rem;
+  line-height: 1.25rem;
+  padding-inline: 0.5rem;
+}
+
+.orivis-agent-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.orivis-agent-card {
+  border: 1px solid var(--orivis-line);
+  border-radius: 0.95rem;
+  background: color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent);
+  color: var(--orivis-muted);
+  padding: 1rem;
+}
+
+.orivis-brand-link {
+  align-items: center;
+  color: var(--orivis-ink);
+  display: inline-flex;
+  gap: 0.75rem;
+  text-decoration: none;
+}
+
+.orivis-brand-mark {
+  align-items: center;
+  background: linear-gradient(135deg, #0f766e, #0ea5e9);
+  border-radius: 0.9rem;
+  box-shadow: 0 12px 26px rgba(14, 165, 233, 0.22);
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.orivis-brand-mark-lg {
+  height: 2.75rem;
+  width: 2.75rem;
+}
+
+.orivis-brand-name {
+  color: var(--orivis-ink);
+  font-size: 1.05rem;
+  font-weight: 780;
+  line-height: 1.1;
+}
+
+.orivis-brand-caption {
+  color: var(--orivis-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+}
+
+.orivis-nav-item {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 0.9rem;
+  color: var(--orivis-ink);
+  display: flex;
+  font-size: 0.9rem;
+  font-weight: 700;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  text-decoration: none;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.orivis-nav-item:hover {
+  background: color-mix(in srgb, var(--orivis-line) 24%, transparent);
+  transform: translateX(1px);
+}
+
+.orivis-nav-item.is-primary {
+  border-color: color-mix(in srgb, var(--orivis-accent) 24%, transparent);
+  background: color-mix(in srgb, var(--orivis-accent-soft) 75%, transparent);
+}
+
+.orivis-nav-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--orivis-unknown);
+}
+
+.orivis-nav-dot-success {
+  background: var(--orivis-success);
+}
+
+.orivis-nav-dot-info {
+  background: #0ea5e9;
+}
+
 @media (min-width: 768px) {
   .orivis-monitor-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .orivis-agent-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -829,6 +1249,31 @@ body.orivis-shell {
 @media (min-width: 1280px) {
   .orivis-monitor-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .orivis-metric-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .orivis-agent-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  .orivis-dashboard-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .orivis-metric-strip,
+  .orivis-monitor-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .orivis-monitor-card-head {
+    flex-direction: column;
   }
 }
 

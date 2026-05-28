@@ -55,4 +55,41 @@
     border-color: rgba(251, 113, 133, 0.34);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
   }
+
+  .orivis-workspace {
+    background:
+      linear-gradient(180deg, rgba(15, 23, 42, 0.52), transparent 19rem),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+  }
+
+  .orivis-command-center,
+  .orivis-public-header,
+  .orivis-control-panel,
+  .orivis-panel,
+  .orivis-monitor-card,
+  .orivis-agent-card,
+  .orivis-metric-card {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent), color-mix(in srgb, var(--orivis-accent-soft) 42%, transparent)),
+      var(--orivis-panel-solid);
+  }
+
+  .orivis-btn-ghost,
+  .orivis-form-input,
+  .orivis-select {
+    color: var(--orivis-ink);
+    background: color-mix(in srgb, var(--orivis-panel-solid) 82%, transparent);
+  }
+
+  .orivis-filter-chip,
+  .orivis-status-chip,
+  .orivis-meta-pill,
+  .orivis-monitor-facts div {
+    background: color-mix(in srgb, var(--orivis-panel-solid) 70%, transparent);
+  }
+
+  .orivis-status-badge-secondary {
+    color: #cbd5e1;
+  }
 }
