@@ -63,8 +63,8 @@ func openDatabase(cfg config.Config, logger *slog.Logger, driver string, d diale
 
 	configureConnectionPool(database, cfg)
 	if forSQLite {
-		configureSQLiteConnection(database, cfg.DB.DSN)
-		if err := configureSQLitePragmas(context.Background(), database, cfg); err != nil {
+		configureSQLiteConnection(database, dsn)
+		if err := configureSQLitePragmas(context.Background(), database, dsn, cfg.DB.BusyTimeout); err != nil {
 			if closeErr := database.Close(); closeErr != nil {
 				return nil, errors.Join(err, wrapError(closeErr, "close database store"))
 			}
@@ -97,17 +97,18 @@ func configureConnectionPool(database *dbx.DB, cfg config.Config) {
 	database.SQLDB().SetMaxIdleConns(cfg.DB.MaxOpenConns)
 }
 
-func configureSQLitePragmas(ctx context.Context, database *dbx.DB, cfg config.Config) error {
+func configureSQLitePragmas(ctx context.Context, database *dbx.DB, rawDSN, busyTimeout string) error {
 	if database == nil {
 		return nil
 	}
+	isMemory := isSQLiteMemoryDSN(rawDSN)
 	if err := execSQLitePragma(ctx, database, "PRAGMA foreign_keys = ON"); err != nil {
 		return err
 	}
-	if err := execSQLitePragma(ctx, database, "PRAGMA busy_timeout = "+sqliteBusyTimeoutMillis(cfg.DB.BusyTimeout)); err != nil {
+	if err := execSQLitePragma(ctx, database, "PRAGMA busy_timeout = "+sqliteBusyTimeoutMillis(busyTimeout)); err != nil {
 		return err
 	}
-	if isSQLiteMemoryDSN(cfg.DB.DSN) {
+	if isMemory {
 		return nil
 	}
 	if err := execSQLitePragma(ctx, database, "PRAGMA journal_mode = WAL"); err != nil {
@@ -132,8 +133,30 @@ func sqliteBusyTimeoutMillis(value string) string {
 }
 
 func isSQLiteMemoryDSN(dsn string) bool {
-	normalizedDSN := strings.ToLower(dsn)
-	return strings.Contains(normalizedDSN, "mode=memory") || strings.Contains(normalizedDSN, ":memory:")
+	normalizedDSN := strings.ToLower(strings.TrimSpace(dsn))
+	if normalizedDSN == "" {
+		return false
+	}
+	if strings.HasPrefix(normalizedDSN, ":memory:") {
+		return true
+	}
+	if strings.Contains(normalizedDSN, "file::memory:") {
+		return true
+	}
+	if strings.Contains(normalizedDSN, "mode=memory") {
+		return true
+	}
+
+	parsed, err := url.Parse(normalizedDSN)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(parsed.Query().Get("mode"), "memory")
+}
+
+// IsSQLiteMemoryDSN reports whether a sqlite DSN points to an in-memory database.
+func IsSQLiteMemoryDSN(dsn string) bool {
+	return isSQLiteMemoryDSN(dsn)
 }
 
 func normalizeDatabaseDSN(driver, rawDSN string) string {

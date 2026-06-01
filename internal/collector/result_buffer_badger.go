@@ -31,6 +31,7 @@ type badgerResultBuffer struct {
 	next               uint64
 	db                 *badgerx.DB
 	namespace          *badgerx.Namespace[uint64, protocol.AgentResultRequest]
+	memory             bool
 	compactAt          time.Time
 	compactInterval    time.Duration
 	compactDiscardRate float64
@@ -77,6 +78,7 @@ func newBadgerResultBuffer(ctx context.Context, options badger.Options, path str
 			next:               next,
 			db:                 db,
 			namespace:          namespace,
+			memory:             options.InMemory,
 			compactAt:          time.Now(),
 			compactInterval:    resultBufferCompactionInterval,
 			compactDiscardRate: resultBufferCompactionDiscardRate,
@@ -97,6 +99,7 @@ func newBadgerResultBuffer(ctx context.Context, options badger.Options, path str
 		next:               recoveredNext,
 		db:                 recoveredDB,
 		namespace:          recoveredNamespace,
+		memory:             options.InMemory,
 		compactAt:          time.Now(),
 		compactInterval:    resultBufferCompactionInterval,
 		compactDiscardRate: resultBufferCompactionDiscardRate,

@@ -129,6 +129,30 @@ func TestBadgerResultBufferCompactionThrottle(t *testing.T) {
 	}
 }
 
+func TestBadgerMemoryResultBufferCompactionNoError(t *testing.T) {
+	buffer, err := collector.NewMemoryBadgerResultBuffer(10)
+	if err != nil {
+		t.Fatalf("new memory badger result buffer: %v", err)
+	}
+	t.Cleanup(func() {
+		if closeErr := buffer.Close(); closeErr != nil {
+			t.Errorf("close memory badger result buffer: %v", closeErr)
+		}
+	})
+
+	var compactable interface {
+		Compact(context.Context) (bool, error)
+	} = buffer
+
+	attempted, err := compactable.Compact(context.Background())
+	if err != nil {
+		t.Fatalf("compact memory badger result buffer: %v", err)
+	}
+	if attempted {
+		t.Fatal("expected in-memory badger result buffer compaction to be skipped")
+	}
+}
+
 func assertPush(t *testing.T, buffer collector.ResultQueue, monitorID string, droppedOldest bool, size int) {
 	t.Helper()
 	result := buffer.Push(bufferedResult(monitorID))

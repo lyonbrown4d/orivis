@@ -155,23 +155,12 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context, environments *collecti
 	if err != nil {
 		return nil, wrapError(err, "list dashboard monitors")
 	}
-	monitors := collectionlist.MapList(rows, func(_ int, row monitorRecord) DashboardMonitor {
-		return DashboardMonitor{
-			ID:                row.ID,
-			SourceKey:         row.SourceKey,
-			Name:              row.Name,
-			Type:              model.MonitorType(row.Type),
-			Target:            row.Target,
-			GroupName:         row.GroupName,
-			EnvironmentCode:   environments.GetOrDefault(row.EnvironmentID, ""),
-			Enabled:           row.Enabled == 1,
-			Interval:          time.Duration(row.IntervalSeconds) * time.Second,
-			Timeout:           time.Duration(row.TimeoutSeconds) * time.Second,
-			RetryCount:        row.RetryCount,
-			AggregationPolicy: model.AggregationPolicy(row.AggregationPolicy),
-			Source:            model.ConfigSource(row.Source),
-		}
-	}).Values()
+	monitors := collectionlist.MapList(
+		rows,
+		func(_ int, row monitorRecord) DashboardMonitor {
+			return dashboardMonitorFromRow(row, environments)
+		},
+	).Values()
 	slices.SortFunc(monitors, func(left, right DashboardMonitor) int {
 		if left.EnvironmentCode != right.EnvironmentCode {
 			return cmpString(left.EnvironmentCode, right.EnvironmentCode)
@@ -179,6 +168,28 @@ func (s *Store) sqlDashboardMonitors(ctx context.Context, environments *collecti
 		return cmpString(left.Name, right.Name)
 	})
 	return monitors, nil
+}
+
+func dashboardMonitorFromRow(row monitorRecord, environments *collectionmapping.Map[string, string]) DashboardMonitor {
+	environmentCode := ""
+	if environments != nil {
+		environmentCode = environments.GetOrDefault(row.EnvironmentID, "")
+	}
+	return DashboardMonitor{
+		ID:                row.ID,
+		SourceKey:         row.SourceKey,
+		Name:              row.Name,
+		Type:              model.MonitorType(row.Type),
+		Target:            row.Target,
+		GroupName:         row.GroupName,
+		EnvironmentCode:   environmentCode,
+		Enabled:           row.Enabled == 1,
+		Interval:          time.Duration(row.IntervalSeconds) * time.Second,
+		Timeout:           time.Duration(row.TimeoutSeconds) * time.Second,
+		RetryCount:        row.RetryCount,
+		AggregationPolicy: model.AggregationPolicy(row.AggregationPolicy),
+		Source:            model.ConfigSource(row.Source),
+	}
 }
 
 func (s *Store) sqlDashboardResults(

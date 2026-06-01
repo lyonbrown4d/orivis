@@ -165,27 +165,12 @@ func dashboardMonitorResponses(monitors *collectionlist.List[dashboardMonitorVie
 	return dashboardSliceValues(collectionlist.MapList(
 		monitors,
 		func(_ int, monitor dashboardMonitorView) dashboardMonitorResponse {
-			item := dashboardMonitorResponse{
-				ID:                monitor.ID,
-				Name:              monitor.Name,
-				Type:              string(monitor.Type),
-				Target:            monitor.Target,
-				GroupName:         dashboardGroupName(monitor.GroupName),
-				EnvironmentCode:   monitor.EnvironmentCode,
-				Enabled:           monitor.Enabled,
-				IntervalMS:        monitor.Interval.Milliseconds(),
-				TimeoutMS:         monitor.Timeout.Milliseconds(),
-				RetryCount:        monitor.RetryCount,
-				AggregationPolicy: string(monitor.AggregationPolicy),
-				Source:            string(monitor.Source),
-				DiscoverySource:   monitor.DiscoverySource,
-				DiscoveryDetail:   monitor.DiscoveryDetail,
-			}
+			var latest *dashboardResultResponse
 			if monitor.Latest != nil {
-				latest := dashboardResultResponseFromView(*monitor.Latest)
-				item.Latest = &latest
+				result := dashboardResultResponseFromView(*monitor.Latest)
+				latest = &result
 			}
-			return item
+			return dashboardMonitorResponseFromStore(monitor.DashboardMonitor, latest)
 		},
 	).Values())
 }

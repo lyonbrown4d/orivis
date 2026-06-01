@@ -2,10 +2,12 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	collectionlist "github.com/arcgolabs/collectionx/list"
 	"github.com/arcgolabs/storx/badgerx"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/samber/oops"
 )
@@ -138,15 +140,14 @@ func (b *badgerResultBuffer) Compact(ctx context.Context) (bool, error) {
 	if b == nil {
 		return false, nil
 	}
-	if err := ctx.Err(); err != nil {
-		return false, oops.Wrapf(err, "badger result buffer compact context canceled")
-	}
-
 	b.compactMu.Lock()
 	defer b.compactMu.Unlock()
 
 	now := time.Now()
-	if !b.compactAt.IsZero() && now.Before(b.compactAt) {
+	if b.compactAt.IsZero() {
+		b.compactAt = now
+	}
+	if now.Before(b.compactAt) {
 		return false, nil
 	}
 	if b.compactInterval <= 0 {
@@ -154,13 +155,26 @@ func (b *badgerResultBuffer) Compact(ctx context.Context) (bool, error) {
 	}
 	b.compactAt = now.Add(b.compactInterval)
 
-	if b.db == nil {
+	if err := ctx.Err(); err != nil {
+		return false, oops.Wrapf(err, "badger result buffer compact context canceled")
+	}
+	if b.memory || b.db == nil {
 		return false, nil
 	}
-	if err := b.db.RunValueLogGC(ctx, b.compactDiscardRate); err != nil {
-		return true, oops.Wrapf(err, "compact badger result buffer")
+	if err := b.compactValueLog(ctx); err != nil {
+		return true, err
 	}
 	return true, nil
+}
+
+func (b *badgerResultBuffer) compactValueLog(ctx context.Context) error {
+	if err := b.db.RunValueLogGC(ctx, b.compactDiscardRate); err != nil {
+		if errors.Is(err, badger.ErrNoRewrite) || errors.Is(err, badger.ErrRejected) {
+			return nil
+		}
+		return oops.Wrapf(err, "compact badger result buffer")
+	}
+	return nil
 }
 
 func (b *badgerResultBuffer) Len() int {

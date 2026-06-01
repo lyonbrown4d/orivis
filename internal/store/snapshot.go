@@ -57,6 +57,12 @@ type DashboardResult struct {
 	CreatedAt       time.Time
 }
 
+type DashboardMonitorDetail struct {
+	Monitor       DashboardMonitor
+	Results       []DashboardResult
+	Notifications []DashboardNotification
+}
+
 func (s *Store) DashboardSnapshot(ctx context.Context, resultLimit int) (DashboardSnapshot, error) {
 	if resultLimit <= 0 {
 		resultLimit = 50
@@ -68,6 +74,25 @@ func (s *Store) DashboardSnapshot(ctx context.Context, resultLimit int) (Dashboa
 		return out, nil
 	case s.DB != nil:
 		return s.sqlDashboardSnapshot(ctx, resultLimit)
+	default:
+		return out, nil
+	}
+}
+
+func (s *Store) DashboardMonitorDetail(ctx context.Context, monitorID string, resultLimit, notificationLimit int) (DashboardMonitorDetail, error) {
+	if resultLimit <= 0 {
+		resultLimit = 50
+	}
+	if notificationLimit <= 0 {
+		notificationLimit = 20
+	}
+
+	out := DashboardMonitorDetail{}
+	switch {
+	case s == nil:
+		return out, nil
+	case s.DB != nil:
+		return s.sqlDashboardMonitorDetail(ctx, monitorID, resultLimit, notificationLimit)
 	default:
 		return out, nil
 	}

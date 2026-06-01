@@ -49,6 +49,7 @@ type alertState struct {
 type webhookPayload struct {
 	Event         string       `json:"event"`
 	MonitorID     string       `json:"monitor_id"`
+	Channel       string       `json:"channel,omitempty"`
 	AgentID       string       `json:"agent_id"`
 	RegionID      string       `json:"region_id"`
 	EnvironmentID string       `json:"environment_id"`
@@ -213,81 +214,70 @@ func (m *Manager) handleProbeResult(ctx context.Context, result model.ProbeResul
 	if err != nil || !ok {
 		return err
 	}
+	if routeErr := m.recordProbeResultPayload(result, payload); routeErr != nil {
+		return routeErr
+	}
 	channels, err := m.webhookChannels(ctx, result)
 	if err != nil {
 		return err
 	}
 	if len(channels) == 0 {
-		m.metrics.observeWebhookUnrouted(ctx)
-		return nil
+		return m.recordUnroutedProbeResult(ctx, result, payload)
 	}
-	_, err = collectionlist.ReduceErrList(
-		collectionlist.NewList(channels...),
-		struct{}{},
-		func(empty struct{}, _ int, channel webhookChannel) (struct{}, error) {
-			m.metrics.observeWebhookRouteMatched(ctx, channel.channelName())
-			if enqueueErr := m.enqueueWebhook(ctx, payload, channel); enqueueErr != nil {
-				return empty, enqueueErr
-			}
-			return empty, nil
-		},
-	)
-	if err != nil {
-		return wrapError(err, "enqueue webhook notifications")
+
+	for index := range channels {
+		channel := &channels[index]
+		if err := m.routePayloadToChannel(ctx, result, channel, payload); err != nil {
+			return wrapError(err, "enqueue webhook notification")
+		}
 	}
 	return nil
 }
 
-func (m *Manager) webhookChannels(ctx context.Context, result model.ProbeResult) ([]webhookChannel, error) {
-	if len(m.channels) == 0 {
-		return nil, nil
+func (m *Manager) recordProbeResultPayload(result model.ProbeResult, payload webhookPayload) error {
+	if m.logger != nil {
+		m.logger.Debug(
+			"notification payload generated",
+			"monitor_id", result.MonitorID,
+			"status", string(result.Status),
+			"event", payload.Event,
+		)
 	}
-	groupName, err := m.monitorGroupName(ctx, result.MonitorID)
-	if err != nil {
-		return nil, err
-	}
-	return matchingWebhookChannels(m.channels, result.MonitorID, groupName), nil
+	return nil
 }
 
-func (m *Manager) monitorGroupName(ctx context.Context, monitorID string) (string, error) {
-	if m.storage == nil || m.storage.MonitorStore() == nil {
-		return "", nil
+func (m *Manager) recordUnroutedProbeResult(
+	ctx context.Context,
+	result model.ProbeResult,
+	payload webhookPayload,
+) error {
+	if m.logger != nil {
+		m.logger.Debug(
+			"notification payload has no webhook route",
+			"monitor_id", result.MonitorID,
+			"status", string(result.Status),
+			"event", payload.Event,
+		)
 	}
-	monitor, err := m.storage.MonitorStore().Get(ctx, monitorID)
-	if err != nil {
-		return "", wrapError(err, "load monitor for notification routing")
-	}
-	return monitor.GroupName, nil
+	m.metrics.observeWebhookUnrouted(ctx)
+	return nil
 }
 
-func (m *Manager) enqueueWebhook(ctx context.Context, payload webhookPayload, channel webhookChannel) error {
-	select {
-	case <-ctx.Done():
-		return wrapError(ctx.Err(), "enqueue webhook notification")
-	case m.deliveries <- webhookDelivery{payload: payload, channel: channel}:
-		m.metrics.observeWebhookRouteEnqueued(ctx, channel.channelName())
-		return nil
-	default:
-		m.metrics.observeWebhookQueueFull(ctx)
-		return newError("webhook notification delivery queue is full")
+func (m *Manager) routePayloadToChannel(
+	ctx context.Context,
+	result model.ProbeResult,
+	channel *webhookChannel,
+	payload webhookPayload,
+) error {
+	payload.Channel = channel.channelName()
+	if m.logger != nil {
+		m.logger.Debug(
+			"notification routed",
+			"monitor_id", result.MonitorID,
+			"channel", payload.Channel,
+			"event", payload.Event,
+		)
 	}
-}
-
-func (m *Manager) enabled() bool {
-	return len(m.channels) > 0
-}
-
-func newWebhookPayload(event string, result model.ProbeResult, sentAt time.Time) webhookPayload {
-	return webhookPayload{
-		Event:         event,
-		MonitorID:     result.MonitorID,
-		AgentID:       result.AgentID,
-		RegionID:      result.RegionID,
-		EnvironmentID: result.EnvironmentID,
-		Status:        result.Status,
-		LatencyMS:     result.Latency.Milliseconds(),
-		ErrorMessage:  result.ErrorMessage,
-		CheckedAt:     result.CheckedAt,
-		SentAt:        sentAt,
-	}
+	m.metrics.observeWebhookRouteMatched(ctx, payload.Channel)
+	return m.enqueueWebhook(ctx, payload, *channel)
 }

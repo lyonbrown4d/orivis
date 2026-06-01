@@ -2,8 +2,8 @@ package notification_test
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +38,12 @@ func newNotificationTestBus(t *testing.T) eventx.BusRuntime {
 type webhookPayloadRecorder struct {
 	t      *testing.T
 	mu     sync.Mutex
-	events []string
+	events []webhookPayloadEvent
+}
+
+type webhookPayloadEvent struct {
+	Event   string `json:"event"`
+	Channel string `json:"channel"`
 }
 
 func newWebhookPayloadRecorder(t *testing.T) *webhookPayloadRecorder {
@@ -48,15 +53,13 @@ func newWebhookPayloadRecorder(t *testing.T) *webhookPayloadRecorder {
 
 func (r *webhookPayloadRecorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer closeRequestBody(r.t, req)
-	var payload struct {
-		Event string `json:"event"`
-	}
+	var payload webhookPayloadEvent
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	r.mu.Lock()
-	r.events = append(r.events, payload.Event)
+	r.events = append(r.events, payload)
 	r.mu.Unlock()
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -93,7 +96,35 @@ func (r *webhookPayloadRecorder) expectNoMoreEvents(t *testing.T, duration time.
 func (r *webhookPayloadRecorder) snapshot() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return append([]string(nil), r.events...)
+	out := make([]string, 0, len(r.events))
+	for _, item := range r.events {
+		out = append(out, item.Event)
+	}
+	return out
+}
+
+func (r *webhookPayloadRecorder) snapshotEvents() []webhookPayloadEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]webhookPayloadEvent(nil), r.events...)
+}
+
+func (r *webhookPayloadRecorder) waitPayloadEvent(t *testing.T) webhookPayloadEvent {
+	t.Helper()
+	deadline := time.After(2 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	count := 1
+	for {
+		select {
+		case <-deadline:
+			t.Fatalf("expected %d webhook payloads, got %#v", count, r.snapshotEvents())
+		case <-ticker.C:
+			if events := r.snapshotEvents(); len(events) >= count {
+				return events[0]
+			}
+		}
+	}
 }
 
 func notificationTestConfig(url string) config.Config {

@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/arcgolabs/authx"
@@ -28,6 +31,7 @@ func (s *Server) registerDashboardRoutes() {
 	s.app.Post("/api/auth/logout", endpoint.fiberLogout)
 	s.app.Get("/api/auth/me", endpoint.fiberAuthMe)
 	s.app.Get("/api/dashboard/snapshot", endpoint.fiberDashboardSnapshot)
+	s.app.Get("/api/dashboard/monitor/:id", endpoint.fiberDashboardMonitorDetail)
 	endpoint.registerTemplateRoutes(s.app)
 }
 
@@ -117,6 +121,55 @@ func (e *dashboardEndpoint) fiberDashboardSnapshot(ctx fiber.Ctx) error {
 		return fmt.Errorf("write dashboard snapshot response: %w", err)
 	}
 	return nil
+}
+
+func (e *dashboardEndpoint) fiberDashboardMonitorDetail(ctx fiber.Ctx) error {
+	if !e.authenticateDashboardJWT(ctx.Context(), ctx.Cookies(dashboardAuthCookie)) {
+		return fiber.ErrUnauthorized
+	}
+	monitorID := strings.TrimSpace(ctx.Params("id"))
+	if monitorID == "" {
+		return fiber.ErrBadRequest
+	}
+	resultLimit, err := parseDashboardQueryLimit(ctx.Query("results"), 50)
+	if err != nil {
+		return fiber.ErrBadRequest
+	}
+	notificationLimit, err := parseDashboardQueryLimit(ctx.Query("notifications"), 20)
+	if err != nil {
+		return fiber.ErrBadRequest
+	}
+	out, err := e.store.DashboardMonitorDetail(ctx.Context(), monitorID, resultLimit, notificationLimit)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			return fiber.ErrNotFound
+		case errors.Is(err, store.ErrInvalidInput):
+			return fiber.ErrBadRequest
+		default:
+			return fmt.Errorf("load dashboard monitor detail: %w", err)
+		}
+	}
+	response := newDashboardMonitorDetailResponse(out)
+	if err := ctx.JSON(response); err != nil {
+		return fmt.Errorf("write dashboard monitor detail response: %w", err)
+	}
+	return nil
+}
+
+func parseDashboardQueryLimit(raw string, defaultValue int) (int, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return defaultValue, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("parse query limit: %w", err)
+	}
+	if parsed <= 0 {
+		return defaultValue, nil
+	}
+	return parsed, nil
 }
 
 func (e *dashboardEndpoint) dashboardClaims(token string) (dashboardJWTClaims, bool) {
