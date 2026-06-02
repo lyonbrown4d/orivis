@@ -31,6 +31,11 @@ func newDashboardTemplatePage(
 	links := dashboardTemplateLinksFor(view.GroupSlug)
 	if public {
 		links.Refresh = links.Status
+		links.Back = links.Status
+		links.Monitor = monitorDetailRoute
+	} else {
+		links.Back = links.Dashboard
+		links.Monitor = dashboardMonitorDetailRoute
 	}
 	return dashboardTemplatePage{
 		Locale:        dashboardTemplateLocale(ctx),
@@ -41,7 +46,7 @@ func newDashboardTemplatePage(
 		User:          dashboardTemplateUserFor(endpoint, ctx),
 		Links:         links,
 		Text:          text,
-		Summary:       dashboardTemplateSummary(view.Summary),
+		Summary:       dashboardTemplateSummaryFromView(view.Summary),
 		Groups:        dashboardListValues(view.Groups),
 		Agents:        dashboardTemplateAgents(dashboardListValues(view.Agents)),
 		Monitors:      dashboardTemplateMonitors(dashboardListValues(view.Monitors), dashboardListValues(view.StatusLights)),
@@ -51,6 +56,10 @@ func newDashboardTemplatePage(
 		GeneratedAt:   dashboardTemplateTime(view.GeneratedAt),
 		Error:         message,
 	}
+}
+
+func dashboardTemplateSummaryFromView(summary dashboardSummary) dashboardTemplateSummary {
+	return dashboardTemplateSummary(summary)
 }
 
 func dashboardTemplateTitle(text dashboardTemplateText, view *dashboardView, public bool) string {
@@ -112,6 +121,7 @@ func dashboardTemplateMonitors(monitors []dashboardMonitorView, lights []dashboa
 		monitor := &monitors[index]
 		latest := dashboardTemplateLatestMetrics(monitor.Latest)
 		out = append(out, dashboardTemplateMonitor{
+			ID:            monitor.ID,
 			Name:          monitor.Name,
 			Type:          string(monitor.Type),
 			Target:        monitor.Target,

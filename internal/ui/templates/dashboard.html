@@ -111,7 +111,7 @@
               <div class="min-w-0">
                 <div class="orivis-monitor-title-line">
                   <span class="orivis-status-dot orivis-status-dot-{{ .StatusClass }}"></span>
-                  <h3>{{ .Name }}</h3>
+                  <h3><a href="{{ $.Links.Monitor }}/{{ .ID }}">{{ .Name }}</a></h3>
                 </div>
                 <p class="orivis-monitor-target">{{ .Target }}</p>
               </div>

@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	TemplateDashboard = "dashboard.html"
-	TemplateStatus    = "status.html"
-	TemplateLogin     = "login.html"
+	TemplateDashboard     = "dashboard.html"
+	TemplateStatus        = "status.html"
+	TemplateLogin         = "login.html"
+	TemplateMonitorDetail = "monitor_detail.html"
 )
 
 // Templates contains the server-rendered HTML templates for the built-in UI.
@@ -19,6 +20,7 @@ const (
 //   - dashboard.html
 //   - status.html
 //   - login.html
+//   - monitor_detail.html
 //
 // Route registration is intentionally left to the server assembly layer.
 //
@@ -34,7 +36,7 @@ var Static embed.FS
 // ParseTemplate parses one page entry with the shared layout and partials.
 func ParseTemplate(entry string) (*template.Template, error) {
 	switch entry {
-	case TemplateDashboard, TemplateStatus, TemplateLogin:
+	case TemplateDashboard, TemplateStatus, TemplateLogin, TemplateMonitorDetail:
 	default:
 		return nil, fmt.Errorf("unknown UI template entry %q", entry)
 	}

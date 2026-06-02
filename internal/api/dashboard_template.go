@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/lyonbrown4d/orivis/internal/store"
 	"github.com/lyonbrown4d/orivis/internal/ui"
 	"github.com/samber/oops"
 )
@@ -25,6 +26,10 @@ func newDashboardTemplateRenderer() (*dashboardTemplateRenderer, error) {
 	if err != nil {
 		return nil, oops.Wrapf(err, "parse login template")
 	}
+	monitor, err := ui.ParseTemplate(ui.TemplateMonitorDetail)
+	if err != nil {
+		return nil, oops.Wrapf(err, "parse monitor detail template")
+	}
 	staticFS, err := fs.Sub(ui.Static, "static")
 	if err != nil {
 		return nil, oops.Wrapf(err, "load dashboard static filesystem")
@@ -33,6 +38,7 @@ func newDashboardTemplateRenderer() (*dashboardTemplateRenderer, error) {
 		dashboard: dashboard,
 		status:    status,
 		login:     login,
+		monitor:   monitor,
 		static:    staticFS,
 	}, nil
 }
@@ -43,6 +49,8 @@ func (e *dashboardEndpoint) registerTemplateRoutes(app *fiber.App) {
 		app.Get("/", unavailableDashboardTemplate(err))
 		app.Get(dashboardRoute, unavailableDashboardTemplate(err))
 		app.Get("/:group", unavailableDashboardTemplate(err))
+		app.Get(dashboardMonitorDetailRoute+"/:id", unavailableDashboardTemplate(err))
+		app.Get(monitorDetailRoute+"/:id", unavailableDashboardTemplate(err))
 		return
 	}
 
@@ -54,6 +62,8 @@ func (e *dashboardEndpoint) registerTemplateRoutes(app *fiber.App) {
 	app.Get(dashboardRoute, e.dashboardPage(renderer))
 	app.Get(statusRoute, e.statusPage(renderer))
 	app.Get("/:group", e.statusPage(renderer))
+	app.Get(dashboardMonitorDetailRoute+"/:id", e.dashboardMonitorDetailPage(renderer, false))
+	app.Get(monitorDetailRoute+"/:id", e.dashboardMonitorDetailPage(renderer, true))
 }
 
 func unavailableDashboardTemplate(err error) fiber.Handler {
@@ -125,6 +135,50 @@ func (e *dashboardEndpoint) statusPage(renderer *dashboardTemplateRenderer) fibe
 	}
 }
 
+func (e *dashboardEndpoint) dashboardMonitorDetailPage(renderer *dashboardTemplateRenderer, public bool) fiber.Handler {
+	return func(ctx fiber.Ctx) error {
+		if err := e.ensureDashboardMonitorDetailAccess(ctx, public); err != nil {
+			return err
+		}
+		detail, err := e.loadDashboardMonitorDetail(ctx)
+		if err != nil {
+			return err
+		}
+		page := newDashboardTemplateMonitorDetailPage(ctx, e, detail, public, "")
+		return renderer.render(ctx, renderer.monitor, page)
+	}
+}
+
+func (e *dashboardEndpoint) ensureDashboardMonitorDetailAccess(ctx fiber.Ctx, public bool) error {
+	if public || e.dashboardAuthenticated(ctx) {
+		return nil
+	}
+	if err := ctx.Redirect().Status(fiber.StatusFound).To(loginRoute); err != nil {
+		return oops.Wrapf(err, "redirect dashboard login")
+	}
+	return nil
+}
+
+func (e *dashboardEndpoint) loadDashboardMonitorDetail(ctx fiber.Ctx) (store.DashboardMonitorDetail, error) {
+	monitorID := strings.TrimSpace(ctx.Params("id"))
+	if monitorID == "" {
+		return store.DashboardMonitorDetail{}, fiber.ErrBadRequest
+	}
+	resultLimit, err := parseDashboardQueryLimit(ctx.Query("results"), 50)
+	if err != nil {
+		return store.DashboardMonitorDetail{}, fiber.ErrBadRequest
+	}
+	notificationLimit, err := parseDashboardQueryLimit(ctx.Query("notifications"), 20)
+	if err != nil {
+		return store.DashboardMonitorDetail{}, fiber.ErrBadRequest
+	}
+	detail, err := e.store.DashboardMonitorDetail(ctx.Context(), monitorID, resultLimit, notificationLimit)
+	if err != nil {
+		return store.DashboardMonitorDetail{}, oops.Wrapf(err, "load monitor detail")
+	}
+	return detail, nil
+}
+
 func (e *dashboardEndpoint) loginPage(renderer *dashboardTemplateRenderer) fiber.Handler {
 	return func(ctx fiber.Ctx) error {
 		if !e.cfg.Auth.Dashboard.Enabled || e.dashboardAuthenticated(ctx) {
@@ -181,7 +235,7 @@ func (r *dashboardTemplateRenderer) render(ctx fiber.Ctx, tmpl *template.Templat
 
 func dashboardReservedSlug(slug string) bool {
 	switch strings.ToLower(strings.TrimSpace(slug)) {
-	case "", "api", "assets", "dashboard", "favicon.ico", "healthz", "login", "logout", "metrics", "status", "ui":
+	case "", "api", "assets", "dashboard", "favicon.ico", "login", "logout", "metrics", "status", "ui", monitorDetailSlug:
 		return true
 	default:
 		return false
