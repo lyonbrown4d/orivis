@@ -74,7 +74,7 @@ func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest
 	if err != nil {
 		return out, wrapError(err, "execute register agent request")
 	}
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		return out, errorf("register agent: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
@@ -93,7 +93,7 @@ func (c *Client) Heartbeat(ctx context.Context, req protocol.AgentHeartbeatReque
 	if err != nil {
 		return out, wrapError(err, "execute heartbeat request")
 	}
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		return out, errorf("heartbeat agent: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
@@ -113,7 +113,7 @@ func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (pro
 	if err != nil {
 		return out, wrapError(err, "execute tasks request")
 	}
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		return out, errorf("pull agent tasks: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
@@ -132,7 +132,7 @@ func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSync
 	if err != nil {
 		return out, wrapError(err, "execute monitor sync request")
 	}
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		return out, errorf("sync agent monitors: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
@@ -154,7 +154,7 @@ func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultReque
 	if err != nil {
 		return wrapError(err, "execute report result request")
 	}
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		return errorf("report agent result: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return nil
@@ -177,7 +177,7 @@ func (c *Client) ReportResults(ctx context.Context, req protocol.AgentResultBatc
 	if err != nil {
 		return out, wrapError(err, "execute report result batch request")
 	}
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		return out, errorf("report agent result batch: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil

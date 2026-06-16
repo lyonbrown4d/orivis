@@ -161,7 +161,7 @@ func (c *Checker) checkHTTP(ctx context.Context, task protocol.AgentTask) (model
 	}
 	resp, err := c.httpClient.Execute(
 		ctx,
-		c.httpClient.R().SetDoNotParseResponse(true),
+		c.httpClient.R().SetResponseDoNotParse(true),
 		http.MethodGet,
 		task.Target,
 	)
