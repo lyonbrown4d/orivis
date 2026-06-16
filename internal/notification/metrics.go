@@ -16,6 +16,7 @@ type notificationMetrics struct {
 	mu                       sync.Mutex
 	routeMatchedByChannel    map[string]observabilityx.Counter
 	routeEnqueuedByChannel   map[string]observabilityx.Counter
+	routeNotMatchedByChannel map[string]observabilityx.Counter
 	deliverySuccessByChannel map[string]observabilityx.Counter
 	deliveryFailureByChannel map[string]observabilityx.Counter
 	unrouted                 observabilityx.Counter
@@ -28,6 +29,7 @@ func newNotificationMetrics(obs observabilityx.Observability, logger *slog.Logge
 		obs:                      obs,
 		routeMatchedByChannel:    make(map[string]observabilityx.Counter),
 		routeEnqueuedByChannel:   make(map[string]observabilityx.Counter),
+		routeNotMatchedByChannel: make(map[string]observabilityx.Counter),
 		deliverySuccessByChannel: make(map[string]observabilityx.Counter),
 		deliveryFailureByChannel: make(map[string]observabilityx.Counter),
 		unrouted: obs.Counter(observabilityx.NewCounterSpec(
@@ -45,6 +47,10 @@ func newNotificationMetrics(obs observabilityx.Observability, logger *slog.Logge
 
 func (m *notificationMetrics) observeWebhookRouteMatched(ctx context.Context, channelName string) {
 	m.observeRouteCounter(ctx, m.routeMatchedByChannel, channelName, "matched", "notification_webhook_route_%s_matched_total", "Total webhook deliveries routed to the channel.")
+}
+
+func (m *notificationMetrics) observeWebhookRouteNotMatched(ctx context.Context, channelName string) {
+	m.observeRouteCounter(ctx, m.routeNotMatchedByChannel, channelName, "not_matched", "notification_webhook_route_%s_not_matched_total", "Total probe results that did not match this webhook route.")
 }
 
 func (m *notificationMetrics) observeWebhookRouteEnqueued(ctx context.Context, channelName string) {

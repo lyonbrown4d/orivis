@@ -149,6 +149,18 @@ ORIVIS_DB__DSN=file:orivis.db
 | `ORIVIS_AUTH__DASHBOARD__PASSWORD` | empty | Dashboard login password. |
 | `ORIVIS_AUTH__DASHBOARD__SECURE_COOKIE` | `false` | Set dashboard session cookie `Secure`; enable behind HTTPS. |
 | `ORIVIS_OBSERVABILITY__PROMETHEUS__ENABLED` | `false` | Enable Prometheus metrics. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__ENABLED` | `false` | Enable built-in webhook notification system. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__URL` | empty | Optional default webhook endpoint for all matched alerts. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__METHOD` | `POST` | HTTP method for webhook callouts. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__TIMEOUT` | `5s` | Per-delivery timeout. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__COOLDOWN` | `5m` | Cooldown between repeated alert/recovery notifications for the same key. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__QUEUESIZE` | `128` | Delivery queue size. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__MAXATTEMPTS` | `3` | Retry attempts when delivery fails. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__RETRYINTERVAL` | `5s` | Base delay for retry backoff. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__SECRET` | empty | Shared secret for `X-Orivis-Signature` HMAC SHA256 signing. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__HEADERS` | empty | Comma-separated default headers for webhook delivery. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__ROUTES` | empty | Optional semicolon-separated route list overriding default scope/format. |
+| `ORIVIS_NOTIFICATION__WEBHOOK__RECOVERYENABLED` | `true` | Send recovery (`monitor_recovered`) notifications. |
 
 ### Agent
 
@@ -184,6 +196,16 @@ ORIVIS_AUTH__DASHBOARD__PASSWORD=change-me
 ```
 
 For production, run Orivis behind a reverse proxy that terminates HTTPS.
+
+## Notifications
+
+Orivis supports route-based webhook notifications and optional Alertmanager mode.
+See [`docs/notifications.md`](/D:/Projects/orivis/docs/notifications.md) for:
+
+- route DSL
+- `webhook` vs `alertmanager` payload behavior
+- examples and troubleshooting checklist
+- signatures and common failure checks
 
 ## Supported probes
 

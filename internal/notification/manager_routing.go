@@ -15,7 +15,11 @@ func (m *Manager) webhookChannels(ctx context.Context, result model.ProbeResult)
 	if err != nil {
 		return nil, err
 	}
-	return matchingWebhookChannels(m.channels, result.MonitorID, groupName), nil
+	matched, unmatched := matchingWebhookChannels(m.channels, result.MonitorID, groupName)
+	for i := range unmatched {
+		m.metrics.observeWebhookRouteNotMatched(ctx, unmatched[i].channelName())
+	}
+	return matched, nil
 }
 
 func (m *Manager) monitorGroupName(ctx context.Context, monitorID string) (string, error) {

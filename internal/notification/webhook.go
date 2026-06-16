@@ -5,7 +5,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -17,7 +16,7 @@ import (
 
 func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) (int, error) {
 	payload := delivery.payload
-	body, err := json.Marshal(payload)
+	body, err := notificationDeliveryBody(delivery)
 	if err != nil {
 		return 0, wrapError(err, "marshal webhook payload")
 	}
@@ -36,7 +35,13 @@ func (m *Manager) deliverWebhook(ctx context.Context, delivery webhookDelivery) 
 		return resp.StatusCode(), newErrorf("webhook notification returned HTTP %d", resp.StatusCode())
 	}
 	if m.logger != nil {
-		m.logger.Info("sent webhook notification", "channel", delivery.channel.channelName(), "event", payload.Event, "monitor_id", payload.MonitorID, "status", payload.Status)
+		m.logger.Info(
+			"sent notification",
+			"channel", delivery.channel.channelName(),
+			"event", payload.Event,
+			"monitor_id", payload.MonitorID,
+			"status", payload.Status,
+		)
 	}
 	return resp.StatusCode(), nil
 }

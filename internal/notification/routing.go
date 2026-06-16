@@ -4,20 +4,20 @@ import (
 	"net/http"
 	"strings"
 
-	collectionlist "github.com/arcgolabs/collectionx/list"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/samber/lo"
 	"github.com/samber/mo"
 )
 
 type webhookChannel struct {
-	name       string
-	url        string
-	method     string
-	secret     string
-	headers    []string
-	monitorIDs []string
-	groups     []string
+	channelType string
+	name        string
+	url         string
+	method      string
+	secret      string
+	headers     []string
+	monitorIDs  []string
+	groups      []string
 }
 
 func webhookChannelsFromConfig(cfg config.Config) ([]webhookChannel, error) {
@@ -39,30 +39,40 @@ func webhookChannelsFromConfig(cfg config.Config) ([]webhookChannel, error) {
 
 func defaultWebhookChannel(cfg config.Config) webhookChannel {
 	return webhookChannel{
-		name:    "webhook",
-		url:     strings.TrimSpace(cfg.Notification.Webhook.URL),
-		method:  webhookMethod(cfg.Notification.Webhook.Method),
-		secret:  cfg.Notification.Webhook.Secret,
-		headers: cfg.Notification.Webhook.Headers,
+		channelType: notificationChannelWebhook,
+		name:        "webhook",
+		url:         strings.TrimSpace(cfg.Notification.Webhook.URL),
+		method:      webhookMethod(cfg.Notification.Webhook.Method),
+		secret:      cfg.Notification.Webhook.Secret,
+		headers:     cfg.Notification.Webhook.Headers,
 	}
 }
 
 func parseWebhookRoute(entry string, cfg config.Config) (webhookChannel, error) {
 	fields := parseRouteFields(entry)
 	channel := webhookChannel{
-		name:       firstNonEmpty(fields["name"], "webhook"),
-		url:        strings.TrimSpace(fields["url"]),
-		method:     webhookMethod(firstNonEmpty(fields["method"], cfg.Notification.Webhook.Method)),
-		secret:     firstNonEmpty(fields["secret"], cfg.Notification.Webhook.Secret),
-		headers:    routeList(firstNonEmpty(fields["headers"], strings.Join(cfg.Notification.Webhook.Headers, "|"))),
-		monitorIDs: routeList(fields["monitors"]),
-		groups:     routeList(fields["groups"]),
+		channelType: firstNonEmpty(fields["type"], notificationChannelWebhook),
+		name:        firstNonEmpty(fields["name"], "webhook"),
+		url:         strings.TrimSpace(fields["url"]),
+		method:      webhookMethod(firstNonEmpty(fields["method"], cfg.Notification.Webhook.Method)),
+		secret:      firstNonEmpty(fields["secret"], cfg.Notification.Webhook.Secret),
+		headers:     routeList(firstNonEmpty(fields["headers"], strings.Join(cfg.Notification.Webhook.Headers, "|"))),
+		monitorIDs:  routeList(fields["monitors"]),
+		groups:      routeList(fields["groups"]),
 	}
 	if channel.url == "" {
 		return webhookChannel{}, newErrorf("webhook route %q missing url", entry)
 	}
+	channel.channelType = normalizeNotificationChannelType(channel.channelType)
+	if channel.channelType == "" {
+		return webhookChannel{}, newErrorf("webhook route %q has unsupported type", entry)
+	}
 	return channel, nil
 }
+
+const notificationChannelWebhook = "webhook"
+
+const notificationChannelAlertmanager = "alertmanager"
 
 func parseRouteFields(entry string) map[string]string {
 	fields := make(map[string]string)
@@ -98,21 +108,44 @@ func (c webhookChannel) matches(monitorID, groupName string) bool {
 	return containsFold(c.monitorIDs, monitorID) || containsFold(c.groups, groupName)
 }
 
-func matchingWebhookChannels(channels []webhookChannel, monitorID, groupName string) []webhookChannel {
-	return collectionlist.FilterMapList(
-		collectionlist.NewList(channels...),
-		func(_ int, channel webhookChannel) (webhookChannel, bool) {
-			return channel, channel.matches(monitorID, groupName)
-		},
-	).Values()
+func matchingWebhookChannels(channels []webhookChannel, monitorID, groupName string) ([]webhookChannel, []webhookChannel) {
+	matched := make([]webhookChannel, 0, len(channels))
+	unmatched := make([]webhookChannel, 0, len(channels))
+	for i := range channels {
+		channel := channels[i]
+		if channel.matches(monitorID, groupName) {
+			matched = append(matched, channel)
+			continue
+		}
+		unmatched = append(unmatched, channel)
+	}
+	return matched, unmatched
 }
 
 func (c webhookChannel) channelName() string {
 	name := strings.TrimSpace(c.name)
-	if name == "" || name == "webhook" {
-		return "webhook"
+	channelType := notificationChannelType(c.channelType)
+	if name == "" || strings.EqualFold(name, channelType) {
+		return channelType
 	}
-	return "webhook:" + name
+	return channelType + ":" + name
+}
+
+func notificationChannelType(rawType string) string {
+	switch strings.ToLower(strings.TrimSpace(rawType)) {
+	case notificationChannelAlertmanager:
+		return notificationChannelAlertmanager
+	default:
+		return notificationChannelWebhook
+	}
+}
+
+func normalizeNotificationChannelType(rawType string) string {
+	channelType := notificationChannelType(rawType)
+	if channelType == notificationChannelWebhook && rawType != "" && !strings.EqualFold(rawType, notificationChannelWebhook) {
+		return ""
+	}
+	return channelType
 }
 
 func containsFold(values []string, target string) bool {

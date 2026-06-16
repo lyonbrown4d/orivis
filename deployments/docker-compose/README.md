@@ -10,6 +10,8 @@ Use the root `docker-compose.yml` for local source builds. Use this directory wh
 - `server.env.example`: server environment variables.
 - `agent.env.example`: agent environment variables.
 - `compose.hcl.yml`: optional override for mounting an HCL agent config.
+- `compose.notifications.yml`: optional override to enable notification routes without touching monitoring config.
+- `server.notifications.env.example`: notification-specific environment variables only.
 
 ## Usage
 
@@ -60,6 +62,19 @@ ORIVIS_DB__DSN=file:/data/orivis.db?cache=shared
 ```
 
 `postgres`/`pg` driver aliases are no longer accepted; use `pgx` explicitly.
+
+## Enable notifications only
+
+You can enable notifications without changing monitor discovery by using the notification override.
+
+```powershell
+Copy-Item deployments/docker-compose/server.notifications.env.example deployments/docker-compose/server.notifications.env
+# Fill webhook URLs / secrets / monitor scope in server.notifications.env
+docker compose -f deployments/docker-compose/compose.yml -f deployments/docker-compose/compose.notifications.yml up -d
+```
+
+For production, keep monitor config in `server.env` and `agent.env` unchanged; only provide
+`server.notifications.env` variables.
 
 The agent reads Docker labels and metadata through the Docker socket when `ORIVIS_DISCOVERY__PROVIDER=docker` is set. Standalone Docker and Docker Compose use container labels. Docker Swarm managers use service labels from `deploy.labels`; Swarm workers fall back to local container labels.
 

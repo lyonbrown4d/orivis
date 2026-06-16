@@ -1,0 +1,4 @@
+services:
+  server:
+    env_file:
+      - server.notifications.env

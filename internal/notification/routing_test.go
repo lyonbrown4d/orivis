@@ -52,3 +52,36 @@ func TestWebhookNotificationRouteMatchingByMonitorAndGroup(t *testing.T) {
 	monitorRecorder.expectNoMoreEvents(t, 200)
 	groupRecorder.expectNoMoreEvents(t, 200)
 }
+
+func TestWebhookNotificationRouteMatchingByGroupCaseInsensitive(t *testing.T) {
+	monitorRecorder := newWebhookPayloadRecorder(t)
+	server := newWebhookTestServer(monitorRecorder)
+	defer server.Close()
+
+	bus := newNotificationTestBus(t)
+	storage := notificationTestStore(t)
+	agent := notificationTestRegisterAgent(t, storage, "route-agent-group-case", []string{"prod"})
+	monitorID := notificationTestCreateMonitor(t, storage, agent, "API health", "APi")
+
+	cfg := notificationTestConfig("")
+	cfg.Notification.Webhook.URL = ""
+	cfg.Notification.Webhook.Routes = []string{
+		"name=group-route;url=" + server.URL + ";groups=api",
+	}
+	manager, err := notification.NewManager(cfg, nil, bus, cachex.NewMemoryStore(), storage, obsx.NewNop(nil))
+	if err != nil {
+		t.Fatalf("new notification manager: %v", err)
+	}
+	ctx := context.Background()
+	if err := manager.Start(ctx); err != nil {
+		t.Fatalf("start notification manager: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := manager.Stop(ctx); err != nil {
+			t.Errorf("stop notification manager: %v", err)
+		}
+	})
+
+	publishProbeResults(t, bus, notificationTestResultForMonitor(monitorID, model.StatusDown))
+	_ = monitorRecorder.waitEvents(t, 1)
+}
