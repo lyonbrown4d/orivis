@@ -2,12 +2,16 @@
   var STORAGE_PREFIX = "orivis.monitor.ui.";
   var STORAGE_VERSION = "v1";
   var STORAGE_TTL = 1000 * 60 * 60 * 24 * 14;
+  var REFRESH_PAUSED_KEY = STORAGE_PREFIX + STORAGE_VERSION + ":refresh-paused";
   var MAX_ANIMATION_CARD_COUNT = 22;
+  var SEARCH_DEBOUNCE_MS = 90;
   var DEFAULT_SORT = "checked-desc";
   var FILTER_HINT_CLEAR_DISABLED = "filters already cleared";
   var FILTER_SUMMARY_DEFAULT = "No filters";
   var FILTER_SUMMARY_PREFIX = "Filters:";
   var SEARCH_SHORTCUT_HINT = "Press / to focus search";
+  var CARD_INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, summary, [data-orivis-ignore-card-click]";
+  var TOOLTIP_OFFSET = 14;
 
   var statusFilterLabel = {
     success: "Healthy",
@@ -88,6 +92,30 @@
         at: Date.now(),
       };
       window.localStorage.setItem(getStorageKey(pathname), JSON.stringify(payload));
+    } catch (_) {
+      return;
+    }
+  }
+
+  function readRefreshPaused() {
+    if (!window.localStorage) {
+      return false;
+    }
+
+    try {
+      return window.localStorage.getItem(REFRESH_PAUSED_KEY) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function writeRefreshPaused(paused) {
+    if (!window.localStorage) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(REFRESH_PAUSED_KEY, paused ? "1" : "0");
     } catch (_) {
       return;
     }
@@ -283,6 +311,16 @@
     return document.querySelector("#orivis-refresh-indicator");
   }
 
+  function getRefreshToggle(scope) {
+    if (scope && scope.querySelector) {
+      var scopedToggle = scope.querySelector("#orivis-refresh-toggle");
+      if (scopedToggle) {
+        return scopedToggle;
+      }
+    }
+    return document.querySelector("#orivis-refresh-toggle");
+  }
+
   function setSearchHint(searchInput) {
     if (!searchInput) {
       return;
@@ -327,6 +365,11 @@
   }
 
   function setRefreshState(scope, refreshing) {
+    if (readRefreshPaused()) {
+      updateRefreshPausedUI(scope, true);
+      return;
+    }
+
     var indicator = getRefreshIndicator(scope);
     if (!indicator) {
       return;
@@ -341,6 +384,43 @@
 
     indicator.textContent = baseText;
     indicator.classList.remove("is-refreshing");
+  }
+
+  function updateRefreshPausedUI(scope, paused) {
+    var indicator = getRefreshIndicator(scope);
+    if (indicator) {
+      var idleText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
+      var pausedText = indicator.getAttribute("data-orivis-refresh-paused") || "Refresh paused";
+      indicator.textContent = paused ? pausedText : idleText;
+      indicator.classList.toggle("is-paused", paused);
+      indicator.classList.remove("is-refreshing");
+    }
+
+    var toggle = getRefreshToggle(scope);
+    if (!toggle) {
+      return;
+    }
+    var pauseText = toggle.getAttribute("data-orivis-refresh-pause") || "Pause refresh";
+    var resumeText = toggle.getAttribute("data-orivis-refresh-resume") || "Resume refresh";
+    toggle.textContent = paused ? resumeText : pauseText;
+    toggle.setAttribute("aria-pressed", paused ? "true" : "false");
+    toggle.classList.toggle("is-paused", paused);
+  }
+
+  function bindRefreshToggle(scope) {
+    var toggle = getRefreshToggle(scope);
+    if (!toggle || toggle.__orivis_refresh_bound__) {
+      updateRefreshPausedUI(scope, readRefreshPaused());
+      return;
+    }
+
+    toggle.__orivis_refresh_bound__ = true;
+    updateRefreshPausedUI(scope, readRefreshPaused());
+    toggle.addEventListener("click", function () {
+      var next = !readRefreshPaused();
+      writeRefreshPaused(next);
+      updateRefreshPausedUI(scope, next);
+    });
   }
 
   function animateValueFromZero(node, targetText) {
@@ -388,6 +468,147 @@
       cards[i].style.animationDelay = i * 28 + "ms";
       cards[i].classList.add("orivis-monitor-card-enter");
     }
+  }
+
+  function isInteractiveTarget(target, card) {
+    var node = target;
+    while (node && node !== card) {
+      if (node.matches && node.matches(CARD_INTERACTIVE_SELECTOR)) {
+        return true;
+      }
+      node = node.parentNode;
+    }
+    return false;
+  }
+
+  function navigateMonitorCard(card, event, newTab) {
+    if (!card) {
+      return;
+    }
+    var url = card.getAttribute("data-monitor-url");
+    if (!url) {
+      return;
+    }
+    if (event) {
+      event.preventDefault();
+    }
+    if (newTab) {
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    window.location.href = url;
+  }
+
+  function bindMonitorCardNavigation(scope) {
+    var cards = scope.querySelectorAll("[data-monitor-card][data-monitor-url]");
+    Array.prototype.forEach.call(cards, function (card) {
+      if (card.__orivis_card_nav_bound__) {
+        return;
+      }
+      card.__orivis_card_nav_bound__ = true;
+      card.addEventListener("click", function (event) {
+        if (isInteractiveTarget(event.target, card)) {
+          return;
+        }
+        navigateMonitorCard(card, event, event.metaKey || event.ctrlKey);
+      });
+      card.addEventListener("auxclick", function (event) {
+        if (event.button !== 1 || isInteractiveTarget(event.target, card)) {
+          return;
+        }
+        navigateMonitorCard(card, event, true);
+      });
+      card.addEventListener("keydown", function (event) {
+        if (event.defaultPrevented || isInteractiveTarget(event.target, card)) {
+          return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+          navigateMonitorCard(card, event, false);
+        }
+      });
+    });
+  }
+
+  function tooltipNode() {
+    var existing = document.querySelector("[data-orivis-floating-tooltip]");
+    if (existing) {
+      return existing;
+    }
+    var node = document.createElement("div");
+    node.className = "orivis-floating-tooltip";
+    node.setAttribute("data-orivis-floating-tooltip", "");
+    node.setAttribute("role", "tooltip");
+    node.setAttribute("aria-hidden", "true");
+    document.body.appendChild(node);
+    return node;
+  }
+
+  function setTooltipPosition(node, x, y) {
+    var left = x + TOOLTIP_OFFSET;
+    var top = y - TOOLTIP_OFFSET;
+    var rect = node.getBoundingClientRect();
+    var maxLeft = window.innerWidth - rect.width - 12;
+    var maxTop = window.innerHeight - rect.height - 12;
+    node.style.left = Math.max(12, Math.min(left, maxLeft)) + "px";
+    node.style.top = Math.max(12, Math.min(top, maxTop)) + "px";
+  }
+
+  function showTooltip(target, event) {
+    var text = target.getAttribute("data-orivis-tooltip") || target.getAttribute("title") || "";
+    if (!text) {
+      return;
+    }
+    var node = tooltipNode();
+    node.textContent = text;
+    node.classList.add("is-visible");
+    node.setAttribute("aria-hidden", "false");
+    setTooltipPosition(node, event.clientX || 20, event.clientY || 20);
+  }
+
+  function hideTooltip() {
+    var node = document.querySelector("[data-orivis-floating-tooltip]");
+    if (!node) {
+      return;
+    }
+    node.classList.remove("is-visible");
+    node.setAttribute("aria-hidden", "true");
+  }
+
+  function bindStatusLightTooltips(scope) {
+    var lights = scope.querySelectorAll(".orivis-status-light");
+    Array.prototype.forEach.call(lights, function (light) {
+      if (light.__orivis_tooltip_bound__) {
+        return;
+      }
+      var title = light.getAttribute("title");
+      if (title) {
+        light.setAttribute("data-orivis-tooltip", title);
+        light.setAttribute("aria-label", title);
+        light.removeAttribute("title");
+      }
+      if (!light.getAttribute("data-orivis-tooltip")) {
+        return;
+      }
+      light.__orivis_tooltip_bound__ = true;
+      if (!light.hasAttribute("tabindex")) {
+        light.setAttribute("tabindex", "0");
+      }
+      light.addEventListener("pointerenter", function (event) {
+        showTooltip(light, event);
+      });
+      light.addEventListener("pointermove", function (event) {
+        var node = tooltipNode();
+        if (node.classList.contains("is-visible")) {
+          setTooltipPosition(node, event.clientX, event.clientY);
+        }
+      });
+      light.addEventListener("pointerleave", hideTooltip);
+      light.addEventListener("focus", function () {
+        var rect = light.getBoundingClientRect();
+        showTooltip(light, { clientX: rect.left + rect.width / 2, clientY: rect.top });
+      });
+      light.addEventListener("blur", hideTooltip);
+    });
   }
 
   function isMainScope(target) {
@@ -557,16 +778,29 @@
     var searchInput = scope.querySelector("#orivis-monitor-search");
     var sortSelect = scope.querySelector("#orivis-monitor-sort");
     var clearButton = scope.querySelector("#orivis-clear-filters");
+    var filterTimer = 0;
+
+    function scheduleApply(animate) {
+      if (filterTimer) {
+        clearTimeout(filterTimer);
+      }
+      filterTimer = setTimeout(function () {
+        applyMonitorFilters(scope, state, animate);
+      }, SEARCH_DEBOUNCE_MS);
+    }
 
     if (searchInput) {
       searchInput.value = state.q || "";
       searchInput.addEventListener("input", function () {
         state.q = this.value || "";
-        applyMonitorFilters(scope, state, false);
+        scheduleApply(false);
         writePersistedState(window.location.pathname, state);
       });
       searchInput.addEventListener("keydown", function (event) {
         if (event.key === "Escape") {
+          if (filterTimer) {
+            clearTimeout(filterTimer);
+          }
           state.q = "";
           searchInput.value = "";
           applyMonitorFilters(scope, state, false);
@@ -602,6 +836,9 @@
     }
 
     enableSearchShortcut(scope);
+    bindRefreshToggle(scope);
+    bindMonitorCardNavigation(scope);
+    bindStatusLightTooltips(scope);
 
     if (clearButton) {
       clearButton.disabled = !hasAnyFilter(state);
@@ -639,6 +876,11 @@
   });
   document.addEventListener("htmx:beforeRequest", function (event) {
     if (!event || !event.detail || !event.detail.target || !isMainScope(event.detail.target)) {
+      return;
+    }
+    if (readRefreshPaused()) {
+      event.preventDefault();
+      updateRefreshPausedUI(event.detail.target, true);
       return;
     }
     setRefreshState(event.detail.target, true);

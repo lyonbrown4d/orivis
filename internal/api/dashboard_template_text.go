@@ -77,6 +77,10 @@ var dashboardTemplateTextEN = dashboardTemplateText{
 	CheckedAt:           "Checked at",
 	GeneratedAt:         "Generated at",
 	Refresh:             "Refresh",
+	LiveRefresh:         "Live refresh",
+	PauseRefresh:        "Pause refresh",
+	ResumeRefresh:       "Resume refresh",
+	RefreshPaused:       "Refresh paused",
 }
 
 var dashboardTemplateTextZH = func() dashboardTemplateText {
@@ -146,6 +150,10 @@ var dashboardTemplateTextZH = func() dashboardTemplateText {
 	text.CheckedAt = "检查时间"
 	text.GeneratedAt = "生成时间"
 	text.Refresh = "刷新"
+	text.LiveRefresh = "实时刷新"
+	text.PauseRefresh = "暂停刷新"
+	text.ResumeRefresh = "恢复刷新"
+	text.RefreshPaused = "刷新已暂停"
 	return text
 }()
 

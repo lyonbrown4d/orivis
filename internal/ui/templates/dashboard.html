@@ -74,7 +74,8 @@
       <div class="orivis-dashboard-meta mt-4 flex flex-wrap items-center gap-3 text-xs">
         <span id="orivis-monitor-visible-count" data-monitor-total="{{ .Summary.Monitors }}">{{ .Summary.Monitors }} / {{ .Summary.Monitors }}</span>
         <span id="orivis-monitor-filter-summary" class="orivis-filter-summary" aria-live="polite">{{ .Summary.Monitors }} monitors</span>
-        <span id="orivis-refresh-indicator" class="orivis-refresh-indicator ml-auto" data-orivis-refresh-idle="{{ .Text.Refresh }}" aria-live="polite">{{ .Text.Refresh }}</span>
+        <span id="orivis-refresh-indicator" class="orivis-refresh-indicator ml-auto" data-orivis-refresh-idle="{{ .Text.Refresh }}" data-orivis-refresh-paused="{{ .Text.RefreshPaused }}" aria-live="polite">{{ .Text.Refresh }}</span>
+        <button id="orivis-refresh-toggle" class="orivis-refresh-toggle" type="button" data-orivis-refresh-pause="{{ .Text.PauseRefresh }}" data-orivis-refresh-resume="{{ .Text.ResumeRefresh }}" aria-label="{{ .Text.LiveRefresh }}" aria-pressed="false">{{ .Text.PauseRefresh }}</button>
       </div>
     </section>
 
@@ -106,6 +107,10 @@
             data-monitor-source="{{ .Source }}"
             data-monitor-latency-ms="{{ .LatencyMs }}"
             data-monitor-checked-at="{{ .CheckedAtUnix }}"
+            data-monitor-url="{{ $.Links.Monitor }}/{{ .ID }}"
+            tabindex="0"
+            role="link"
+            aria-label="{{ .Name }} {{ $.Text.MonitorDetails }}"
           >
             <div class="orivis-monitor-card-head">
               <div class="min-w-0">

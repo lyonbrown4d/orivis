@@ -110,6 +110,10 @@ type dashboardTemplateText struct {
 	CheckedAt           string
 	GeneratedAt         string
 	Refresh             string
+	LiveRefresh         string
+	PauseRefresh        string
+	ResumeRefresh       string
+	RefreshPaused       string
 	MonitorDetails      string
 	BackToDashboard     string
 	BackToStatus        string

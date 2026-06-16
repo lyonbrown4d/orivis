@@ -85,11 +85,18 @@
   .orivis-filter-chip,
   .orivis-status-chip,
   .orivis-meta-pill,
+  .orivis-refresh-toggle,
   .orivis-monitor-facts div {
     background: color-mix(in srgb, var(--orivis-panel-solid) 70%, transparent);
   }
 
   .orivis-status-badge-secondary {
     color: #cbd5e1;
+  }
+
+  .orivis-floating-tooltip {
+    background: rgba(2, 6, 23, 0.96);
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
   }
 }
