@@ -922,3 +922,45 @@
     target.appendChild(alert);
   });
 })();
+
+(function () {
+  "use strict";
+
+  function bindPasswordToggles(scope) {
+    var root = scope || document;
+    var toggles = root.querySelectorAll("[data-orivis-password-toggle]");
+
+    toggles.forEach(function (toggle) {
+      if (toggle.dataset.orivisBound === "true") {
+        return;
+      }
+
+      toggle.dataset.orivisBound = "true";
+      toggle.addEventListener("click", function () {
+        var field = toggle.closest(".orivis-password-field");
+        var input = field ? field.querySelector("input") : null;
+
+        if (!input) {
+          return;
+        }
+
+        var isHidden = input.type === "password";
+        var label = isHidden ? toggle.dataset.orivisPasswordHide : toggle.dataset.orivisPasswordShow;
+
+        input.type = isHidden ? "text" : "password";
+        toggle.textContent = label;
+        toggle.setAttribute("aria-label", label);
+        toggle.setAttribute("aria-pressed", isHidden ? "true" : "false");
+      });
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      bindPasswordToggles(document);
+    });
+    return;
+  }
+
+  bindPasswordToggles(document);
+}());

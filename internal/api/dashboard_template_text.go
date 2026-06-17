@@ -20,6 +20,8 @@ var dashboardTemplateTextEN = dashboardTemplateText{
 	Logout:              "Logout",
 	Username:            "Username",
 	Password:            "Password",
+	ShowPassword:        "Show password",
+	HidePassword:        "Hide password",
 	Auth:                "Authentication",
 	LoginHeading:        "Sign in to Orivis",
 	LoginIntro:          "Use the configured credentials to access the dashboard.",
@@ -93,6 +95,8 @@ var dashboardTemplateTextZH = func() dashboardTemplateText {
 	text.Logout = "退出"
 	text.Username = "用户名"
 	text.Password = "密码"
+	text.ShowPassword = "显示密码"
+	text.HidePassword = "隐藏密码"
 	text.Auth = "认证"
 	text.LoginHeading = "登录 Orivis"
 	text.LoginIntro = "使用配置的账号密码访问控制台。"

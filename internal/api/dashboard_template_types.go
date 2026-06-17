@@ -70,6 +70,8 @@ type dashboardTemplateText struct {
 	Logout              string
 	Username            string
 	Password            string
+	ShowPassword        string
+	HidePassword        string
 	Auth                string
 	LoginHeading        string
 	LoginIntro          string

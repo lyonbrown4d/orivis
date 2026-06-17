@@ -24,7 +24,7 @@ This checklist defines the minimum bar for an alpha release.
 - SQLite file DSN persists data.
 - Retention cleanup is enabled by default.
 - README documents the supported probe types.
-- README explicitly states Kafka is not implemented.
+- README documents Kafka as supported only while the Kafka probe remains implemented.
 
 ## Manual smoke commands
 

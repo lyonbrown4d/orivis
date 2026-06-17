@@ -7,6 +7,128 @@ import (
 	"github.com/samber/lo"
 )
 
+type imageComponentProvider struct {
+	monitorType string
+	exact       []string
+	contains    []string
+}
+
+var imageComponentProviders = []imageComponentProvider{
+	{
+		monitorType: "http",
+		exact: []string{
+			"adminer",
+			"apache",
+			"cadvisor",
+			"caddy",
+			"flask",
+			"grafana",
+			"haproxy",
+			"httpd",
+			"nginx",
+			"pgadmin",
+			"phpmyadmin",
+			"pushgateway",
+			"traefik",
+			"tomcat",
+		},
+		contains: []string{
+			"alertmanager",
+			"blackbox-exporter",
+			"cadvisor",
+			"consul",
+			"dozzle",
+			"express",
+			"gitea",
+			"grafana",
+			"homepage",
+			"httpbin",
+			"jaeger",
+			"jenkins",
+			"keycloak",
+			"kibana",
+			"minio",
+			"nextjs",
+			"node",
+			"node-exporter",
+			"pgadmin",
+			"phpmyadmin",
+			"prometheus",
+			"pushgateway",
+			"sonarqube",
+			"spring",
+			"uptime-kuma",
+			"vault",
+			"whoami",
+			"wordpress",
+			"zipkin",
+		},
+	},
+	{monitorType: "kafka", contains: []string{"kafka", "redpanda"}},
+	{monitorType: "redis", contains: []string{"dragonfly", "keydb", "redis", "valkey"}},
+	{monitorType: "rabbitmq", contains: []string{"rabbitmq"}},
+	{monitorType: "mongodb", contains: []string{"mongo"}},
+	{monitorType: "mysql", contains: []string{"mariadb", "mysql", "percona"}},
+	{monitorType: "postgres", contains: []string{"postgis", "postgres", "postgresql", "timescaledb"}},
+	{monitorType: "memcached", contains: []string{"memcached"}},
+	{monitorType: "nats", contains: []string{"nats"}},
+	{monitorType: "smtp", contains: []string{"mailhog", "mailpit", "postfix", "smtp"}},
+	{monitorType: "tcp", contains: []string{"cockroach", "etcd", "zookeeper"}},
+}
+
+var monitorTargetSchemes = map[string]string{
+	"http":      "http",
+	"redis":     "redis",
+	"memcached": "memcached",
+	"nats":      "nats",
+	"smtp":      "smtp",
+}
+
+var plainMonitorTargetTypes = map[string]struct{}{
+	"amqp":       {},
+	"kafka":      {},
+	"mongo":      {},
+	"mongodb":    {},
+	"mysql":      {},
+	"postgres":   {},
+	"postgresql": {},
+	"rabbitmq":   {},
+	"tcp":        {},
+}
+
+var defaultMonitorPorts = map[string]int{
+	"http":       80,
+	"kafka":      9092,
+	"redis":      6379,
+	"mysql":      3306,
+	"postgres":   5432,
+	"postgresql": 5432,
+	"mongo":      27017,
+	"mongodb":    27017,
+	"rabbitmq":   5672,
+	"amqp":       5672,
+	"memcached":  11211,
+	"nats":       4222,
+	"smtp":       25,
+}
+
+var preferredMonitorPortValues = map[string][]int{
+	"http":       {80, 8080, 3000, 3001, 8000, 8081, 8088, 9000, 9001, 9090, 9091, 9093, 9100, 9115, 5601, 16686, 9411},
+	"tcp":        {2181, 2379, 26257},
+	"kafka":      {9092, 19092, 29092},
+	"redis":      {6379},
+	"mysql":      {3306},
+	"postgres":   {5432},
+	"postgresql": {5432},
+	"mongo":      {27017},
+	"mongodb":    {27017},
+	"rabbitmq":   {5672},
+	"amqp":       {5672},
+	"memcached":  {11211},
+	"nats":       {4222},
+	"smtp":       {25, 465, 587, 1025},
+}
+
 func inferredMonitorFields(source LabelSource, fields map[string]string) (map[string]string, bool) {
 	out := cloneFields(fields)
 	ensureInferredType(source, out)
@@ -32,7 +154,7 @@ func ensureInferredTarget(source LabelSource, out map[string]string) {
 	if strings.TrimSpace(out["target"]) != "" {
 		return
 	}
-	monitorType := strings.TrimSpace(out["type"])
+	monitorType := strings.ToLower(strings.TrimSpace(out["type"]))
 	if target := inferMonitorTarget(monitorType, source.TargetHost, source.Ports); target != "" {
 		out["target"] = target
 	}
@@ -68,30 +190,25 @@ func inferMonitorTypeFromImage(imageName string) string {
 		return ""
 	}
 	normalizedImage = dockerImageName(normalizedImage)
-	switch normalizedImage {
-	case "nginx", "caddy", "traefik", "haproxy", "apache", "httpd", "flask", "tomcat":
-		return "http"
+	provider, ok := lo.Find(imageComponentProviders, func(provider imageComponentProvider) bool {
+		return provider.matches(normalizedImage)
+	})
+	if !ok {
+		return ""
 	}
+	return provider.monitorType
+}
 
-	if strings.Contains(normalizedImage, "kafka") {
-		return "kafka"
+func (p imageComponentProvider) matches(image string) bool {
+	if lo.Contains(p.exact, image) {
+		return true
 	}
-	if strings.Contains(normalizedImage, "redis") {
-		return "redis"
+	for _, value := range p.contains {
+		if strings.Contains(image, value) {
+			return true
+		}
 	}
-	if strings.Contains(normalizedImage, "rabbitmq") {
-		return "rabbitmq"
-	}
-	if strings.Contains(normalizedImage, "mongo") {
-		return "mongo"
-	}
-	if strings.Contains(normalizedImage, "mysql") {
-		return "mysql"
-	}
-	if strings.Contains(normalizedImage, "postgres") {
-		return "postgres"
-	}
-	return ""
+	return false
 }
 
 func inferMonitorTarget(monitorType, host string, ports []int) string {
@@ -103,18 +220,13 @@ func inferMonitorTarget(monitorType, host string, ports []int) string {
 	if port == 0 {
 		return ""
 	}
-	switch monitorType {
-	case "http":
-		return fmt.Sprintf("http://%s:%d", host, port)
-	case "redis":
-		return fmt.Sprintf("redis://%s:%d", host, port)
-	case "kafka", "mysql", "postgres", "mongo", "rabbitmq", "amqp", "postgresql":
-		return fmt.Sprintf("%s:%d", host, port)
-	case "tcp":
-		return fmt.Sprintf("%s:%d", host, port)
-	default:
-		return ""
+	if scheme, ok := monitorTargetSchemes[monitorType]; ok {
+		return fmt.Sprintf("%s://%s:%d", scheme, host, port)
 	}
+	if _, ok := plainMonitorTargetTypes[monitorType]; ok {
+		return fmt.Sprintf("%s:%d", host, port)
+	}
+	return ""
 }
 
 func selectMonitorPort(monitorType string, ports []int) int {
@@ -131,45 +243,17 @@ func selectMonitorPort(monitorType string, ports []int) int {
 }
 
 func defaultMonitorPort(monitorType string) int {
-	switch monitorType {
-	case "http":
-		return 80
-	case "kafka":
-		return 9092
-	case "redis":
-		return 6379
-	case "mysql":
-		return 3306
-	case "postgres", "postgresql":
-		return 5432
-	case "mongo", "mongodb":
-		return 27017
-	case "rabbitmq", "amqp":
-		return 5672
-	default:
-		return 0
+	if port, ok := defaultMonitorPorts[monitorType]; ok {
+		return port
 	}
+	return 0
 }
 
 func preferredMonitorPorts(monitorType string) []int {
-	switch monitorType {
-	case "http":
-		return []int{80, 8080, 3000, 8000}
-	case "kafka":
-		return []int{9092, 19092}
-	case "redis":
-		return []int{6379}
-	case "mysql":
-		return []int{3306}
-	case "postgres", "postgresql":
-		return []int{5432}
-	case "mongo", "mongodb":
-		return []int{27017}
-	case "rabbitmq", "amqp":
-		return []int{5672}
-	default:
-		return nil
+	if ports, ok := preferredMonitorPortValues[monitorType]; ok {
+		return ports
 	}
+	return nil
 }
 
 func monitorField(field string) bool {

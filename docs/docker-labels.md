@@ -11,6 +11,28 @@ labels:
   orivis.enable: "true"
 ```
 
+## Minimal inferred component check
+
+When only `orivis.enable=true` is present, the agent also tries to infer a richer monitor type from image metadata before falling back to TCP.
+
+Current inferred component providers:
+
+| Provider family | Example images | Inferred type | Preferred ports |
+| --- | --- | --- | --- |
+| HTTP apps and consoles | `nginx`, `caddy`, `grafana`, `prometheus`, `alertmanager`, `kibana`, `minio`, `vault`, `keycloak`, `jenkins`, `gitea`, `adminer`, `phpmyadmin`, `pgadmin`, `node-exporter`, `pushgateway`, `blackbox-exporter`, `uptime-kuma`, `dozzle` | `http` | `80`, `8080`, `3000`, `3001`, `8000`, `9000`, `9090`, `9100`, `9115` |
+| Redis compatible | `redis`, `valkey`, `dragonfly`, `keydb` | `redis` | `6379` |
+| Kafka compatible | `kafka`, `redpanda` | `kafka` | `9092`, `19092`, `29092` |
+| RabbitMQ | `rabbitmq` | `rabbitmq` | `5672` |
+| MongoDB | `mongo`, `mongodb` | `mongodb` | `27017` |
+| MySQL compatible | `mysql`, `mariadb`, `percona` | `mysql` | `3306` |
+| PostgreSQL compatible | `postgres`, `postgresql`, `postgis`, `timescaledb` | `postgres` | `5432` |
+| Memcached | `memcached` | `memcached` | `11211` |
+| NATS | `nats` | `nats` | `4222` |
+| SMTP test/mail images | `mailhog`, `mailpit`, `postfix`, `smtp` | `smtp` | `25`, `465`, `587`, `1025` |
+| TCP infrastructure | `zookeeper`, `etcd`, `cockroach` | `tcp` | `2181`, `2379`, `26257` |
+
+For stateful services that need credentials or topic/database names, keep `orivis.monitor.target` explicit.
+
 ## HTTP health check
 
 ```yaml

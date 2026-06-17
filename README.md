@@ -213,16 +213,21 @@ See [`docs/notifications.md`](/D:/Projects/orivis/docs/notifications.md) for:
 | --- | --- | --- |
 | `http` | `https://example.com/health` | Sends `GET`; `2xx` and `3xx` are up. |
 | `tcp` | `example.com:443` | Opens a TCP connection. |
+| `udp` | `example.com:53` | Sends a UDP packet and waits for a response. |
 | `ping` | `1.1.1.1` | Sends one ICMP/UDP ping via `pro-bing`. Containers may need network capabilities depending on platform. |
+| `smtp` | `smtp://127.0.0.1:25` | Reads SMTP greeting and sends `NOOP`. |
 | `redis` | `redis://127.0.0.1:6379` | Uses `go-redis` `PING`. |
+| `memcached` | `memcached://127.0.0.1:11211` | Sends the memcached `version` command. |
+| `mongodb` / `mongo` | `mongodb://127.0.0.1:27017` | Uses MongoDB driver ping. |
+| `rabbitmq` / `amqp` | `amqp://guest:guest@127.0.0.1:5672/` | Opens an AMQP connection. |
+| `nats` | `nats://127.0.0.1:4222` | Opens and flushes a NATS connection. |
+| `kafka` | `kafka://127.0.0.1:9092?topic=orivis` | Reads Kafka broker metadata. |
 | `database` | `sqlite://file:orivis.db` | Generic database probe. |
 | `sqlite` | `file:orivis.db` | SQLite `database/sql` ping. |
 | `mysql` | `mysql://root:password@127.0.0.1:3306/app?parseTime=true` | MySQL `database/sql` ping. |
 | `postgres` / `pg` | `postgres://postgres:password@127.0.0.1:5432/app?sslmode=disable` | PostgreSQL `database/sql` ping through pgx. |
 | `dns` | `example.com` | Resolves host addresses. |
 | `tls` | `example.com:443` | Opens a verified TLS connection. |
-
-Kafka is not implemented yet and is not advertised as a supported probe.
 
 ## Docker labels
 
@@ -239,6 +244,7 @@ labels:
 
 When Docker discovery is enabled, Orivis uses Docker metadata to infer the monitor name, environment, group, target host, and ports.
 For Redis, `orivis.monitor.type=redis` is enough to infer `redis://<service>:6379`.
+When only `orivis.enable=true` is present, the agent can infer component providers from image metadata for common HTTP apps and dashboards, Redis-compatible stores, Kafka-compatible brokers, RabbitMQ, MongoDB, MySQL-compatible databases, PostgreSQL-compatible databases, Memcached, NATS, SMTP test/mail images, and TCP infrastructure such as ZooKeeper or etcd.
 For database probes that need credentials, keep `orivis.monitor.target` explicit.
 
 Multiple monitors can still be grouped by `orivis.monitor.<name>.*`.

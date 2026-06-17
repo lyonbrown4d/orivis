@@ -1,30 +1,63 @@
 {{ template "base" . }}
 
 {{ define "content" }}
-<section class="mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-6 sm:px-6">
-  <div class="orivis-card orivis-login-card w-full max-w-lg p-6 sm:p-8">
-    <div class="orivis-auth-hero mb-6 rounded-2xl p-6 text-white">
-      <p class="text-xs font-semibold uppercase tracking-[0.26em] text-white/75">{{ .Text.Auth }}</p>
-      <h1 class="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{{ .Text.LoginHeading }}</h1>
-      <p class="mt-2 text-sm text-white/80">{{ .Text.LoginIntro }}</p>
+<section class="orivis-login-shell mx-auto flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-6 sm:px-6">
+  <div class="orivis-login-frame w-full max-w-5xl">
+    <aside class="orivis-login-brand-panel">
+      <div class="orivis-login-brand-head">
+        <span class="orivis-brand-mark orivis-brand-mark-lg">O</span>
+        <span>
+          <span class="orivis-brand-name block">Orivis</span>
+          <span class="orivis-brand-caption block">Observability</span>
+        </span>
+      </div>
+      <div class="orivis-login-signal" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="orivis-login-brand-copy">
+        <p class="orivis-eyebrow">{{ .Text.Auth }}</p>
+        <h1>{{ .Text.LoginHeading }}</h1>
+        <p>{{ .Text.LoginIntro }}</p>
+      </div>
+      <dl class="orivis-login-status-grid">
+        <div>
+          <dt>{{ .Text.Status }}</dt>
+          <dd>{{ .Text.StatusUp }}</dd>
+        </div>
+        <div>
+          <dt>{{ .Text.Dashboard }}</dt>
+          <dd>{{ .Text.Login }}</dd>
+        </div>
+      </dl>
+    </aside>
+
+    <div class="orivis-login-form-panel">
+      <div class="orivis-login-form-head">
+        <p class="orivis-eyebrow">{{ .Text.Dashboard }}</p>
+        <h2>{{ .Text.Login }}</h2>
+      </div>
+
+      {{ if .Error }}
+      <div class="orivis-login-error" role="alert">{{ .Error }}</div>
+      {{ end }}
+
+      <form class="orivis-login-form" method="post" action="{{ .Links.LoginSubmit }}">
+        <div class="orivis-login-field">
+          <label for="username">{{ .Text.Username }}</label>
+          <input class="orivis-form-input" id="username" name="username" autocomplete="username" required autofocus>
+        </div>
+        <div class="orivis-login-field">
+          <label for="password">{{ .Text.Password }}</label>
+          <div class="orivis-password-field">
+            <input class="orivis-form-input" id="password" name="password" type="password" autocomplete="current-password" required>
+            <button class="orivis-password-toggle" type="button" data-orivis-password-toggle data-orivis-password-show="{{ .Text.ShowPassword }}" data-orivis-password-hide="{{ .Text.HidePassword }}" aria-label="{{ .Text.ShowPassword }}" aria-pressed="false">{{ .Text.ShowPassword }}</button>
+          </div>
+        </div>
+        <button class="orivis-btn orivis-btn-brand orivis-login-submit" type="submit">{{ .Text.Login }}</button>
+      </form>
     </div>
-
-    {{ if .Error }}
-    <div class="mt-6 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700" role="alert">{{ .Error }}</div>
-    {{ end }}
-
-    <form class="mt-8 space-y-5" method="post" action="{{ .Links.LoginSubmit }}">
-      <div>
-        <label class="text-sm font-semibold text-slate-700" for="username">{{ .Text.Username }}</label>
-        <input class="orivis-form-input mt-2 w-full" id="username" name="username" autocomplete="username" required>
-      </div>
-      <div>
-        <label class="text-sm font-semibold text-slate-700" for="password">{{ .Text.Password }}</label>
-        <input class="orivis-form-input mt-2 w-full" id="password" name="password" type="password" autocomplete="current-password" required>
-      </div>
-      <button class="orivis-btn orivis-btn-brand mt-2 w-full" type="submit">{{ .Text.Login }}</button>
-    </form>
-    <p class="mt-5 text-center text-xs text-slate-500">{{ .Text.Dashboard }} · {{ .Text.Login }}</p>
   </div>
 </section>
 {{ end }}
