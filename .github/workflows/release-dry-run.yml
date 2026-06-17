@@ -11,6 +11,9 @@ concurrency:
   group: release-dry-run-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || github.repository_owner }}
+
 jobs:
   goreleaser-dry-run:
     runs-on: ubuntu-latest

@@ -146,6 +146,7 @@ dockers_v2:
     dockerfile: Dockerfile.goreleaser.server
     images:
       - ghcr.io/lyonbrown4d/orivis-server
+      - "{{ .Env.DOCKERHUB_NAMESPACE }}/orivis-server"
     tags:
       - "{{ .Tag }}"
       - latest
@@ -167,6 +168,7 @@ dockers_v2:
     dockerfile: Dockerfile.goreleaser
     images:
       - ghcr.io/lyonbrown4d/orivis-agent
+      - "{{ .Env.DOCKERHUB_NAMESPACE }}/orivis-agent"
     tags:
       - "{{ .Tag }}"
       - latest
