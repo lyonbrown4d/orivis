@@ -53,6 +53,10 @@ type defaultConfigValues struct {
 		Docker struct {
 			Mode string `json:"mode"`
 		} `json:"docker"`
+		Kubernetes struct {
+			Mode       string   `json:"mode"`
+			Namespaces []string `json:"namespaces"`
+		} `json:"kubernetes"`
 	} `json:"discovery"`
 	Log struct {
 		Level string `json:"level"`
@@ -94,6 +98,8 @@ func defaultConfig() defaultConfigValues {
 	cfg.Transport.GzipResults = true
 	cfg.Discovery.Static.Enabled = true
 	cfg.Discovery.Static.HCLFiles = []string{}
+	cfg.Discovery.Kubernetes.Mode = "service"
+	cfg.Discovery.Kubernetes.Namespaces = []string{}
 	cfg.Log.Level = "info"
 	return cfg
 }

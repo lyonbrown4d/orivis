@@ -141,6 +141,31 @@ func TestLoadLegacyDockerDiscoveryMode(t *testing.T) {
 	}
 }
 
+func TestLoadKubernetesDiscovery(t *testing.T) {
+	isolateOrivisEnv(t)
+	t.Setenv("ORIVIS_DISCOVERY__PROVIDER", "k8s")
+	t.Setenv("ORIVIS_DISCOVERY__KUBERNETES__MODE", "services")
+	t.Setenv("ORIVIS_DISCOVERY__KUBERNETES__NAMESPACE", "observability")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("expected environment config to load: %v", err)
+	}
+
+	if cfg.Discovery.Provider != "kubernetes" || !cfg.Discovery.Kubernetes.Enabled {
+		t.Fatal("expected Kubernetes discovery to be enabled")
+	}
+	if cfg.Discovery.Kubernetes.Mode != "service" {
+		t.Fatalf("expected Kubernetes discovery mode to normalize, got %q", cfg.Discovery.Kubernetes.Mode)
+	}
+	if cfg.Discovery.Kubernetes.Namespace != "observability" {
+		t.Fatalf("expected Kubernetes namespace from environment, got %q", cfg.Discovery.Kubernetes.Namespace)
+	}
+	if cfg.Runtime != "kubernetes" {
+		t.Fatalf("expected Kubernetes provider to set runtime, got %q", cfg.Runtime)
+	}
+}
+
 func TestLoadStaticDiscoveryMonitorFromEnvironment(t *testing.T) {
 	isolateOrivisEnv(t)
 	t.Setenv("ORIVIS_DISCOVERY__STATIC__MONITOR__NAME", "server-health")

@@ -14,14 +14,14 @@ import (
 )
 
 func NewMonitorDiscoverer(cfg config.Config, logger *slog.Logger) (MonitorDiscoverer, error) {
-	discoverers := collectionlist.NewListWithCapacity[MonitorDiscoverer](2)
+	discoverers := collectionlist.NewListWithCapacity[MonitorDiscoverer](3)
 
 	if cfg.Discovery.Static.Enabled && len(cfg.Discovery.Static.Monitors) > 0 {
 		discoverers.Add(agentdiscovery.NewStaticDiscoverer(cfg.Discovery.Static.Monitors))
 		logger.Info("static discovery enabled", "count", len(cfg.Discovery.Static.Monitors))
 	}
 
-	if discoveryProviderEnabled(cfg) {
+	if dockerDiscoveryEnabled(cfg) {
 		discoverer, err := agentdiscovery.NewDockerDiscoverer(agentdiscovery.DockerOptions{
 			Mode:               cfg.Discovery.Docker.Mode,
 			DefaultEnvironment: defaultDiscoveryEnvironment(cfg.Agent.Environments),
@@ -39,6 +39,29 @@ func NewMonitorDiscoverer(cfg config.Config, logger *slog.Logger) (MonitorDiscov
 		)
 	}
 
+	if kubernetesDiscoveryEnabled(cfg) {
+		discoverer, err := agentdiscovery.NewKubernetesDiscoverer(agentdiscovery.KubernetesOptions{
+			Mode:               cfg.Discovery.Kubernetes.Mode,
+			Namespace:          cfg.Discovery.Kubernetes.Namespace,
+			Namespaces:         cfg.Discovery.Kubernetes.Namespaces,
+			Kubeconfig:         cfg.Discovery.Kubernetes.Kubeconfig,
+			DefaultEnvironment: defaultDiscoveryEnvironment(cfg.Agent.Environments),
+			Logger:             logger,
+		})
+		if err != nil {
+			return nil, oops.Wrapf(err, "create Kubernetes discoverer")
+		}
+		discoverers.Add(discoverer)
+		logger.Info(
+			"Kubernetes discovery enabled",
+			"provider", cfg.Discovery.Provider,
+			"mode", cfg.Discovery.Kubernetes.Mode,
+			"namespace", cfg.Discovery.Kubernetes.Namespace,
+			"namespaces", cfg.Discovery.Kubernetes.Namespaces,
+			"default_environment", defaultDiscoveryEnvironment(cfg.Agent.Environments),
+		)
+	}
+
 	if discoverers.Len() == 0 {
 		logger.Info("monitor discovery disabled")
 		return disabledDiscoverer{}, nil
@@ -46,8 +69,12 @@ func NewMonitorDiscoverer(cfg config.Config, logger *slog.Logger) (MonitorDiscov
 	return compositeDiscoverer{discoverers: discoverers}, nil
 }
 
-func discoveryProviderEnabled(cfg config.Config) bool {
+func dockerDiscoveryEnabled(cfg config.Config) bool {
 	return cfg.Discovery.Provider == "docker" || cfg.Discovery.Docker.Enabled
+}
+
+func kubernetesDiscoveryEnabled(cfg config.Config) bool {
+	return cfg.Discovery.Provider == "kubernetes" || cfg.Discovery.Kubernetes.Enabled
 }
 
 func defaultDiscoveryEnvironment(environments []string) string {

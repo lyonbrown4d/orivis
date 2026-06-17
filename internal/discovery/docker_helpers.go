@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 
@@ -46,7 +45,7 @@ func discoverByItems[T any](
 		collectionlist.NewList(items...),
 		collectionlist.NewList[protocol.AgentDiscoveredMonitor](),
 		func(out *collectionlist.List[protocol.AgentDiscoveredMonitor], _ int, item T) (*collectionlist.List[protocol.AgentDiscoveredMonitor], error) {
-			return collectDockerLabelMonitors(out, toSource(item), defaultEnvironment)
+			return collectLabelMonitors(out, toSource(item), defaultEnvironment)
 		},
 	)
 	if err != nil {
@@ -55,14 +54,14 @@ func discoverByItems[T any](
 	parsed := monitors.Values()
 	if logger != nil {
 		logger.Info(
-			fmt.Sprintf("docker %s monitors discovered", source),
+			source+" monitors discovered",
 			"count", len(parsed),
 			"source", source,
 		)
 		for i := range parsed {
 			monitor := &parsed[i]
 			logger.Debug(
-				"docker monitor parsed",
+				"monitor parsed",
 				"source_key", monitor.SourceKey,
 				"monitor_name", monitor.Name,
 				"monitor_type", monitor.Type,
@@ -76,7 +75,7 @@ func discoverByItems[T any](
 	return parsed, nil
 }
 
-func collectDockerLabelMonitors(
+func collectLabelMonitors(
 	out *collectionlist.List[protocol.AgentDiscoveredMonitor],
 	source LabelSource,
 	defaultEnvironment string,

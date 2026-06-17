@@ -50,10 +50,11 @@ type agentHCLLog struct {
 }
 
 type agentHCLDiscovery struct {
-	Provider string          `hcl:"provider,optional"`
-	Static   *agentHCLStatic `hcl:"static,block"`
-	Docker   *agentHCLDocker `hcl:"docker,block"`
-	Probes   []agentHCLProbe `hcl:"probe,block"`
+	Provider   string              `hcl:"provider,optional"`
+	Static     *agentHCLStatic     `hcl:"static,block"`
+	Docker     *agentHCLDocker     `hcl:"docker,block"`
+	Kubernetes *agentHCLKubernetes `hcl:"kubernetes,block"`
+	Probes     []agentHCLProbe     `hcl:"probe,block"`
 }
 
 type agentHCLStatic struct {
@@ -65,6 +66,14 @@ type agentHCLStatic struct {
 type agentHCLDocker struct {
 	Enabled *bool  `hcl:"enabled,optional"`
 	Mode    string `hcl:"mode,optional"`
+}
+
+type agentHCLKubernetes struct {
+	Enabled    *bool    `hcl:"enabled,optional"`
+	Mode       string   `hcl:"mode,optional"`
+	Namespace  string   `hcl:"namespace,optional"`
+	Namespaces []string `hcl:"namespaces,optional"`
+	Kubeconfig string   `hcl:"kubeconfig,optional"`
 }
 
 type agentHCLProbe struct {
@@ -179,6 +188,7 @@ func (file agentHCLFile) applyDiscovery(values map[string]any) error {
 	setString(values, "discovery.provider", file.Discovery.Provider)
 	file.Discovery.applyStatic(values)
 	file.Discovery.applyDocker(values)
+	file.Discovery.applyKubernetes(values)
 	monitors, err := file.Discovery.staticMonitors()
 	if err != nil {
 		return err
@@ -205,6 +215,19 @@ func (discoveryConfig agentHCLDiscovery) applyDocker(values map[string]any) {
 	}
 	setOptional(values, "discovery.docker.enabled", discoveryConfig.Docker.Enabled)
 	setString(values, "discovery.docker.mode", discoveryConfig.Docker.Mode)
+}
+
+func (discoveryConfig agentHCLDiscovery) applyKubernetes(values map[string]any) {
+	if discoveryConfig.Kubernetes == nil {
+		return
+	}
+	setOptional(values, "discovery.kubernetes.enabled", discoveryConfig.Kubernetes.Enabled)
+	setString(values, "discovery.kubernetes.mode", discoveryConfig.Kubernetes.Mode)
+	setString(values, "discovery.kubernetes.namespace", discoveryConfig.Kubernetes.Namespace)
+	setString(values, "discovery.kubernetes.kubeconfig", discoveryConfig.Kubernetes.Kubeconfig)
+	if len(discoveryConfig.Kubernetes.Namespaces) > 0 {
+		setValue(values, "discovery.kubernetes.namespaces", discoveryConfig.Kubernetes.Namespaces)
+	}
 }
 
 func (discoveryConfig agentHCLDiscovery) staticMonitors() ([]discovery.StaticMonitor, error) {

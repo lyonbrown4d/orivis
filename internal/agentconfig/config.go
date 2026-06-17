@@ -68,6 +68,13 @@ type Config struct {
 			Enabled bool   `mapstructure:"enabled"`
 			Mode    string `mapstructure:"mode"`
 		} `mapstructure:"docker"`
+		Kubernetes struct {
+			Enabled    bool     `mapstructure:"enabled"`
+			Mode       string   `mapstructure:"mode"`
+			Namespace  string   `mapstructure:"namespace"`
+			Namespaces []string `mapstructure:"namespaces"`
+			Kubeconfig string   `mapstructure:"kubeconfig"`
+		} `mapstructure:"kubernetes"`
 	} `mapstructure:"discovery"`
 	Log struct {
 		Level string `mapstructure:"level" validate:"required"`
@@ -85,6 +92,7 @@ func Load(opts ...configx.Option) (Config, error) {
 func finalizeConfig(cfg Config) (Config, error) {
 	cfg.Agent.Environments = normalizeStringSlice(cfg.Agent.Environments)
 	cfg.Discovery.Static.HCLFiles = normalizeStringSlice(cfg.Discovery.Static.HCLFiles)
+	cfg.Discovery.Kubernetes.Namespaces = normalizeStringSlice(cfg.Discovery.Kubernetes.Namespaces)
 	cfg.Agent.Name = appendHostnameSuffix(cfg.Agent.Name)
 	normalizePollConfig(&cfg)
 	if err := normalizeBufferConfig(&cfg); err != nil {
@@ -183,11 +191,23 @@ func normalizeBufferConfig(cfg *Config) error {
 func normalizeDiscoveryConfig(cfg *Config) error {
 	cfg.Discovery.Provider = strings.ToLower(strings.TrimSpace(cfg.Discovery.Provider))
 	cfg.Discovery.Docker.Mode = strings.ToLower(strings.TrimSpace(cfg.Discovery.Docker.Mode))
+	cfg.Discovery.Kubernetes.Mode = strings.ToLower(strings.TrimSpace(cfg.Discovery.Kubernetes.Mode))
+	cfg.Discovery.Kubernetes.Namespace = strings.TrimSpace(cfg.Discovery.Kubernetes.Namespace)
+	cfg.Discovery.Kubernetes.Kubeconfig = strings.TrimSpace(cfg.Discovery.Kubernetes.Kubeconfig)
+
+	if cfg.Discovery.Provider == "k8s" {
+		cfg.Discovery.Provider = "kubernetes"
+	}
 
 	switch cfg.Discovery.Provider {
 	case "docker":
 		return normalizeDockerDiscovery(cfg)
+	case "kubernetes":
+		return normalizeKubernetesDiscovery(cfg)
 	case "":
+		if cfg.Discovery.Kubernetes.Enabled {
+			return normalizeKubernetesDiscovery(cfg)
+		}
 		if !cfg.Discovery.Docker.Enabled {
 			return nil
 		}
@@ -209,5 +229,21 @@ func normalizeDockerDiscovery(cfg *Config) error {
 	if cfg.Discovery.Docker.Mode == "" {
 		return newError("discovery docker mode is required when provider is docker")
 	}
+	return nil
+}
+
+func normalizeKubernetesDiscovery(cfg *Config) error {
+	cfg.Discovery.Kubernetes.Enabled = true
+	runtimeMode := strings.TrimSpace(cfg.Runtime)
+	if runtimeMode == "" || strings.EqualFold(runtimeMode, "host") {
+		cfg.Runtime = "kubernetes"
+	}
+	if cfg.Discovery.Kubernetes.Mode == "" {
+		cfg.Discovery.Kubernetes.Mode = discovery.KubernetesModeService
+	}
+	if discovery.NormalizeKubernetesMode(cfg.Discovery.Kubernetes.Mode) == "" {
+		return newErrorf("unsupported discovery kubernetes mode %q", cfg.Discovery.Kubernetes.Mode)
+	}
+	cfg.Discovery.Kubernetes.Mode = discovery.NormalizeKubernetesMode(cfg.Discovery.Kubernetes.Mode)
 	return nil
 }

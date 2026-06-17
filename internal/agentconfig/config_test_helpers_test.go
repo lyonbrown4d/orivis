@@ -66,6 +66,9 @@ func assertDefaultDiscoveryConfig(t *testing.T, cfg config.Config) {
 	if cfg.Discovery.Provider != "" || cfg.Discovery.Docker.Enabled || cfg.Discovery.Docker.Mode != "" {
 		t.Fatalf("unexpected Docker discovery defaults: %#v", cfg.Discovery.Docker)
 	}
+	if cfg.Discovery.Kubernetes.Enabled || cfg.Discovery.Kubernetes.Mode != "service" || len(cfg.Discovery.Kubernetes.Namespaces) != 0 {
+		t.Fatalf("unexpected Kubernetes discovery defaults: %#v", cfg.Discovery.Kubernetes)
+	}
 	if !cfg.Discovery.Static.Enabled || len(cfg.Discovery.Static.Monitors) != 0 {
 		t.Fatalf("unexpected static discovery defaults: %#v", cfg.Discovery.Static)
 	}
@@ -120,6 +123,11 @@ func isolateOrivisEnv(t *testing.T) {
 		"ORIVIS_DISCOVERY__PROVIDER",
 		"ORIVIS_DISCOVERY__DOCKER__ENABLED",
 		"ORIVIS_DISCOVERY__DOCKER__MODE",
+		"ORIVIS_DISCOVERY__KUBERNETES__ENABLED",
+		"ORIVIS_DISCOVERY__KUBERNETES__MODE",
+		"ORIVIS_DISCOVERY__KUBERNETES__NAMESPACE",
+		"ORIVIS_DISCOVERY__KUBERNETES__NAMESPACES",
+		"ORIVIS_DISCOVERY__KUBERNETES__KUBECONFIG",
 		"ORIVIS_DISCOVERY__STATIC__ENABLED",
 		"ORIVIS_DISCOVERY__STATIC__HCL_FILES",
 		"ORIVIS_DISCOVERY__STATIC__MONITORS",

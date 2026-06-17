@@ -25,6 +25,13 @@ func TestDeduplicateMonitorsFromStaticDiscovery(t *testing.T) {
 				Enabled bool   `mapstructure:"enabled"`
 				Mode    string `mapstructure:"mode"`
 			} `mapstructure:"docker"`
+			Kubernetes struct {
+				Enabled    bool     `mapstructure:"enabled"`
+				Mode       string   `mapstructure:"mode"`
+				Namespace  string   `mapstructure:"namespace"`
+				Namespaces []string `mapstructure:"namespaces"`
+				Kubeconfig string   `mapstructure:"kubeconfig"`
+			} `mapstructure:"kubernetes"`
 		}{
 			Static: struct {
 				Monitor  discovery.StaticMonitor   `mapstructure:"monitor"`
