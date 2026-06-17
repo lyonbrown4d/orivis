@@ -16,13 +16,13 @@ func newDashboardTemplateMonitorDetailPage(
 	message string,
 ) dashboardTemplatePage {
 	text := dashboardTemplateTexts(ctx)
-	links := dashboardTemplateLinksFor("")
+	links := dashboardTemplateLinksFor(endpoint.cfg, "")
 	if public {
 		links.Back = links.Status
-		links.Monitor = monitorDetailRoute
+		links.Monitor = prefixedPath(endpoint.cfg, monitorDetailRoute)
 	} else {
 		links.Back = links.Dashboard
-		links.Monitor = dashboardMonitorDetailRoute
+		links.Monitor = prefixedPath(endpoint.cfg, dashboardMonitorDetailRoute)
 	}
 	return dashboardTemplatePage{
 		Locale:        dashboardTemplateLocale(ctx),

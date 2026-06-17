@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/arcgolabs/clientx"
 	clienthttp "github.com/arcgolabs/clientx/http"
@@ -26,7 +27,7 @@ func New(cfg config.Config, logger *slog.Logger, obs observabilityx.Observabilit
 
 	httpClient, err := clienthttp.New(
 		clienthttp.Config{
-			BaseURL:   cfg.Server.URL,
+			BaseURL:   agentHTTPBaseURL(cfg.Server.URL),
 			Timeout:   cfg.Transport.RequestTimeout,
 			UserAgent: "orivis-agent/" + buildinfo.Version,
 		},
@@ -69,7 +70,7 @@ func (c *Client) Register(ctx context.Context, req protocol.AgentRegisterRequest
 			return c.HTTP.R().SetBody(req).SetResult(&out)
 		},
 		http.MethodPost,
-		"/api/agent/register",
+		"api/agent/register",
 	)
 	if err != nil {
 		return out, wrapError(err, "execute register agent request")
@@ -88,7 +89,7 @@ func (c *Client) Heartbeat(ctx context.Context, req protocol.AgentHeartbeatReque
 			return c.HTTP.R().SetBody(req).SetResult(&out)
 		},
 		http.MethodPost,
-		"/api/agent/heartbeat",
+		"api/agent/heartbeat",
 	)
 	if err != nil {
 		return out, wrapError(err, "execute heartbeat request")
@@ -109,7 +110,7 @@ func (c *Client) Tasks(ctx context.Context, req protocol.AgentTasksRequest) (pro
 			request.SetQueryParam("token", req.Token)
 		}
 		return request
-	}, http.MethodGet, "/api/agent/tasks")
+	}, http.MethodGet, "api/agent/tasks")
 	if err != nil {
 		return out, wrapError(err, "execute tasks request")
 	}
@@ -127,7 +128,7 @@ func (c *Client) SyncMonitors(ctx context.Context, req protocol.AgentMonitorSync
 			return c.HTTP.R().SetBody(req).SetResult(&out)
 		},
 		http.MethodPost,
-		"/api/agent/monitors",
+		"api/agent/monitors",
 	)
 	if err != nil {
 		return out, wrapError(err, "execute monitor sync request")
@@ -150,7 +151,7 @@ func (c *Client) ReportResult(ctx context.Context, req protocol.AgentResultReque
 			request.SetHeader("Content-Type", "application/json")
 		}
 		return request.SetBody(body)
-	}, http.MethodPost, "/api/agent/results")
+	}, http.MethodPost, "api/agent/results")
 	if err != nil {
 		return wrapError(err, "execute report result request")
 	}
@@ -173,7 +174,7 @@ func (c *Client) ReportResults(ctx context.Context, req protocol.AgentResultBatc
 			request.SetHeader("Content-Type", "application/json")
 		}
 		return request.SetBody(body)
-	}, http.MethodPost, "/api/agent/results/batch")
+	}, http.MethodPost, "api/agent/results/batch")
 	if err != nil {
 		return out, wrapError(err, "execute report result batch request")
 	}
@@ -181,4 +182,12 @@ func (c *Client) ReportResults(ctx context.Context, req protocol.AgentResultBatc
 		return out, errorf("report agent result batch: server returned %s: %s", resp.Status(), resp.String())
 	}
 	return out, nil
+}
+
+func agentHTTPBaseURL(value string) string {
+	baseURL := strings.TrimSpace(value)
+	if baseURL == "" || strings.HasSuffix(baseURL, "/") {
+		return baseURL
+	}
+	return baseURL + "/"
 }

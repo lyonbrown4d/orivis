@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/lyonbrown4d/orivis/internal/api"
+	"github.com/lyonbrown4d/orivis/internal/security"
 	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
@@ -128,8 +129,9 @@ func newAPITestStore(t *testing.T) *store.Store {
 }
 
 func newAPITestServer(cfg config.Config, storage *store.Store) *api.Server {
-	deps := api.ServerRuntimeDeps{}
-	return api.NewServer(cfg, testLogger(), storage, deps, api.NewDefaultEndpoints(cfg, storage, nil))
+	logger := testLogger()
+	deps := api.ServerRuntimeDeps{Auth: security.NewEngine(cfg, logger, nil)}
+	return api.NewServer(cfg, logger, storage, deps, api.NewDefaultEndpoints(cfg, storage, nil))
 }
 
 func testLogger() *slog.Logger {

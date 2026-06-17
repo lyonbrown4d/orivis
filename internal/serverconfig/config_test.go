@@ -8,7 +8,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_HTTP__BODYLIMITBYTES", "ORIVIS_MDNS__ENABLED", "ORIVIS_MDNS__SERVICE", "ORIVIS_MDNS__DOMAIN", "ORIVIS_MDNS__INSTANCE", "ORIVIS_MDNS__SCHEME", "ORIVIS_MDNS__PORT", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN", "ORIVIS_CACHE__DRIVER", "ORIVIS_CACHE__PREFIX")
+	unset(t, "ORIVIS_APP__ENV", "ORIVIS_HTTP__ADDR", "ORIVIS_HTTP__BASEPATH", "ORIVIS_HTTP__BODYLIMITBYTES", "ORIVIS_MDNS__ENABLED", "ORIVIS_MDNS__SERVICE", "ORIVIS_MDNS__DOMAIN", "ORIVIS_MDNS__INSTANCE", "ORIVIS_MDNS__SCHEME", "ORIVIS_MDNS__PORT", "ORIVIS_LOG__LEVEL", "ORIVIS_DB__DRIVER", "ORIVIS_DB__DSN", "ORIVIS_CACHE__DRIVER", "ORIVIS_CACHE__PREFIX")
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -21,6 +21,7 @@ func assertDefaultConfig(t *testing.T, cfg config.Config) {
 	t.Helper()
 	assertEqual(t, "app env", cfg.App.Env, "development")
 	assertEqual(t, "http addr", cfg.HTTP.Addr, ":8080")
+	assertEqual(t, "http base path", cfg.HTTP.BasePath, "")
 	assertEqual(t, "http body limit", cfg.HTTP.BodyLimitBytes, 4*1024*1024)
 	assertEqual(t, "mDNS enabled", cfg.MDNS.Enabled, true)
 	assertEqual(t, "mDNS service", cfg.MDNS.Service, "orivis")
@@ -44,6 +45,7 @@ func unset(t *testing.T, keys ...string) {
 func TestLoadFromEnvironment(t *testing.T) {
 	t.Setenv("ORIVIS_APP__ENV", "test")
 	t.Setenv("ORIVIS_HTTP__ADDR", ":9090")
+	t.Setenv("ORIVIS_HTTP__BASEPATH", "/orivis/")
 	t.Setenv("ORIVIS_HTTP__BODYLIMITBYTES", "1024")
 	t.Setenv("ORIVIS_MDNS__ENABLED", "false")
 	t.Setenv("ORIVIS_MDNS__SERVICE", "orivis-test")
@@ -65,6 +67,7 @@ func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	t.Helper()
 	assertEqual(t, "app env", cfg.App.Env, "test")
 	assertEqual(t, "http addr", cfg.HTTP.Addr, ":9090")
+	assertEqual(t, "http base path", cfg.HTTP.BasePath, "/orivis")
 	assertEqual(t, "http body limit", cfg.HTTP.BodyLimitBytes, 1024)
 	assertEqual(t, "log level", cfg.Log.Level, "debug")
 	assertEqual(t, "mDNS enabled", cfg.MDNS.Enabled, false)
@@ -74,6 +77,14 @@ func assertEnvironmentConfig(t *testing.T, cfg config.Config) {
 	assertEqual(t, "db dsn", cfg.DB.DSN, "file:orivis.db")
 	assertEqual(t, "cache driver", cfg.Cache.Driver, "memory")
 	assertEqual(t, "cache prefix", cfg.Cache.Prefix, "unit-test")
+}
+
+func TestLoadRejectsInvalidHTTPBasePath(t *testing.T) {
+	t.Setenv("ORIVIS_HTTP__BASEPATH", "orivis")
+
+	if _, err := config.Load(); err == nil {
+		t.Fatal("expected invalid base path to fail")
+	}
 }
 
 func assertEqual[T comparable](t *testing.T, name string, got, want T) {

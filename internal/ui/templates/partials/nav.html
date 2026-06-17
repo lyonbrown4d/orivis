@@ -51,7 +51,7 @@
         <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[0.72rem] font-semibold text-slate-600">{{ .Summary.Monitors }}</span>
       </a>
       {{ range .Groups }}
-      <a class="orivis-group-item {{ if .Active }}is-active{{ end }}" href="/{{ .Slug }}">
+      <a class="orivis-group-item {{ if .Active }}is-active{{ end }}" href="{{ $.Links.Root }}/{{ .Slug }}">
         <span>{{ .Name }}</span>
         <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[0.72rem] font-semibold text-slate-600">{{ .Count }}</span>
       </a>

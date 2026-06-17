@@ -8,7 +8,7 @@
   <title>{{ .Title }} - Orivis</title>
   <link rel="preconnect" href="https://cdn.tailwindcss.com">
   <script src="https://cdn.tailwindcss.com" defer></script>
-  <link href="/ui/static/app.css" rel="stylesheet">
+  <link href="{{ .Links.Static }}/app.css" rel="stylesheet">
 </head>
 <body class="orivis-shell min-h-screen antialiased overflow-x-hidden">
   {{ if .Public }}
@@ -24,7 +24,7 @@
   </div>
   {{ end }}
   <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
-  <script src="/ui/static/app.js" defer></script>
+  <script src="{{ .Links.Static }}/app.js" defer></script>
 </body>
 </html>
 {{ end }}

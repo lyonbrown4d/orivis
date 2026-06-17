@@ -77,8 +77,8 @@ func NewServer(
 		Title:       "Orivis API",
 		Version:     buildinfo.Version,
 		Description: "Distributed availability observability API",
-		DocsPath:    "/docs",
-		OpenAPIPath: "/openapi",
+		DocsPath:    prefixedPath(cfg, "/docs"),
+		OpenAPIPath: prefixedPath(cfg, "/openapi"),
 	})
 
 	runtime := httpx.New(
@@ -101,6 +101,7 @@ func NewServer(
 		errCh:   make(chan error, 1),
 	}
 	server.registerEndpoints(endpoints)
+	server.registerRootHealthAliases()
 	server.registerDashboardRoutes()
 	return server
 }
@@ -134,8 +135,25 @@ func (s *Server) registerEndpoints(endpoints *collectionlist.List[httpx.Endpoint
 	if endpoints == nil {
 		return
 	}
+	basePath := httpBasePath(s.cfg)
 	endpoints.Range(func(_ int, endpoint httpx.Endpoint) bool {
+		if basePath != "" {
+			endpoint.Register(s.runtime.Group(basePath))
+			return true
+		}
 		s.runtime.RegisterOnly(endpoint)
 		return true
+	})
+}
+
+func (s *Server) registerRootHealthAliases() {
+	if httpBasePath(s.cfg) == "" {
+		return
+	}
+	s.app.Get("/healthz", func(ctx fiber.Ctx) error {
+		return ctx.JSON(fiber.Map{"status": "ok"})
+	})
+	s.app.Get("/readyz", func(ctx fiber.Ctx) error {
+		return ctx.JSON(fiber.Map{"status": "ready"})
 	})
 }

@@ -3,6 +3,9 @@ app:
 
 http:
   addr: :8080
+  # Optional subpath/base path for reverse proxy deployments, for example "/orivis".
+  # Leave empty to serve from root.
+  basepath: ""
 
 log:
   level: info

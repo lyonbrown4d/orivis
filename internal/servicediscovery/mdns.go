@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ type MDNSAdvertiseConfig struct {
 	Instance string
 	Scheme   string
 	Port     int
+	BasePath string
 	Version  string
 }
 
@@ -68,6 +70,9 @@ func (a *MDNSAdvertiser) Start(context.Context) error {
 		"scheme=" + a.cfg.Scheme,
 		"version=" + a.cfg.Version,
 	}
+	if a.cfg.BasePath != "" {
+		text = append(text, "path="+a.cfg.BasePath)
+	}
 	service, err := mdns.NewMDNSService(a.cfg.Instance, normalizeService(a.cfg.Service), normalizeDomain(a.cfg.Domain), "", a.cfg.Port, nil, text)
 	if err != nil {
 		return wrapError(err, "create mDNS service")
@@ -78,7 +83,7 @@ func (a *MDNSAdvertiser) Start(context.Context) error {
 	}
 	a.server = server
 	if a.logger != nil {
-		a.logger.Info("mDNS server discovery advertised", "service", normalizeService(a.cfg.Service), "domain", normalizeDomain(a.cfg.Domain), "instance", a.cfg.Instance, "scheme", a.cfg.Scheme, "port", a.cfg.Port)
+		a.logger.Info("mDNS server discovery advertised", "service", normalizeService(a.cfg.Service), "domain", normalizeDomain(a.cfg.Domain), "instance", a.cfg.Instance, "scheme", a.cfg.Scheme, "port", a.cfg.Port, "base_path", a.cfg.BasePath)
 	}
 	return nil
 }
@@ -185,6 +190,7 @@ func normalizeAdvertiseConfig(cfg MDNSAdvertiseConfig) MDNSAdvertiseConfig {
 	if cfg.Scheme == "" {
 		cfg.Scheme = DefaultMDNSScheme
 	}
+	cfg.BasePath = normalizeBasePath(cfg.BasePath)
 	return cfg
 }
 
@@ -240,10 +246,25 @@ func endpointFromEntry(entry *mdns.ServiceEntry, defaultScheme string) (ServerEn
 	if scheme == "" {
 		scheme = defaultScheme
 	}
+	basePath := normalizeBasePath(firstTextValue(entry.InfoFields, "path"))
 	return ServerEndpoint{
-		URL:    fmt.Sprintf("%s://%s:%d", scheme, host, entry.Port),
+		URL:    fmt.Sprintf("%s://%s:%d%s", scheme, host, entry.Port, basePath),
 		Source: "mdns",
 	}, true
+}
+
+func normalizeBasePath(basePath string) string {
+	basePath = strings.TrimSpace(basePath)
+	if basePath == "" || basePath == "/" {
+		return ""
+	}
+	basePath, _, _ = strings.Cut(basePath, "?")
+	basePath, _, _ = strings.Cut(basePath, "#")
+	basePath = path.Clean("/" + strings.Trim(basePath, "/"))
+	if basePath == "." || basePath == "/" {
+		return ""
+	}
+	return basePath
 }
 
 func isServerEntry(entry *mdns.ServiceEntry) bool {

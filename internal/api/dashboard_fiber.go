@@ -27,12 +27,19 @@ func newDashboardEndpoint(cfg config.Config, storage *store.Store, auth *authx.E
 
 func (s *Server) registerDashboardRoutes() {
 	endpoint := newDashboardEndpoint(s.cfg, s.store, s.auth, s.cache)
-	s.app.Post("/api/auth/login", endpoint.fiberLogin)
-	s.app.Post("/api/auth/logout", endpoint.fiberLogout)
-	s.app.Get("/api/auth/me", endpoint.fiberAuthMe)
-	s.app.Get("/api/dashboard/snapshot", endpoint.fiberDashboardSnapshot)
-	s.app.Get("/api/dashboard/monitor/:id", endpoint.fiberDashboardMonitorDetail)
-	endpoint.registerTemplateRoutes(s.app)
+	if basePath := httpBasePath(s.cfg); basePath != "" {
+		endpoint.registerDashboardRoutes(s.app.Group(basePath))
+	}
+	endpoint.registerDashboardRoutes(s.app)
+}
+
+func (e *dashboardEndpoint) registerDashboardRoutes(router fiber.Router) {
+	router.Post("/api/auth/login", e.fiberLogin)
+	router.Post("/api/auth/logout", e.fiberLogout)
+	router.Get("/api/auth/me", e.fiberAuthMe)
+	router.Get("/api/dashboard/snapshot", e.fiberDashboardSnapshot)
+	router.Get("/api/dashboard/monitor/:id", e.fiberDashboardMonitorDetail)
+	e.registerTemplateRoutes(router)
 }
 
 func dashboardSnapshotCacheTTL(cfg config.Config) time.Duration {

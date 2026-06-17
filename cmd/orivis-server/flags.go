@@ -6,6 +6,7 @@ func registerServerFlags(cmd *cobra.Command, configFile *string) {
 	cmd.Flags().StringVar(configFile, "config", "", "config file path")
 	cmd.Flags().String("app-env", "", "runtime environment")
 	cmd.Flags().String("http-addr", "", "HTTP listen address")
+	cmd.Flags().String("http-base-path", "", "HTTP base path for subpath deployments")
 	cmd.Flags().String("log-level", "", "log level")
 	cmd.Flags().String("db-driver", "", "database driver")
 	cmd.Flags().String("db-dsn", "", "database DSN")

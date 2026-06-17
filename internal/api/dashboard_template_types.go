@@ -51,6 +51,8 @@ type dashboardTemplateLinks struct {
 	Login       string
 	Logout      string
 	LoginSubmit string
+	Root        string
+	Static      string
 	Status      string
 	Refresh     string
 	Back        string

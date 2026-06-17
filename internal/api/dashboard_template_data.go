@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/lyonbrown4d/orivis/internal/model"
+	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 	"github.com/lyonbrown4d/orivis/internal/store"
 )
 
@@ -13,8 +14,9 @@ func newLoginTemplatePage(ctx templateFiberContext, endpoint *dashboardEndpoint,
 	return dashboardTemplatePage{
 		Locale:      dashboardTemplateLocale(ctx),
 		Title:       text.Login,
+		Public:      true,
 		AuthEnabled: endpoint.cfg.Auth.Dashboard.Enabled,
-		Links:       dashboardTemplateLinksFor(""),
+		Links:       dashboardTemplateLinksFor(endpoint.cfg, ""),
 		Text:        text,
 		Error:       message,
 	}
@@ -28,14 +30,14 @@ func newDashboardTemplatePage(
 	message string,
 ) dashboardTemplatePage {
 	text := dashboardTemplateTexts(ctx)
-	links := dashboardTemplateLinksFor(view.GroupSlug)
+	links := dashboardTemplateLinksFor(endpoint.cfg, view.GroupSlug)
 	if public {
 		links.Refresh = links.Status
 		links.Back = links.Status
-		links.Monitor = monitorDetailRoute
+		links.Monitor = prefixedPath(endpoint.cfg, monitorDetailRoute)
 	} else {
 		links.Back = links.Dashboard
-		links.Monitor = dashboardMonitorDetailRoute
+		links.Monitor = prefixedPath(endpoint.cfg, dashboardMonitorDetailRoute)
 	}
 	return dashboardTemplatePage{
 		Locale:        dashboardTemplateLocale(ctx),
@@ -83,18 +85,20 @@ func dashboardTemplateUserFor(endpoint *dashboardEndpoint, ctx templateFiberCont
 	return &dashboardTemplateUser{Name: claims.Subject}
 }
 
-func dashboardTemplateLinksFor(group string) dashboardTemplateLinks {
-	status := statusRoute
+func dashboardTemplateLinksFor(cfg config.Config, group string) dashboardTemplateLinks {
+	status := prefixedPath(cfg, statusRoute)
 	if group != "" {
-		status = "/" + group
+		status = prefixedPath(cfg, "/"+group)
 	}
 	return dashboardTemplateLinks{
-		Dashboard:   dashboardRoute,
-		Login:       loginRoute,
-		Logout:      logoutRoute,
-		LoginSubmit: loginRoute,
+		Dashboard:   prefixedPath(cfg, dashboardRoute),
+		Login:       prefixedPath(cfg, loginRoute),
+		Logout:      prefixedPath(cfg, logoutRoute),
+		LoginSubmit: prefixedPath(cfg, loginRoute),
+		Root:        httpBasePath(cfg),
+		Static:      prefixedPath(cfg, "/ui/static"),
 		Status:      status,
-		Refresh:     dashboardRoute,
+		Refresh:     prefixedPath(cfg, dashboardRoute),
 	}
 }
 

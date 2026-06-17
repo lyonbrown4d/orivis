@@ -1,6 +1,10 @@
 package config
 
 import (
+	"errors"
+	"path"
+	"strings"
+
 	"github.com/arcgolabs/configx"
 	jsonparser "github.com/knadh/koanf/parsers/json"
 	tomlparser "github.com/knadh/koanf/parsers/toml/v2"
@@ -16,6 +20,7 @@ type Config struct {
 	} `mapstructure:"app"`
 	HTTP struct {
 		Addr           string `mapstructure:"addr"           validate:"required"`
+		BasePath       string `mapstructure:"basepath"`
 		BodyLimitBytes int    `mapstructure:"bodylimitbytes"`
 	} `mapstructure:"http"`
 	MDNS struct {
@@ -100,7 +105,34 @@ func Load(opts ...configx.Option) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	return finalizeConfig(cfg)
+}
+
+func finalizeConfig(cfg Config) (Config, error) {
+	basePath, err := normalizeBasePath(cfg.HTTP.BasePath)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.HTTP.BasePath = basePath
 	return cfg, nil
+}
+
+func normalizeBasePath(value string) (string, error) {
+	raw := strings.TrimSpace(value)
+	if raw == "" || raw == "/" {
+		return "", nil
+	}
+	if !strings.HasPrefix(raw, "/") {
+		return "", errors.New("http base path must start with /")
+	}
+	if strings.ContainsAny(raw, "?#") {
+		return "", errors.New("http base path must not contain query or fragment")
+	}
+	cleaned := path.Clean(raw)
+	if cleaned == "." || cleaned == "/" {
+		return "", nil
+	}
+	return cleaned, nil
 }
 
 func LoadFromFlags(flags *pflag.FlagSet, configFile string, opts ...configx.Option) (Config, error) {
@@ -118,6 +150,7 @@ type defaultConfigValues struct {
 	} `json:"app"`
 	HTTP struct {
 		Addr           string `json:"addr"`
+		BasePath       string `json:"basepath"`
 		BodyLimitBytes int    `json:"bodylimitbytes"`
 	} `json:"http"`
 	MDNS struct {
@@ -205,6 +238,7 @@ func defaultConfig() defaultConfigValues {
 	var cfg defaultConfigValues
 	cfg.App.Env = "development"
 	cfg.HTTP.Addr = ":8080"
+	cfg.HTTP.BasePath = ""
 	cfg.HTTP.BodyLimitBytes = 4 * 1024 * 1024
 	cfg.MDNS.Enabled = true
 	cfg.MDNS.Service = "orivis"

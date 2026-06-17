@@ -43,27 +43,27 @@ func newDashboardTemplateRenderer() (*dashboardTemplateRenderer, error) {
 	}, nil
 }
 
-func (e *dashboardEndpoint) registerTemplateRoutes(app *fiber.App) {
+func (e *dashboardEndpoint) registerTemplateRoutes(router fiber.Router) {
 	renderer, err := newDashboardTemplateRenderer()
 	if err != nil {
-		app.Get("/", unavailableDashboardTemplate(err))
-		app.Get(dashboardRoute, unavailableDashboardTemplate(err))
-		app.Get("/:group", unavailableDashboardTemplate(err))
-		app.Get(dashboardMonitorDetailRoute+"/:id", unavailableDashboardTemplate(err))
-		app.Get(monitorDetailRoute+"/:id", unavailableDashboardTemplate(err))
+		router.Get("/", unavailableDashboardTemplate(err))
+		router.Get(dashboardRoute, unavailableDashboardTemplate(err))
+		router.Get("/:group", unavailableDashboardTemplate(err))
+		router.Get(dashboardMonitorDetailRoute+"/:id", unavailableDashboardTemplate(err))
+		router.Get(monitorDetailRoute+"/:id", unavailableDashboardTemplate(err))
 		return
 	}
 
-	app.Use("/ui/static", renderer.staticAsset)
-	app.Get(loginRoute, e.loginPage(renderer))
-	app.Post(loginRoute, e.loginSubmit(renderer))
-	app.Get(logoutRoute, e.logoutPage)
-	app.Get("/", e.dashboardPage(renderer))
-	app.Get(dashboardRoute, e.dashboardPage(renderer))
-	app.Get(statusRoute, e.statusPage(renderer))
-	app.Get("/:group", e.statusPage(renderer))
-	app.Get(dashboardMonitorDetailRoute+"/:id", e.dashboardMonitorDetailPage(renderer, false))
-	app.Get(monitorDetailRoute+"/:id", e.dashboardMonitorDetailPage(renderer, true))
+	router.Use("/ui/static", renderer.staticAsset)
+	router.Get(loginRoute, e.loginPage(renderer))
+	router.Post(loginRoute, e.loginSubmit(renderer))
+	router.Get(logoutRoute, e.logoutPage)
+	router.Get("/", e.dashboardPage(renderer))
+	router.Get(dashboardRoute, e.dashboardPage(renderer))
+	router.Get(statusRoute, e.statusPage(renderer))
+	router.Get("/:group", e.statusPage(renderer))
+	router.Get(dashboardMonitorDetailRoute+"/:id", e.dashboardMonitorDetailPage(renderer, false))
+	router.Get(monitorDetailRoute+"/:id", e.dashboardMonitorDetailPage(renderer, true))
 }
 
 func unavailableDashboardTemplate(err error) fiber.Handler {
@@ -78,9 +78,7 @@ func (r *dashboardTemplateRenderer) staticAsset(ctx fiber.Ctx) error {
 		return fiber.ErrNotFound
 	}
 
-	name := strings.TrimPrefix(path.Clean(rawName), "/ui/static/")
-	name = strings.TrimPrefix(name, "ui/static/")
-	name = strings.TrimPrefix(name, "static/")
+	name := staticAssetName(rawName)
 	if name == "." || strings.HasPrefix(name, "../") || strings.Contains(name, "/../") {
 		return fiber.ErrNotFound
 	}
@@ -106,7 +104,7 @@ func (r *dashboardTemplateRenderer) staticAsset(ctx fiber.Ctx) error {
 func (e *dashboardEndpoint) dashboardPage(renderer *dashboardTemplateRenderer) fiber.Handler {
 	return func(ctx fiber.Ctx) error {
 		if !e.dashboardAuthenticated(ctx) {
-			if err := ctx.Redirect().Status(fiber.StatusFound).To(loginRoute); err != nil {
+			if err := ctx.Redirect().Status(fiber.StatusFound).To(prefixedPath(e.cfg, loginRoute)); err != nil {
 				return oops.Wrapf(err, "redirect dashboard login")
 			}
 			return nil
@@ -153,7 +151,7 @@ func (e *dashboardEndpoint) ensureDashboardMonitorDetailAccess(ctx fiber.Ctx, pu
 	if public || e.dashboardAuthenticated(ctx) {
 		return nil
 	}
-	if err := ctx.Redirect().Status(fiber.StatusFound).To(loginRoute); err != nil {
+	if err := ctx.Redirect().Status(fiber.StatusFound).To(prefixedPath(e.cfg, loginRoute)); err != nil {
 		return oops.Wrapf(err, "redirect dashboard login")
 	}
 	return nil
@@ -182,7 +180,7 @@ func (e *dashboardEndpoint) loadDashboardMonitorDetail(ctx fiber.Ctx) (store.Das
 func (e *dashboardEndpoint) loginPage(renderer *dashboardTemplateRenderer) fiber.Handler {
 	return func(ctx fiber.Ctx) error {
 		if !e.cfg.Auth.Dashboard.Enabled || e.dashboardAuthenticated(ctx) {
-			if err := ctx.Redirect().Status(fiber.StatusFound).To(dashboardRoute); err != nil {
+			if err := ctx.Redirect().Status(fiber.StatusFound).To(prefixedPath(e.cfg, dashboardRoute)); err != nil {
 				return oops.Wrapf(err, "redirect dashboard")
 			}
 			return nil
@@ -199,7 +197,7 @@ func (e *dashboardEndpoint) loginSubmit(renderer *dashboardTemplateRenderer) fib
 			return renderer.render(ctx, renderer.login, newLoginTemplatePage(ctx, e, dashboardTemplateTexts(ctx).LoginFailed))
 		}
 		ctx.Set(fiber.HeaderSetCookie, e.dashboardJWTSetCookie(token, false))
-		if err := ctx.Redirect().Status(fiber.StatusFound).To(dashboardRoute); err != nil {
+		if err := ctx.Redirect().Status(fiber.StatusFound).To(prefixedPath(e.cfg, dashboardRoute)); err != nil {
 			return oops.Wrapf(err, "redirect dashboard after login")
 		}
 		return nil
@@ -208,7 +206,7 @@ func (e *dashboardEndpoint) loginSubmit(renderer *dashboardTemplateRenderer) fib
 
 func (e *dashboardEndpoint) logoutPage(ctx fiber.Ctx) error {
 	ctx.Set(fiber.HeaderSetCookie, e.dashboardJWTSetCookie("", true))
-	if err := ctx.Redirect().Status(fiber.StatusFound).To(loginRoute); err != nil {
+	if err := ctx.Redirect().Status(fiber.StatusFound).To(prefixedPath(e.cfg, loginRoute)); err != nil {
 		return oops.Wrapf(err, "redirect dashboard logout")
 	}
 	return nil

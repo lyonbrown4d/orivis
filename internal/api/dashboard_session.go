@@ -11,6 +11,7 @@ import (
 	"github.com/arcgolabs/authx"
 	authjwt "github.com/arcgolabs/authx/jwt"
 	"github.com/golang-jwt/jwt/v5"
+	config "github.com/lyonbrown4d/orivis/internal/serverconfig"
 )
 
 const (
@@ -64,11 +65,18 @@ func (e *dashboardEndpoint) dashboardJWTSetCookie(token string, expired bool) st
 	if expired {
 		maxAge = 0
 	}
-	cookie := dashboardAuthCookie + "=" + token + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=" + strconv.Itoa(maxAge)
+	cookie := dashboardAuthCookie + "=" + token + "; Path=" + dashboardCookiePath(e.cfg) + "; HttpOnly; SameSite=Lax; Max-Age=" + strconv.Itoa(maxAge)
 	if e.cfg.Auth.Dashboard.SecureCookie {
 		cookie += "; Secure"
 	}
 	return cookie
+}
+
+func dashboardCookiePath(cfg config.Config) string {
+	if basePath := httpBasePath(cfg); basePath != "" {
+		return basePath
+	}
+	return "/"
 }
 
 func (e *dashboardEndpoint) dashboardJWTSecret() (string, error) {

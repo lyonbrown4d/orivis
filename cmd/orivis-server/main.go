@@ -156,6 +156,7 @@ func newServerMDNSModule(configModule, loggingModule dix.Module) dix.Module {
 					Instance: cfg.MDNS.Instance,
 					Scheme:   cfg.MDNS.Scheme,
 					Port:     port,
+					BasePath: cfg.HTTP.BasePath,
 					Version:  buildinfo.Version,
 				}, logger)
 			}),
