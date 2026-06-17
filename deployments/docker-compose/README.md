@@ -89,7 +89,7 @@ labels:
   orivis.monitor.timeout: "3s"
 ```
 
-See `../../docs/docker-labels.md` for HTTP, TCP, Redis, database, Kafka, TLS, multi-monitor, Docker Compose, and Docker Swarm examples.
+See the [Docker labels wiki page](https://github.com/lyonbrown4d/orivis/wiki/Docker-labels) for HTTP, TCP, Redis, database, Kafka, TLS, multi-monitor, Docker Compose, and Docker Swarm examples.
 
 When credentials are required, keep an explicit target:
 

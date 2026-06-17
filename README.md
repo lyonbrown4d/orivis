@@ -17,6 +17,20 @@ Orivis is suitable for `v0.1-alpha` testing. The core loop is implemented:
 agent discovery -> server sync -> task pull -> probe check -> result report -> eventx ingest -> database -> dashboard
 ```
 
+## Documentation
+
+The project documentation is maintained in the GitHub Wiki:
+
+- [Wiki home](https://github.com/lyonbrown4d/orivis/wiki)
+- [Quick start](https://github.com/lyonbrown4d/orivis/wiki/Quick-start)
+- [Configuration](https://github.com/lyonbrown4d/orivis/wiki/Configuration)
+- [Discovery](https://github.com/lyonbrown4d/orivis/wiki/Discovery)
+- [Docker labels](https://github.com/lyonbrown4d/orivis/wiki/Docker-labels)
+- [Supported probes](https://github.com/lyonbrown4d/orivis/wiki/Probes)
+- [Notifications](https://github.com/lyonbrown4d/orivis/wiki/Notifications)
+- [Deployment](https://github.com/lyonbrown4d/orivis/wiki/Deployment)
+- [Operations](https://github.com/lyonbrown4d/orivis/wiki/Operations)
+
 ## Quick start with Docker Compose
 
 ```powershell
@@ -200,7 +214,7 @@ For production, run Orivis behind a reverse proxy that terminates HTTPS.
 ## Notifications
 
 Orivis supports route-based webhook notifications and optional Alertmanager mode.
-See [`docs/notifications.md`](/D:/Projects/orivis/docs/notifications.md) for:
+See the [Notifications wiki page](https://github.com/lyonbrown4d/orivis/wiki/Notifications) for:
 
 - route DSL
 - `webhook` vs `alertmanager` payload behavior
@@ -232,7 +246,7 @@ See [`docs/notifications.md`](/D:/Projects/orivis/docs/notifications.md) for:
 ## Docker labels
 
 Orivis monitor discovery uses labels with an `orivis.` prefix.
-See [docker-labels.md](docs/docker-labels.md) for full Docker, Compose, and Swarm label examples.
+See the [Docker labels wiki page](https://github.com/lyonbrown4d/orivis/wiki/Docker-labels) for full Docker, Compose, and Swarm label examples.
 
 ```yaml
 labels:
@@ -316,5 +330,5 @@ POST /api/agent/results        report probe result
 ./scripts/verify.ps1 -Release
 ```
 
-See [release-checklist.md](docs/release-checklist.md) for the alpha release checklist.
-See [roadmap.md](docs/roadmap.md) for planned production-hardening work.
+See the [Release checklist wiki page](https://github.com/lyonbrown4d/orivis/wiki/Release-checklist) for the alpha release checklist.
+See the [Roadmap wiki page](https://github.com/lyonbrown4d/orivis/wiki/Roadmap) for planned production-hardening work.
