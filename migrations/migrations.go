@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//go:embed sqlite/*.sql
+//go:embed mysql/*.sql pgx/*.sql sqlite/*.sql
 var files embed.FS
 
 type File struct {
@@ -20,6 +20,27 @@ type File struct {
 
 func SQLite() ([]File, error) {
 	return readDir("sqlite")
+}
+
+func MySQL() ([]File, error) {
+	return readDir("mysql")
+}
+
+func PGX() ([]File, error) {
+	return readDir("pgx")
+}
+
+func ForDriver(driver string) ([]File, error) {
+	switch strings.ToLower(strings.TrimSpace(driver)) {
+	case "", "sqlite", "sqlite3":
+		return SQLite()
+	case "mysql":
+		return MySQL()
+	case "pgx", "postgres", "postgresql":
+		return PGX()
+	default:
+		return nil, fmt.Errorf("unsupported migration driver %q", driver)
+	}
 }
 
 func All() ([]File, error) {

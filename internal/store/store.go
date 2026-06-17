@@ -14,6 +14,7 @@ import (
 
 type Store struct {
 	DB           *dbx.DB
+	driver       string
 	repositories *Repositories
 	ids          IDGenerator
 	agents       AgentStore
@@ -26,10 +27,14 @@ func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return New(database, NewRepositories(database), NewIDGenerator(database))
+	return NewWithDriver(database, normalizeDBDriver(cfg.DB.Driver), NewRepositories(database), NewIDGenerator(database))
 }
 
 func New(database *dbx.DB, repositories *Repositories, ids IDGenerator) (*Store, error) {
+	return NewWithDriver(database, "sqlite", repositories, ids)
+}
+
+func NewWithDriver(database *dbx.DB, driver string, repositories *Repositories, ids IDGenerator) (*Store, error) {
 	if database == nil {
 		return nil, wrapError(ErrInvalidInput, "db is required")
 	}
@@ -42,6 +47,7 @@ func New(database *dbx.DB, repositories *Repositories, ids IDGenerator) (*Store,
 
 	storage := &Store{
 		DB:           database,
+		driver:       normalizeStoreMigrationDriver(driver),
 		repositories: repositories,
 		ids:          ids,
 	}
