@@ -1,24 +1,75 @@
 {{ define "base" }}
 <!doctype html>
-<html lang="{{ .Locale }}">
+<html lang="{{ .Locale }}" data-orivis-theme="system" data-orivis-effective-theme="light" class="min-h-full bg-slate-50 text-slate-950">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f172a">
   <title>{{ .Title }} - Orivis</title>
+  <script>
+    (function () {
+      var storageKey = "orivis.monitor.ui.v1:theme";
+      var modes = { light: true, dark: true, system: true };
+      var root = document.documentElement;
+      function safeRead() {
+        try {
+          var value = window.localStorage ? window.localStorage.getItem(storageKey) : "";
+          return modes[value] ? value : "system";
+        } catch (_) {
+          return "system";
+        }
+      }
+      function prefersDark() {
+        return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      }
+      function effective(mode) {
+        return mode === "dark" || (mode === "system" && prefersDark()) ? "dark" : "light";
+      }
+      function apply(mode) {
+        var nextMode = modes[mode] ? mode : "system";
+        var nextEffective = effective(nextMode);
+        root.setAttribute("data-orivis-theme", nextMode);
+        root.setAttribute("data-orivis-effective-theme", nextEffective);
+        root.classList.toggle("dark", nextEffective === "dark");
+        root.style.colorScheme = nextEffective;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute("content", nextEffective === "dark" ? "#020617" : "#f8fafc");
+        }
+      }
+      window.OrivisTheme = {
+        key: storageKey,
+        modes: modes,
+        read: safeRead,
+        apply: apply,
+        effective: effective,
+      };
+      apply(safeRead());
+    }());
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = { darkMode: "class" };
+  </script>
   <link rel="preconnect" href="https://cdn.tailwindcss.com">
   <script src="https://cdn.tailwindcss.com" defer></script>
   <link href="{{ .Links.Static }}/app.css" rel="stylesheet">
 </head>
-<body class="orivis-shell min-h-screen antialiased overflow-x-hidden">
+<body class="orivis-shell min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 antialiased dark:bg-[#050816] dark:text-slate-100">
+  <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.16),transparent_32%),radial-gradient(circle_at_80%_10%,rgba(59,130,246,0.16),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_34%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.14),transparent_30%),linear-gradient(180deg,#050816_0%,#0f172a_100%)]"></div>
+    <div class="absolute left-1/2 top-0 h-px w-[80rem] -translate-x-1/2 bg-gradient-to-r from-transparent via-emerald-400/60 to-transparent dark:via-emerald-300/40"></div>
+  </div>
+
   {{ if .Public }}
-  <main class="min-h-screen w-full px-4 py-6 sm:px-6 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-trigger="every 10s" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
+  <div class="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
+    {{ template "theme_switch" . }}
+  </div>
+  <main class="min-h-screen w-full px-4 py-8 sm:px-6 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-trigger="every 10s" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
     {{ block "content" . }}{{ end }}
   </main>
   {{ else }}
-  <div class="orivis-layout-shell min-h-screen lg:grid lg:grid-cols-[18rem_minmax(0,1fr)]">
+  <div class="orivis-layout-shell min-h-screen lg:grid lg:grid-cols-[19rem_minmax(0,1fr)]">
     {{ template "nav" . }}
-    <main class="orivis-shell-main orivis-shell-main-public min-h-screen min-w-0 px-4 py-6 sm:px-6 lg:px-8"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
+    <main class="orivis-shell-main min-h-screen min-w-0 px-4 py-5 sm:px-6 lg:px-8 xl:px-10"{{ if .AutoRefresh }} hx-get="{{ .Links.Refresh }}" hx-select="main" hx-target="this" hx-swap="outerHTML" hx-push-url="false"{{ end }}>
       {{ block "content" . }}{{ end }}
     </main>
   </div>

@@ -117,3 +117,167 @@
   color: color-mix(in srgb, var(--orivis-accent) 80%, #ffffff);
   background: color-mix(in srgb, var(--orivis-accent) 18%, transparent);
 }
+
+/* Explicit theme runtime overrides */
+:root,
+html[data-orivis-effective-theme="light"] {
+  color-scheme: light;
+  --orivis-bg: #f5f7fb;
+  --orivis-bg-glow: rgba(20, 184, 166, 0.16);
+  --orivis-bg-warm: rgba(245, 158, 11, 0.11);
+  --orivis-ink: #111827;
+  --orivis-muted: #64748b;
+  --orivis-muted-ink: #475569;
+  --orivis-panel: rgba(255, 255, 255, 0.86);
+  --orivis-panel-solid: #ffffff;
+  --orivis-line: rgba(15, 23, 42, 0.11);
+  --orivis-line-strong: rgba(15, 23, 42, 0.18);
+  --orivis-border: rgba(15, 23, 42, 0.11);
+  --orivis-accent: #0f766e;
+  --orivis-accent-strong: #0f766e;
+  --orivis-accent-soft: rgba(20, 184, 166, 0.14);
+  --orivis-success: #16a34a;
+  --orivis-warning: #f59e0b;
+  --orivis-danger: #dc2626;
+  --orivis-unknown: #94a3b8;
+  --orivis-focus-ring: rgba(14, 165, 233, 0.36);
+  --orivis-shadow: 0 18px 50px rgba(15, 23, 42, 0.09);
+  --orivis-shadow-hover: 0 22px 60px rgba(15, 23, 42, 0.14);
+}
+
+html.dark,
+html[data-orivis-effective-theme="dark"] {
+  color-scheme: dark;
+  --orivis-bg: #07111f;
+  --orivis-bg-glow: rgba(20, 184, 166, 0.15);
+  --orivis-bg-warm: rgba(251, 146, 60, 0.08);
+  --orivis-ink: #e5edf6;
+  --orivis-muted: #94a3b8;
+  --orivis-muted-ink: #94a3b8;
+  --orivis-panel: rgba(15, 23, 42, 0.78);
+  --orivis-panel-solid: #0f172a;
+  --orivis-line: rgba(148, 163, 184, 0.18);
+  --orivis-line-strong: rgba(148, 163, 184, 0.3);
+  --orivis-border: rgba(148, 163, 184, 0.18);
+  --orivis-accent: #2dd4bf;
+  --orivis-accent-strong: #5eead4;
+  --orivis-accent-soft: rgba(45, 212, 191, 0.12);
+  --orivis-success: #22c55e;
+  --orivis-warning: #f59e0b;
+  --orivis-danger: #fb7185;
+  --orivis-unknown: #64748b;
+  --orivis-focus-ring: rgba(56, 189, 248, 0.48);
+  --orivis-shadow: 0 20px 54px rgba(0, 0, 0, 0.32);
+  --orivis-shadow-hover: 0 24px 68px rgba(0, 0, 0, 0.44);
+}
+
+html[data-orivis-effective-theme="light"] body.orivis-shell {
+  background-color: var(--orivis-bg);
+  background-image:
+    radial-gradient(circle at 10% 0%, var(--orivis-bg-glow), transparent 26rem),
+    radial-gradient(circle at 90% 8%, var(--orivis-bg-warm), transparent 24rem),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), var(--orivis-bg) 42%),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+}
+
+html[data-orivis-effective-theme="dark"] body.orivis-shell {
+  background-color: var(--orivis-bg);
+  background-image:
+    radial-gradient(circle at 8% 0%, var(--orivis-bg-glow), transparent 28rem),
+    radial-gradient(circle at 88% 10%, var(--orivis-bg-warm), transparent 25rem),
+    linear-gradient(180deg, #08111f, var(--orivis-bg) 46%),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+}
+
+html[data-orivis-effective-theme="light"] .orivis-workspace {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), transparent 18rem),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+}
+
+html[data-orivis-effective-theme="dark"] .orivis-workspace {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.52), transparent 19rem),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
+}
+
+.orivis-theme-switch {
+  position: relative;
+  isolation: isolate;
+}
+
+.orivis-theme-option {
+  color: var(--orivis-muted);
+  outline: none;
+}
+
+.orivis-theme-option:hover {
+  color: var(--orivis-ink);
+  background: color-mix(in srgb, var(--orivis-line) 30%, transparent);
+}
+
+.orivis-theme-option:focus-visible {
+  box-shadow: 0 0 0 3px var(--orivis-focus-ring);
+}
+
+.orivis-theme-option.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f766e, #0ea5e9);
+  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.22);
+}
+
+html[data-orivis-effective-theme="dark"] .orivis-theme-option.is-active {
+  color: #020617;
+  background: linear-gradient(135deg, #34d399, #7dd3fc);
+  box-shadow: 0 12px 28px rgba(45, 212, 191, 0.16);
+}
+
+.orivis-theme-switch[data-orivis-current-theme="system"]::after {
+  content: attr(data-orivis-effective-theme);
+  position: absolute;
+  right: 0.25rem;
+  bottom: -1.15rem;
+  color: var(--orivis-muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+html[data-orivis-effective-theme="dark"] .orivis-command-center,
+html[data-orivis-effective-theme="dark"] .orivis-public-header,
+html[data-orivis-effective-theme="dark"] .orivis-control-panel,
+html[data-orivis-effective-theme="dark"] .orivis-panel,
+html[data-orivis-effective-theme="dark"] .orivis-monitor-card,
+html[data-orivis-effective-theme="dark"] .orivis-agent-card,
+html[data-orivis-effective-theme="dark"] .orivis-metric-card {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent), color-mix(in srgb, var(--orivis-accent-soft) 42%, transparent)),
+    var(--orivis-panel-solid);
+}
+
+html[data-orivis-effective-theme="light"] .orivis-login-frame {
+  background: color-mix(in srgb, var(--orivis-panel-solid) 88%, transparent);
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.14);
+}
+
+html[data-orivis-effective-theme="dark"] .orivis-login-frame {
+  background: color-mix(in srgb, var(--orivis-panel-solid) 82%, transparent);
+  box-shadow: 0 32px 96px rgba(0, 0, 0, 0.48);
+}
+
+html[data-orivis-effective-theme="light"] .orivis-login-form-panel {
+  background:
+    radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--orivis-accent) 8%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--orivis-panel-solid) 96%, transparent), #f8fafc);
+}
+
+html[data-orivis-effective-theme="dark"] .orivis-login-form-panel {
+  background:
+    radial-gradient(circle at 80% 10%, color-mix(in srgb, var(--orivis-accent) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--orivis-panel-solid) 92%, transparent), color-mix(in srgb, #020617 58%, transparent));
+}

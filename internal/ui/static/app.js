@@ -1,4 +1,140 @@
 (function () {
+  "use strict";
+
+  var STORAGE_KEY = "orivis.monitor.ui.v1:theme";
+  var MODES = { light: true, dark: true, system: true };
+  var mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function controller() {
+    if (window.OrivisTheme && typeof window.OrivisTheme.apply === "function") {
+      return window.OrivisTheme;
+    }
+
+    return {
+      read: readMode,
+      apply: function (mode) {
+        var root = document.documentElement;
+        var nextMode = normalizeTheme(mode);
+        var effectiveMode = nextMode === "dark" || (nextMode === "system" && prefersDark()) ? "dark" : "light";
+        root.setAttribute("data-orivis-theme", nextMode);
+        root.setAttribute("data-orivis-effective-theme", effectiveMode);
+        root.classList.toggle("dark", effectiveMode === "dark");
+        root.style.colorScheme = effectiveMode;
+      },
+    };
+  }
+
+  function normalizeTheme(mode) {
+    return MODES[mode] ? mode : "system";
+  }
+
+  function prefersDark() {
+    return !!(mediaQuery && mediaQuery.matches);
+  }
+
+  function readMode() {
+    try {
+      var value = window.localStorage ? window.localStorage.getItem(STORAGE_KEY) : "";
+      return normalizeTheme(value);
+    } catch (_) {
+      return "system";
+    }
+  }
+
+  function writeMode(mode) {
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, normalizeTheme(mode));
+      }
+    } catch (_) {
+      return;
+    }
+  }
+
+  function currentMode() {
+    return normalizeTheme(document.documentElement.getAttribute("data-orivis-theme") || readMode());
+  }
+
+  function applyMode(mode, persist) {
+    var nextMode = normalizeTheme(mode);
+    if (persist) {
+      writeMode(nextMode);
+    }
+    controller().apply(nextMode);
+    updateThemeSwitches(document);
+  }
+
+  function updateThemeSwitches(scope) {
+    var root = scope || document;
+    var mode = currentMode();
+    var effectiveMode = document.documentElement.getAttribute("data-orivis-effective-theme") || "light";
+    var switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
+
+    Array.prototype.forEach.call(switches, function (switcher) {
+      switcher.setAttribute("data-orivis-current-theme", mode);
+      switcher.setAttribute("data-orivis-effective-theme", effectiveMode);
+      var options = switcher.querySelectorAll("[data-orivis-theme-option]");
+      Array.prototype.forEach.call(options, function (option) {
+        var active = option.getAttribute("data-orivis-theme-option") === mode;
+        option.classList.toggle("is-active", active);
+        option.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    });
+  }
+
+  function bindThemeSwitches(scope) {
+    var root = scope || document;
+    var switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
+
+    Array.prototype.forEach.call(switches, function (switcher) {
+      if (switcher.__orivis_theme_bound__) {
+        return;
+      }
+      switcher.__orivis_theme_bound__ = true;
+      switcher.addEventListener("click", function (event) {
+        var option = event.target && event.target.closest ? event.target.closest("[data-orivis-theme-option]") : null;
+        if (!option || !switcher.contains(option)) {
+          return;
+        }
+        applyMode(option.getAttribute("data-orivis-theme-option"), true);
+      });
+    });
+
+    updateThemeSwitches(root);
+  }
+
+  function syncSystemTheme() {
+    if (currentMode() === "system") {
+      applyMode("system", false);
+    }
+  }
+
+  if (mediaQuery) {
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncSystemTheme);
+    } else if (typeof mediaQuery.addListener === "function") {
+      mediaQuery.addListener(syncSystemTheme);
+    }
+  }
+
+  window.OrivisThemeSwitch = {
+    apply: applyMode,
+    bind: bindThemeSwitches,
+    read: currentMode,
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    applyMode(readMode(), false);
+    bindThemeSwitches(document);
+  });
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    var target = event && event.detail && event.detail.target ? event.detail.target : document;
+    bindThemeSwitches(target);
+    updateThemeSwitches(document);
+  });
+}());
+(function () {
   var STORAGE_PREFIX = "orivis.monitor.ui.";
   var STORAGE_VERSION = "v1";
   var STORAGE_TTL = 1000 * 60 * 60 * 24 * 14;
@@ -964,3 +1100,4 @@
 
   bindPasswordToggles(document);
 }());
+
