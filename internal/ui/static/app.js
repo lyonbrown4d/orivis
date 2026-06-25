@@ -1,9 +1,9 @@
 (function () {
   "use strict";
 
-  var STORAGE_KEY = "orivis.monitor.ui.v1:theme";
-  var MODES = { light: true, dark: true, system: true };
-  var mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const STORAGE_KEY = "orivis.monitor.ui.v1:theme";
+  const MODES = { light: true, dark: true, system: true };
+  const mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
   function controller() {
     if (window.OrivisTheme && typeof window.OrivisTheme.apply === "function") {
@@ -13,9 +13,9 @@
     return {
       read: readMode,
       apply: function (mode) {
-        var root = document.documentElement;
-        var nextMode = normalizeTheme(mode);
-        var effectiveMode = nextMode === "dark" || (nextMode === "system" && prefersDark()) ? "dark" : "light";
+        let root = document.documentElement;
+        let nextMode = normalizeTheme(mode);
+        let effectiveMode = nextMode === "dark" || (nextMode === "system" && prefersDark()) ? "dark" : "light";
         root.setAttribute("data-orivis-theme", nextMode);
         root.setAttribute("data-orivis-effective-theme", effectiveMode);
         root.classList.toggle("dark", effectiveMode === "dark");
@@ -34,7 +34,7 @@
 
   function readMode() {
     try {
-      var value = window.localStorage ? window.localStorage.getItem(STORAGE_KEY) : "";
+      let value = window.localStorage ? window.localStorage.getItem(STORAGE_KEY) : "";
       return normalizeTheme(value);
     } catch (_) {
       return "system";
@@ -56,7 +56,7 @@
   }
 
   function applyMode(mode, persist) {
-    var nextMode = normalizeTheme(mode);
+    let nextMode = normalizeTheme(mode);
     if (persist) {
       writeMode(nextMode);
     }
@@ -65,17 +65,17 @@
   }
 
   function updateThemeSwitches(scope) {
-    var root = scope || document;
-    var mode = currentMode();
-    var effectiveMode = document.documentElement.getAttribute("data-orivis-effective-theme") || "light";
-    var switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
+    let root = scope || document;
+    let mode = currentMode();
+    let effectiveMode = document.documentElement.getAttribute("data-orivis-effective-theme") || "light";
+    let switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
 
     Array.prototype.forEach.call(switches, function (switcher) {
       switcher.setAttribute("data-orivis-current-theme", mode);
       switcher.setAttribute("data-orivis-effective-theme", effectiveMode);
-      var options = switcher.querySelectorAll("[data-orivis-theme-option]");
+      let options = switcher.querySelectorAll("[data-orivis-theme-option]");
       Array.prototype.forEach.call(options, function (option) {
-        var active = option.getAttribute("data-orivis-theme-option") === mode;
+        let active = option.getAttribute("data-orivis-theme-option") === mode;
         option.classList.toggle("is-active", active);
         option.setAttribute("aria-pressed", active ? "true" : "false");
       });
@@ -83,8 +83,8 @@
   }
 
   function bindThemeSwitches(scope) {
-    var root = scope || document;
-    var switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
+    let root = scope || document;
+    let switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
 
     Array.prototype.forEach.call(switches, function (switcher) {
       if (switcher.__orivis_theme_bound__) {
@@ -92,7 +92,7 @@
       }
       switcher.__orivis_theme_bound__ = true;
       switcher.addEventListener("click", function (event) {
-        var option = event.target && event.target.closest ? event.target.closest("[data-orivis-theme-option]") : null;
+        let option = event.target && event.target.closest ? event.target.closest("[data-orivis-theme-option]") : null;
         if (!option || !switcher.contains(option)) {
           return;
         }
@@ -129,34 +129,34 @@
   });
 
   document.addEventListener("htmx:afterSwap", function (event) {
-    var target = event && event.detail && event.detail.target ? event.detail.target : document;
+    let target = event && event.detail && event.detail.target ? event.detail.target : document;
     bindThemeSwitches(target);
     updateThemeSwitches(document);
   });
 }());
 (function () {
-  var STORAGE_PREFIX = "orivis.monitor.ui.";
-  var STORAGE_VERSION = "v1";
-  var STORAGE_TTL = 1000 * 60 * 60 * 24 * 14;
-  var REFRESH_PAUSED_KEY = STORAGE_PREFIX + STORAGE_VERSION + ":refresh-paused";
-  var MAX_ANIMATION_CARD_COUNT = 22;
-  var SEARCH_DEBOUNCE_MS = 90;
-  var DEFAULT_SORT = "checked-desc";
-  var FILTER_HINT_CLEAR_DISABLED = "filters already cleared";
-  var FILTER_SUMMARY_DEFAULT = "No filters";
-  var FILTER_SUMMARY_PREFIX = "Filters:";
-  var SEARCH_SHORTCUT_HINT = "Press / to focus search";
-  var CARD_INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, summary, [data-orivis-ignore-card-click]";
-  var TOOLTIP_OFFSET = 14;
+  const STORAGE_PREFIX = "orivis.monitor.ui.";
+  const STORAGE_VERSION = "v1";
+  const STORAGE_TTL = 1000 * 60 * 60 * 24 * 14;
+  const REFRESH_PAUSED_KEY = STORAGE_PREFIX + STORAGE_VERSION + ":refresh-paused";
+  const MAX_ANIMATION_CARD_COUNT = 22;
+  const SEARCH_DEBOUNCE_MS = 90;
+  const DEFAULT_SORT = "checked-desc";
+  const FILTER_HINT_CLEAR_DISABLED = "filters already cleared";
+  const FILTER_SUMMARY_DEFAULT = "No filters";
+  const FILTER_SUMMARY_PREFIX = "Filters:";
+  const SEARCH_SHORTCUT_HINT = "Press / to focus search";
+  const CARD_INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, summary, [data-orivis-ignore-card-click]";
+  const TOOLTIP_OFFSET = 14;
 
-  var statusFilterLabel = {
+  const statusFilterLabel = {
     success: "Healthy",
     warning: "Unknown",
     danger: "Down",
     secondary: "Other",
   };
 
-  var statusSortOrder = {
+  const statusSortOrder = {
     success: 0,
     warning: 1,
     danger: 2,
@@ -168,13 +168,13 @@
   }
 
   function readPersistedState(pathname) {
-    var fallback = {
+    let fallback = {
       q: "",
       s: {},
       sort: DEFAULT_SORT,
     };
 
-    var raw = null;
+    let raw = null;
     if (!window.localStorage) {
       return fallback;
     }
@@ -189,14 +189,14 @@
     }
 
     try {
-      var parsed = JSON.parse(raw);
+      let parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") {
         return fallback;
       }
-      var q = typeof parsed.q === "string" ? parsed.q : "";
-      var sort = typeof parsed.sort === "string" ? parsed.sort : DEFAULT_SORT;
-      var statusObj = parsed.s;
-      var normalized = {};
+      let q = typeof parsed.q === "string" ? parsed.q : "";
+      let sort = typeof parsed.sort === "string" ? parsed.sort : DEFAULT_SORT;
+      let statusObj = parsed.s;
+      let normalized = {};
       if (statusObj && typeof statusObj === "object") {
         Object.keys(statusObj).forEach(function (key) {
           if (statusObj[key]) {
@@ -221,7 +221,7 @@
     }
 
     try {
-      var payload = {
+      let payload = {
         q: state.q || "",
         s: state.s || {},
         sort: state.sort || DEFAULT_SORT,
@@ -262,7 +262,7 @@
   }
 
   function parseIntOrZero(value) {
-    var parsed = parseInt(value, 10);
+    let parsed = parseInt(value, 10);
     if (!parsed || parsed < 0) {
       return 0;
     }
@@ -300,32 +300,32 @@
   }
 
   function updateChipState(scope, state) {
-    var hasFilter = Object.keys(state.s).length > 0;
-    var chips = scope.querySelectorAll("[data-status-filter]");
+    let hasFilter = Object.keys(state.s).length > 0;
+    let chips = scope.querySelectorAll("[data-status-filter]");
     Array.prototype.forEach.call(chips, function (chip) {
-      var value = normalize(chip.getAttribute("data-status-filter"));
-      var active = value === "all" ? !hasFilter : state.s[value] === true;
+      let value = normalize(chip.getAttribute("data-status-filter"));
+      let active = value === "all" ? !hasFilter : state.s[value] === true;
       setActiveState(chip, active);
       chip.setAttribute("aria-pressed", active ? "true" : "false");
     });
   }
 
   function matchCard(card, state, query) {
-    var status = parseStatusKey(card);
-    var hasStatusFilters = Object.keys(state.s).length > 0;
-    var matchStatus = true;
+    let status = parseStatusKey(card);
+    let hasStatusFilters = Object.keys(state.s).length > 0;
+    let matchStatus = true;
     if (hasStatusFilters) {
       matchStatus = !!state.s[status];
     }
 
-    var haystack = [
+    let haystack = [
       normalize(card.getAttribute("data-monitor-name")),
       normalize(card.getAttribute("data-monitor-target")),
       normalize(card.getAttribute("data-monitor-group")),
       normalize(card.getAttribute("data-monitor-environment")),
       normalize(card.getAttribute("data-monitor-source")),
     ].join(" ");
-    var matchQuery = haystack.indexOf(query) !== -1;
+    let matchQuery = haystack.indexOf(query) !== -1;
     return matchStatus && matchQuery;
   }
 
@@ -335,14 +335,14 @@
 
   function comparator(sortValue) {
     return function (left, right) {
-      var leftStatus = parseStatusKey(left);
-      var rightStatus = parseStatusKey(right);
-      var leftChecked = parseIntOrZero(left.getAttribute("data-monitor-checked-at"));
-      var rightChecked = parseIntOrZero(right.getAttribute("data-monitor-checked-at"));
-      var leftLatency = parseIntOrZero(left.getAttribute("data-monitor-latency-ms"));
-      var rightLatency = parseIntOrZero(right.getAttribute("data-monitor-latency-ms"));
-      var leftName = normalize(left.getAttribute("data-monitor-name"));
-      var rightName = normalize(right.getAttribute("data-monitor-name"));
+      let leftStatus = parseStatusKey(left);
+      let rightStatus = parseStatusKey(right);
+      let leftChecked = parseIntOrZero(left.getAttribute("data-monitor-checked-at"));
+      let rightChecked = parseIntOrZero(right.getAttribute("data-monitor-checked-at"));
+      let leftLatency = parseIntOrZero(left.getAttribute("data-monitor-latency-ms"));
+      let rightLatency = parseIntOrZero(right.getAttribute("data-monitor-latency-ms"));
+      let leftName = normalize(left.getAttribute("data-monitor-name"));
+      let rightName = normalize(right.getAttribute("data-monitor-name"));
 
       switch (sortValue) {
         case "name-asc":
@@ -372,7 +372,7 @@
           break;
       }
 
-      var statusCompare = statusOrder(leftStatus) - statusOrder(rightStatus);
+      let statusCompare = statusOrder(leftStatus) - statusOrder(rightStatus);
       if (statusCompare !== 0) {
         return statusCompare;
       }
@@ -383,7 +383,7 @@
   }
 
   function setCountText(scope, total, visible) {
-    var counter = scope.querySelector("#orivis-monitor-visible-count");
+    let counter = scope.querySelector("#orivis-monitor-visible-count");
     if (!counter) {
       return;
     }
@@ -394,8 +394,8 @@
     if (!root) {
       return;
     }
-    var emptyState = root.querySelector("[data-orivis-monitor-empty-all]");
-    var emptyFilterState = root.querySelector("[data-orivis-monitor-empty-filter]");
+    let emptyState = root.querySelector("[data-orivis-monitor-empty-all]");
+    let emptyFilterState = root.querySelector("[data-orivis-monitor-empty-filter]");
     if (!emptyState || !emptyFilterState) {
       return;
     }
@@ -418,7 +418,7 @@
   }
 
   function normalizeStatusFilters(state) {
-    var names = [];
+    let names = [];
     if (!state || !state.s) {
       return names;
     }
@@ -439,7 +439,7 @@
 
   function getRefreshIndicator(scope) {
     if (scope && scope.querySelector) {
-      var scopedIndicator = scope.querySelector("#orivis-refresh-indicator");
+      let scopedIndicator = scope.querySelector("#orivis-refresh-indicator");
       if (scopedIndicator) {
         return scopedIndicator;
       }
@@ -449,7 +449,7 @@
 
   function getRefreshToggle(scope) {
     if (scope && scope.querySelector) {
-      var scopedToggle = scope.querySelector("#orivis-refresh-toggle");
+      let scopedToggle = scope.querySelector("#orivis-refresh-toggle");
       if (scopedToggle) {
         return scopedToggle;
       }
@@ -467,13 +467,13 @@
   }
 
   function enableSearchShortcut(scope) {
-    var searchInput = scope.querySelector("#orivis-monitor-search");
+    let searchInput = scope.querySelector("#orivis-monitor-search");
     if (!searchInput) {
       return;
     }
 
     setSearchHint(searchInput);
-    var timer;
+    let timer;
     document.addEventListener("keydown", function (event) {
       if (event.defaultPrevented) {
         return;
@@ -506,12 +506,12 @@
       return;
     }
 
-    var indicator = getRefreshIndicator(scope);
+    let indicator = getRefreshIndicator(scope);
     if (!indicator) {
       return;
     }
 
-    var baseText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
+    let baseText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
     if (refreshing) {
       indicator.textContent = baseText + "...";
       indicator.classList.add("is-refreshing");
@@ -523,28 +523,28 @@
   }
 
   function updateRefreshPausedUI(scope, paused) {
-    var indicator = getRefreshIndicator(scope);
+    let indicator = getRefreshIndicator(scope);
     if (indicator) {
-      var idleText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
-      var pausedText = indicator.getAttribute("data-orivis-refresh-paused") || "Refresh paused";
+      let idleText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
+      let pausedText = indicator.getAttribute("data-orivis-refresh-paused") || "Refresh paused";
       indicator.textContent = paused ? pausedText : idleText;
       indicator.classList.toggle("is-paused", paused);
       indicator.classList.remove("is-refreshing");
     }
 
-    var toggle = getRefreshToggle(scope);
+    let toggle = getRefreshToggle(scope);
     if (!toggle) {
       return;
     }
-    var pauseText = toggle.getAttribute("data-orivis-refresh-pause") || "Pause refresh";
-    var resumeText = toggle.getAttribute("data-orivis-refresh-resume") || "Resume refresh";
+    let pauseText = toggle.getAttribute("data-orivis-refresh-pause") || "Pause refresh";
+    let resumeText = toggle.getAttribute("data-orivis-refresh-resume") || "Resume refresh";
     toggle.textContent = paused ? resumeText : pauseText;
     toggle.setAttribute("aria-pressed", paused ? "true" : "false");
     toggle.classList.toggle("is-paused", paused);
   }
 
   function bindRefreshToggle(scope) {
-    var toggle = getRefreshToggle(scope);
+    let toggle = getRefreshToggle(scope);
     if (!toggle || toggle.__orivis_refresh_bound__) {
       updateRefreshPausedUI(scope, readRefreshPaused());
       return;
@@ -553,7 +553,7 @@
     toggle.__orivis_refresh_bound__ = true;
     updateRefreshPausedUI(scope, readRefreshPaused());
     toggle.addEventListener("click", function () {
-      var next = !readRefreshPaused();
+      let next = !readRefreshPaused();
       writeRefreshPaused(next);
       updateRefreshPausedUI(scope, next);
     });
@@ -563,21 +563,21 @@
     if (!node || typeof targetText !== "string") {
       return;
     }
-    var target = parseInt(targetText.replace(/[^\d-]/g, ""), 10);
+    let target = parseInt(targetText.replace(/[^\d-]/g, ""), 10);
     if (!target && target !== 0) {
       return;
     }
 
-    var from = 0;
-    var start = null;
-    var duration = 420;
-    var durationMs = Math.min(Math.max(Math.abs(target), 0), 1600);
+    let from = 0;
+    let start = null;
+    let duration = 420;
+    let durationMs = Math.min(Math.max(Math.abs(target), 0), 1600);
     function tick(timestamp) {
       if (!start) {
         start = timestamp;
       }
-      var ratio = Math.min(1, (timestamp - start) / (duration + durationMs));
-      var current = Math.round(from + (target - from) * ratio);
+      let ratio = Math.min(1, (timestamp - start) / (duration + durationMs));
+      let current = Math.round(from + (target - from) * ratio);
       node.textContent = String(current);
       if (ratio < 1) {
         requestAnimationFrame(tick);
@@ -590,8 +590,8 @@
   }
 
   function animateMonitorCards(cards) {
-    var i = 0;
-    var total = cards && cards.length ? cards.length : 0;
+    let i = 0;
+    let total = cards && cards.length ? cards.length : 0;
     if (total > MAX_ANIMATION_CARD_COUNT) {
       total = MAX_ANIMATION_CARD_COUNT;
     }
@@ -607,7 +607,7 @@
   }
 
   function isInteractiveTarget(target, card) {
-    var node = target;
+    let node = target;
     while (node && node !== card) {
       if (node.matches && node.matches(CARD_INTERACTIVE_SELECTOR)) {
         return true;
@@ -621,7 +621,7 @@
     if (!card) {
       return;
     }
-    var url = card.getAttribute("data-monitor-url");
+    let url = card.getAttribute("data-monitor-url");
     if (!url) {
       return;
     }
@@ -636,7 +636,7 @@
   }
 
   function bindMonitorCardNavigation(scope) {
-    var cards = scope.querySelectorAll("[data-monitor-card][data-monitor-url]");
+    let cards = scope.querySelectorAll("[data-monitor-card][data-monitor-url]");
     Array.prototype.forEach.call(cards, function (card) {
       if (card.__orivis_card_nav_bound__) {
         return;
@@ -666,11 +666,11 @@
   }
 
   function tooltipNode() {
-    var existing = document.querySelector("[data-orivis-floating-tooltip]");
+    let existing = document.querySelector("[data-orivis-floating-tooltip]");
     if (existing) {
       return existing;
     }
-    var node = document.createElement("div");
+    let node = document.createElement("div");
     node.className = "orivis-floating-tooltip";
     node.setAttribute("data-orivis-floating-tooltip", "");
     node.setAttribute("role", "tooltip");
@@ -680,21 +680,21 @@
   }
 
   function setTooltipPosition(node, x, y) {
-    var left = x + TOOLTIP_OFFSET;
-    var top = y - TOOLTIP_OFFSET;
-    var rect = node.getBoundingClientRect();
-    var maxLeft = window.innerWidth - rect.width - 12;
-    var maxTop = window.innerHeight - rect.height - 12;
+    let left = x + TOOLTIP_OFFSET;
+    let top = y - TOOLTIP_OFFSET;
+    let rect = node.getBoundingClientRect();
+    let maxLeft = window.innerWidth - rect.width - 12;
+    let maxTop = window.innerHeight - rect.height - 12;
     node.style.left = Math.max(12, Math.min(left, maxLeft)) + "px";
     node.style.top = Math.max(12, Math.min(top, maxTop)) + "px";
   }
 
   function showTooltip(target, event) {
-    var text = target.getAttribute("data-orivis-tooltip") || target.getAttribute("title") || "";
+    let text = target.getAttribute("data-orivis-tooltip") || target.getAttribute("title") || "";
     if (!text) {
       return;
     }
-    var node = tooltipNode();
+    let node = tooltipNode();
     node.textContent = text;
     node.classList.add("is-visible");
     node.setAttribute("aria-hidden", "false");
@@ -702,7 +702,7 @@
   }
 
   function hideTooltip() {
-    var node = document.querySelector("[data-orivis-floating-tooltip]");
+    let node = document.querySelector("[data-orivis-floating-tooltip]");
     if (!node) {
       return;
     }
@@ -711,12 +711,12 @@
   }
 
   function bindStatusLightTooltips(scope) {
-    var lights = scope.querySelectorAll(".orivis-status-light");
+    let lights = scope.querySelectorAll(".orivis-status-light");
     Array.prototype.forEach.call(lights, function (light) {
       if (light.__orivis_tooltip_bound__) {
         return;
       }
-      var title = light.getAttribute("title");
+      let title = light.getAttribute("title");
       if (title) {
         light.setAttribute("data-orivis-tooltip", title);
         light.setAttribute("aria-label", title);
@@ -733,14 +733,14 @@
         showTooltip(light, event);
       });
       light.addEventListener("pointermove", function (event) {
-        var node = tooltipNode();
+        let node = tooltipNode();
         if (node.classList.contains("is-visible")) {
           setTooltipPosition(node, event.clientX, event.clientY);
         }
       });
       light.addEventListener("pointerleave", hideTooltip);
       light.addEventListener("focus", function () {
-        var rect = light.getBoundingClientRect();
+        let rect = light.getBoundingClientRect();
         showTooltip(light, { clientX: rect.left + rect.width / 2, clientY: rect.top });
       });
       light.addEventListener("blur", hideTooltip);
@@ -756,21 +756,21 @@
       return;
     }
 
-    var summary = scope.querySelector("#orivis-monitor-filter-summary");
+    let summary = scope.querySelector("#orivis-monitor-filter-summary");
     if (!summary) {
       return;
     }
 
-    var query = normalize(state.q || "");
-    var filters = [];
+    let query = normalize(state.q || "");
+    let filters = [];
     if (query.length > 0) {
       filters.push("Keyword: " + state.q);
     }
 
-    var selectedStatuses = normalizeStatusFilters(state);
+    let selectedStatuses = normalizeStatusFilters(state);
     if (selectedStatuses.length > 0) {
-      var labeled = [];
-      for (var i = 0; i < selectedStatuses.length; i++) {
+      let labeled = [];
+      for (let i = 0; i < selectedStatuses.length; i++) {
         labeled.push(statusFilterLabel[selectedStatuses[i]] || selectedStatuses[i]);
       }
       filters.push("Status: " + labeled.join(", "));
@@ -794,28 +794,28 @@
       return;
     }
 
-    var root = getMonitorRoot(scope);
+    let root = getMonitorRoot(scope);
     if (!root) {
       return;
     }
 
-    var grid = root.querySelector(".orivis-monitor-grid");
+    let grid = root.querySelector(".orivis-monitor-grid");
     if (!grid) {
       return;
     }
 
-    var cards = collectCards(grid);
+    let cards = collectCards(grid);
     if (cards.length === 0) {
       setCountText(scope, 0, 0);
       showOrHideEmptyState(scope, root, 0, 0);
       return;
     }
 
-    var query = normalize(state.q);
-    var visibleCards = [];
-    var hiddenCards = [];
-    for (var i = 0; i < cards.length; i++) {
-      var card = cards[i];
+    let query = normalize(state.q);
+    let visibleCards = [];
+    let hiddenCards = [];
+    for (let i = 0; i < cards.length; i++) {
+      let card = cards[i];
       if (matchCard(card, state, query)) {
         card.classList.remove("is-hidden");
         visibleCards.push(card);
@@ -833,7 +833,7 @@
       grid.appendChild(hiddenCards[i]);
     }
 
-    var total = Number(root.getAttribute("data-monitor-total") || cards.length || "0");
+    let total = Number(root.getAttribute("data-monitor-total") || cards.length || "0");
     setCountText(scope, total, visibleCards.length);
 
     updateChipState(scope, state);
@@ -852,12 +852,12 @@
   function resetFilterUI(scope, state) {
     state.q = "";
     state.s = {};
-    var searchInput = scope.querySelector("#orivis-monitor-search");
+    let searchInput = scope.querySelector("#orivis-monitor-search");
     if (searchInput) {
       searchInput.value = "";
     }
 
-    var sortSelect = scope.querySelector("#orivis-monitor-sort");
+    let sortSelect = scope.querySelector("#orivis-monitor-sort");
     if (sortSelect) {
       sortSelect.value = DEFAULT_SORT;
       state.sort = DEFAULT_SORT;
@@ -869,7 +869,7 @@
       return;
     }
 
-    var clearButton = scope.querySelector("#orivis-clear-filters");
+    let clearButton = scope.querySelector("#orivis-clear-filters");
     if (!clearButton) {
       return;
     }
@@ -896,12 +896,12 @@
     }
     scope.__orivis_monitor_bound__ = true;
 
-    var root = scope.querySelector("[data-orivis-monitor-root]");
+    let root = scope.querySelector("[data-orivis-monitor-root]");
     if (!root) {
       return;
     }
 
-    var state = readPersistedState(window.location.pathname);
+    let state = readPersistedState(window.location.pathname);
     if (!state.at || Date.now() - Number(state.at || 0) > STORAGE_TTL) {
       state = {
         q: "",
@@ -910,11 +910,11 @@
       };
     }
 
-    var chips = scope.querySelectorAll("[data-status-filter]");
-    var searchInput = scope.querySelector("#orivis-monitor-search");
-    var sortSelect = scope.querySelector("#orivis-monitor-sort");
-    var clearButton = scope.querySelector("#orivis-clear-filters");
-    var filterTimer = 0;
+    let chips = scope.querySelectorAll("[data-status-filter]");
+    let searchInput = scope.querySelector("#orivis-monitor-search");
+    let sortSelect = scope.querySelector("#orivis-monitor-sort");
+    let clearButton = scope.querySelector("#orivis-clear-filters");
+    let filterTimer = 0;
 
     function scheduleApply(animate) {
       if (filterTimer) {
@@ -947,7 +947,7 @@
 
     Array.prototype.forEach.call(chips, function (chip) {
       chip.addEventListener("click", function () {
-        var value = normalize(chip.getAttribute("data-status-filter") || "all");
+        let value = normalize(chip.getAttribute("data-status-filter") || "all");
         if (value === "all") {
           state.s = {};
         } else {
@@ -1001,7 +1001,7 @@
     ensureBound(document);
   });
   document.addEventListener("htmx:afterSwap", function (event) {
-    var target = event && event.detail && event.detail.target ? event.detail.target : null;
+    let target = event && event.detail && event.detail.target ? event.detail.target : null;
     if (!target) {
       return;
     }
@@ -1028,7 +1028,7 @@
     setRefreshState(event.detail.target, false);
   });
   document.addEventListener("htmx:afterSettle", function (event) {
-    var target = event && event.detail && event.detail.target ? event.detail.target : null;
+    let target = event && event.detail && event.detail.target ? event.detail.target : null;
     if (!target) {
       return;
     }
@@ -1038,15 +1038,15 @@
   });
 
   document.addEventListener("htmx:responseError", function (event) {
-    var detail = event.detail || {};
-    var target = detail.target;
+    let detail = event.detail || {};
+    let target = detail.target;
     if (!target) {
       return;
     }
     setRefreshState(target, false);
 
-    var status = detail.xhr && detail.xhr.status ? " (" + detail.xhr.status + ")" : "";
-    var alert = document.createElement("div");
+    let status = detail.xhr && detail.xhr.status ? " (" + detail.xhr.status + ")" : "";
+    let alert = document.createElement("div");
     alert.className =
       "orivis-hx-error rounded-xl px-4 py-3 text-center text-sm font-medium shadow-sm";
     alert.setAttribute("role", "alert");
@@ -1063,8 +1063,8 @@
   "use strict";
 
   function bindPasswordToggles(scope) {
-    var root = scope || document;
-    var toggles = root.querySelectorAll("[data-orivis-password-toggle]");
+    let root = scope || document;
+    let toggles = root.querySelectorAll("[data-orivis-password-toggle]");
 
     toggles.forEach(function (toggle) {
       if (toggle.dataset.orivisBound === "true") {
@@ -1073,15 +1073,15 @@
 
       toggle.dataset.orivisBound = "true";
       toggle.addEventListener("click", function () {
-        var field = toggle.closest(".orivis-password-field");
-        var input = field ? field.querySelector("input") : null;
+        let field = toggle.closest(".orivis-password-field");
+        let input = field ? field.querySelector("input") : null;
 
         if (!input) {
           return;
         }
 
-        var isHidden = input.type === "password";
-        var label = isHidden ? toggle.dataset.orivisPasswordHide : toggle.dataset.orivisPasswordShow;
+        let isHidden = input.type === "password";
+        let label = isHidden ? toggle.dataset.orivisPasswordHide : toggle.dataset.orivisPasswordShow;
 
         input.type = isHidden ? "text" : "password";
         toggle.textContent = label;
@@ -1101,3 +1101,119 @@
   bindPasswordToggles(document);
 }());
 
+
+(function () {
+  "use strict";
+
+  const POINTER_SELECTOR = ".orivis-command-center, .orivis-public-header, .orivis-control-panel, .orivis-panel, .orivis-monitor-card, .orivis-metric-card";
+
+  function bindPointerLight(scope) {
+    let root = scope || document;
+    let nodes = root.querySelectorAll ? root.querySelectorAll(POINTER_SELECTOR) : [];
+    Array.prototype.forEach.call(nodes, function (node) {
+      if (node.__orivis_pointer_light_bound__) {
+        return;
+      }
+      node.__orivis_pointer_light_bound__ = true;
+      node.addEventListener("pointermove", function (event) {
+        let rect = node.getBoundingClientRect();
+        if (!rect.width || !rect.height) {
+          return;
+        }
+        let x = ((event.clientX - rect.left) / rect.width) * 100;
+        let y = ((event.clientY - rect.top) / rect.height) * 100;
+        node.style.setProperty("--orivis-pointer-x", x.toFixed(2) + "%");
+        node.style.setProperty("--orivis-pointer-y", y.toFixed(2) + "%");
+      });
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      bindPointerLight(document);
+    });
+  } else {
+    bindPointerLight(document);
+  }
+
+  document.addEventListener("htmx:afterSwap", function (event) {
+    let target = event && event.detail && event.detail.target ? event.detail.target : document;
+    bindPointerLight(target);
+  });
+}());
+
+(() => {
+  "use strict";
+
+  const PRESSABLE_SELECTOR = "button, a, [role='button'], [data-monitor-card]";
+  const PRESSING_CLASS = "is-pressing";
+  const THEME_MODES = ["system", "light", "dark"];
+
+  const pressableNodes = scope => Array.from((scope || document).querySelectorAll(PRESSABLE_SELECTOR));
+  const normalizeThemeMode = mode => THEME_MODES.includes(mode) ? mode : "system";
+
+  const clearPressing = element => {
+    element.classList.remove(PRESSING_CLASS);
+  };
+
+  const setPressing = element => {
+    element.classList.add(PRESSING_CLASS);
+  };
+
+  const bindPressStates = scope => {
+    for (const element of pressableNodes(scope)) {
+      if (element.dataset.orivisPressBound === "true") {
+        continue;
+      }
+      element.dataset.orivisPressBound = "true";
+      element.addEventListener("pointerdown", () => setPressing(element));
+      element.addEventListener("pointerup", () => clearPressing(element));
+      element.addEventListener("pointercancel", () => clearPressing(element));
+      element.addEventListener("pointerleave", () => clearPressing(element));
+      element.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          setPressing(element);
+        }
+      });
+      element.addEventListener("keyup", () => clearPressing(element));
+      element.addEventListener("blur", () => clearPressing(element));
+    }
+  };
+
+  const cycleThemeMode = () => {
+    const root = document.documentElement;
+    const current = normalizeThemeMode(root.getAttribute("data-orivis-theme"));
+    const next = THEME_MODES[(THEME_MODES.indexOf(current) + 1) % THEME_MODES.length];
+    const control = document.querySelector(`[data-orivis-theme-option="${next}"]`);
+    control?.click();
+  };
+
+  const bindThemeShortcut = () => {
+    if (document.documentElement.dataset.orivisThemeShortcutBound === "true") {
+      return;
+    }
+    document.documentElement.dataset.orivisThemeShortcutBound = "true";
+    document.addEventListener("keydown", event => {
+      if (event.defaultPrevented || !event.altKey || !event.shiftKey || event.key.toLowerCase() !== "t") {
+        return;
+      }
+      event.preventDefault();
+      cycleThemeMode();
+    });
+  };
+
+  const bindInteractions = scope => {
+    bindPressStates(scope || document);
+    bindThemeShortcut();
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => bindInteractions(document));
+  } else {
+    bindInteractions(document);
+  }
+
+  document.addEventListener("htmx:afterSwap", event => {
+    bindInteractions(event.detail?.target || document);
+  });
+})();

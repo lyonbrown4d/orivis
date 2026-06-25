@@ -1,0 +1,119 @@
+:where(a, button, input, select, textarea, summary, [role="button"], [data-monitor-card]) {
+  touch-action: manipulation;
+}
+
+:where(a, button, input, select, textarea, summary, [role="button"], [data-monitor-card]):focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 4px var(--orivis-focus-ring), var(--orivis-shadow-hover);
+}
+
+.orivis-interactive,
+.orivis-btn,
+.orivis-filter-chip,
+.orivis-refresh-toggle,
+.orivis-theme-option,
+.orivis-monitor-card[data-monitor-url],
+.orivis-group-item,
+.orivis-nav-item {
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.orivis-btn.is-pressing,
+.orivis-filter-chip.is-pressing,
+.orivis-refresh-toggle.is-pressing,
+.orivis-theme-option.is-pressing,
+.orivis-monitor-card.is-pressing,
+.orivis-group-item.is-pressing,
+.orivis-nav-item.is-pressing {
+  transform: translateY(0) scale(0.992);
+}
+
+.orivis-monitor-card:focus-within {
+  border-color: color-mix(in srgb, var(--orivis-accent) 42%, var(--orivis-line));
+}
+
+.orivis-theme-switch {
+  position: relative;
+  overflow: hidden;
+}
+
+.orivis-theme-switch::before {
+  content: "";
+  position: absolute;
+  inset: 0.18rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(14, 165, 233, 0.08));
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.orivis-theme-switch:hover::before,
+.orivis-theme-switch:focus-within::before {
+  opacity: 1;
+}
+
+.orivis-theme-option {
+  position: relative;
+  z-index: 1;
+}
+
+.orivis-filter-chip[aria-pressed="true"],
+.orivis-theme-option[aria-pressed="true"] {
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+html[data-orivis-effective-theme="dark"] .orivis-filter-chip[aria-pressed="true"],
+html[data-orivis-effective-theme="dark"] .orivis-theme-option[aria-pressed="true"] {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.orivis-light-track {
+  contain: paint;
+}
+
+.orivis-status-light {
+  will-change: transform, filter;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .orivis-status-light:hover {
+    transform: scaleY(1.22);
+  }
+
+  .orivis-nav-item:hover,
+  .orivis-group-item:hover {
+    border-color: color-mix(in srgb, var(--orivis-accent) 24%, var(--orivis-line));
+  }
+}
+
+@media (hover: none) {
+  .orivis-status-light:hover {
+    transform: none;
+  }
+}
+
+.orivis-refresh-indicator.is-refreshing::before {
+  border-top-color: var(--orivis-accent);
+}
+
+.orivis-refresh-indicator.is-paused::before {
+  border-color: color-mix(in srgb, var(--orivis-warning) 40%, var(--orivis-line));
+  border-top-color: var(--orivis-warning);
+}
+
+.orivis-hx-error {
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orivis-btn.is-pressing,
+  .orivis-filter-chip.is-pressing,
+  .orivis-refresh-toggle.is-pressing,
+  .orivis-theme-option.is-pressing,
+  .orivis-monitor-card.is-pressing,
+  .orivis-group-item.is-pressing,
+  .orivis-nav-item.is-pressing {
+    transform: none;
+  }
+}
