@@ -125,31 +125,26 @@ func (e *agentEndpoint) syncMonitors(ctx context.Context, input *agentMonitorSyn
 }
 
 func (e *agentEndpoint) syncAgentMonitors(ctx context.Context, agent model.Agent, monitors []protocol.AgentDiscoveredMonitor) (int, error) {
-	monitorIDs, err := collectionlist.ReduceErrList(
-		collectionlist.NewList(monitors...),
-		[]string{},
-		func(ids []string, _ int, monitor protocol.AgentDiscoveredMonitor) ([]string, error) {
-			monitorID, err := e.syncAgentMonitor(ctx, agent, monitor)
-			if err != nil {
-				return nil, err
-			}
-			return append(ids, monitorID), nil
-		},
-	)
-	if err != nil {
-		return 0, fmt.Errorf("sync agent monitors: %w", err)
-	}
-
-	if len(monitorIDs) > 0 {
-		if err := e.store.MonitorStore().AssignMonitors(ctx, monitorIDs); err != nil {
-			return 0, fmt.Errorf("assign monitors: %w", err)
+	monitorIDs := collectionlist.NewListWithCapacity[string](len(monitors))
+	for i := range monitors {
+		monitorID, syncErr := e.syncAgentMonitor(ctx, agent, &monitors[i])
+		if syncErr != nil {
+			return 0, fmt.Errorf("sync agent monitors: %w", syncErr)
 		}
+		monitorIDs.Add(monitorID)
 	}
 
-	return len(monitorIDs), nil
+	if monitorIDs.Len() == 0 {
+		return 0, nil
+	}
+
+	if err := e.store.MonitorStore().AssignMonitors(ctx, monitorIDs.Values()); err != nil {
+		return 0, fmt.Errorf("assign monitors: %w", err)
+	}
+	return monitorIDs.Len(), nil
 }
 
-func (e *agentEndpoint) syncAgentMonitor(ctx context.Context, agent model.Agent, discovered protocol.AgentDiscoveredMonitor) (string, error) {
+func (e *agentEndpoint) syncAgentMonitor(ctx context.Context, agent model.Agent, discovered *protocol.AgentDiscoveredMonitor) (string, error) {
 	environmentID, err := e.store.EnvironmentIDForAgent(ctx, agent, discovered.EnvironmentCode)
 	if err != nil {
 		return "", fmt.Errorf("resolve discovered monitor environment: %w", err)

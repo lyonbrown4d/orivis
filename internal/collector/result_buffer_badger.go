@@ -13,6 +13,7 @@ import (
 	"github.com/arcgolabs/storx/codec"
 	"github.com/arcgolabs/storx/keycodec"
 	"github.com/dgraph-io/badger/v4"
+	config "github.com/lyonbrown4d/orivis/internal/agentconfig"
 	"github.com/lyonbrown4d/orivis/internal/protocol"
 	"github.com/samber/oops"
 )
@@ -23,7 +24,15 @@ const (
 	resultBufferCompactionDiscardRate = 0.5
 )
 
+var (
+	ErrResultBufferClosed          = errors.New("result buffer is closed")
+	ErrResultBufferContextRequired = errors.New("result buffer operation context is required")
+)
+
+var errResultBufferPathRequired = errors.New("result buffer path is required")
+
 type badgerResultBuffer struct {
+	closed             bool
 	mu                 sync.Mutex
 	compactMu          sync.Mutex
 	max                int
@@ -43,7 +52,7 @@ func NewPersistentResultBuffer(path string, capacity int) (*badgerResultBuffer, 
 
 func newPersistentResultBuffer(ctx context.Context, path string, capacity int) (*badgerResultBuffer, error) {
 	if path == "" {
-		return nil, fmt.Errorf("%w: result buffer path is required", oops.New("invalid buffer config"))
+		return nil, oops.Wrapf(errResultBufferPathRequired, "new persistent result buffer")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil && filepath.Dir(path) != "." {
 		return nil, oops.Wrapf(err, "create result buffer directory")
@@ -62,6 +71,9 @@ func newMemoryBadgerResultBuffer(ctx context.Context, capacity int) (*badgerResu
 }
 
 func newBadgerResultBuffer(ctx context.Context, options badger.Options, path string, capacity int) (*badgerResultBuffer, error) {
+	if ctx == nil {
+		return nil, oops.Wrapf(ErrResultBufferContextRequired, "new badger result buffer")
+	}
 	if capacity < 0 {
 		capacity = 0
 	}
@@ -222,4 +234,53 @@ func seedBadgerResultBuffer(
 		next = tail[0] + 1
 	}
 	return len(keys), next, nil
+}
+
+func (c *RuntimeController) watchConfigChanges(ctx context.Context, runSeq uint64) {
+	c.watcher.OnChange(func(cfg config.Config, watcherErr error) {
+		if watcherErr != nil {
+			c.logger.Warn("agent config reload failed", "error", watcherErr)
+			return
+		}
+		if !c.isActive(runSeq) {
+			return
+		}
+		go func(cfg config.Config) {
+			if err := c.reload(ctx, runSeq, cfg); err != nil {
+				c.logger.Warn("restart agent runtime failed; keeping previous runtime", "error", err)
+			}
+		}(cfg)
+	})
+}
+
+func (c *RuntimeController) beginRuntimeStart(cancel context.CancelFunc) (uint64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.started {
+		return 0, false
+	}
+	c.started = true
+	c.runSeq++
+	runSeq := c.runSeq
+	c.cancel = cancel
+	return runSeq, true
+}
+
+func (c *RuntimeController) rollbackRuntimeStart(runSeq uint64, cancel context.CancelFunc) {
+	c.mu.Lock()
+	if c.started && c.runSeq == runSeq {
+		c.started = false
+		c.cancel = nil
+		c.runSeq++
+	}
+	c.mu.Unlock()
+	cancel()
+}
+
+func (c *RuntimeController) isActive(runSeq uint64) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return c.started && c.runSeq == runSeq
 }

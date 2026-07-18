@@ -24,8 +24,15 @@ type RuntimeController struct {
 
 	mu      sync.Mutex
 	cancel  context.CancelFunc
+	started bool
+	runSeq  uint64
 	runtime *runtimeInstance
 }
+
+var (
+	errRuntimeControllerStartContextRequired = errors.New("runtime controller start context is required")
+	errRuntimeControllerStopContextRequired  = errors.New("runtime controller stop context is required")
+)
 
 type runtimeInstance struct {
 	client    *agentclient.Client
@@ -95,40 +102,56 @@ func normalizeRuntimeControllerDeps(
 }
 
 func (c *RuntimeController) Start(ctx context.Context) error {
-	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	c.cancel = cancel
+	if ctx == nil {
+		return oops.Wrapf(errRuntimeControllerStartContextRequired, "start runtime controller")
+	}
 
-	if err := c.reload(runCtx, c.watcher.Config()); err != nil {
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	runSeq, shouldStart := c.beginRuntimeStart(cancel)
+	if !shouldStart {
 		cancel()
+		return nil
+	}
+
+	if err := c.reload(runCtx, runSeq, c.watcher.Config()); err != nil {
+		c.rollbackRuntimeStart(runSeq, cancel)
 		return err
 	}
 
-	c.watcher.OnChange(func(cfg config.Config, err error) {
-		if err != nil {
-			c.logger.Warn("agent config reload failed", "error", err)
-			return
-		}
-		go c.handleConfigChange(runCtx, cfg)
-	})
+	c.watchConfigChanges(runCtx, runSeq)
 
 	go c.watch(runCtx)
 	return nil
 }
 
 func (c *RuntimeController) Stop(ctx context.Context) error {
-	if c.cancel != nil {
-		c.cancel()
+	if ctx == nil {
+		return oops.Wrapf(errRuntimeControllerStopContextRequired, "stop runtime controller")
 	}
+
+	c.mu.Lock()
+	runtime := c.runtime
+	cancel := c.cancel
+	c.cancel = nil
+	c.started = false
+	c.runSeq++
+	c.runtime = nil
+	c.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+
+	if runtime == nil {
+		if err := c.watcher.Close(); err != nil {
+			c.logger.Warn("close agent config watcher failed", "error", err)
+		}
+		return nil
+	}
+
 	if err := c.watcher.Close(); err != nil {
 		c.logger.Warn("close agent config watcher failed", "error", err)
 	}
-	return c.stopRuntime(ctx)
-}
-
-func (c *RuntimeController) handleConfigChange(ctx context.Context, cfg config.Config) {
-	if err := c.reload(ctx, cfg); err != nil {
-		c.logger.Warn("restart agent runtime failed; keeping previous runtime", "error", err)
-	}
+	return runtime.close(ctx)
 }
 
 func (c *RuntimeController) watch(ctx context.Context) {
@@ -137,35 +160,65 @@ func (c *RuntimeController) watch(ctx context.Context) {
 	}
 }
 
-func (c *RuntimeController) reload(ctx context.Context, cfg config.Config) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("agent runtime context stopped: %w", err)
+func (c *RuntimeController) reload(ctx context.Context, runSeq uint64, cfg config.Config) error {
+	if !c.isActive(runSeq) {
+		return nil
 	}
+	if err := c.ctxErr(ctx); err != nil {
+		return err
+	}
+	return c.startRuntime(ctx, runSeq, cfg)
+}
 
+func (c *RuntimeController) startRuntime(ctx context.Context, runSeq uint64, cfg config.Config) error {
 	next, err := c.buildRuntime(ctx, cfg)
 	if err != nil {
 		return err
 	}
 	if err := next.runner.Start(ctx); err != nil {
-		if closeErr := next.close(ctx); closeErr != nil {
-			return errors.Join(err, closeErr)
-		}
-		return err
+		return c.closeRuntimeOnStartFailure(ctx, next, err)
 	}
+	return c.activateRuntime(ctx, runSeq, cfg.Agent.Name, next)
+}
 
-	previous := c.runtime
-	c.runtime = next
+func (c *RuntimeController) closeRuntimeOnStartFailure(ctx context.Context, runtime *runtimeInstance, startErr error) error {
+	if closeErr := runtime.close(ctx); closeErr != nil {
+		return errors.Join(startErr, closeErr)
+	}
+	return startErr
+}
+
+func (c *RuntimeController) activateRuntime(ctx context.Context, runSeq uint64, agentName string, next *runtimeInstance) error {
+	previous, active := c.swapRuntime(runSeq, next)
+	if !active {
+		return next.close(ctx)
+	}
 
 	if previous != nil {
 		if err := previous.close(ctx); err != nil {
 			c.logger.Warn("close previous agent runtime failed", "error", err)
 		}
 	}
+	c.logger.Info("agent runtime started", "agent", agentName, "server_url", next.serverURL)
+	return nil
+}
 
-	c.logger.Info("agent runtime started", "agent", cfg.Agent.Name, "server_url", next.serverURL)
+func (c *RuntimeController) swapRuntime(runSeq uint64, next *runtimeInstance) (*runtimeInstance, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if !c.started || c.runSeq != runSeq {
+		return nil, false
+	}
+	previous := c.runtime
+	c.runtime = next
+	return previous, true
+}
+
+func (c *RuntimeController) ctxErr(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("agent runtime context stopped: %w", err)
+	}
 	return nil
 }
 
@@ -216,18 +269,6 @@ func (c *RuntimeController) resolveServerEndpoint(ctx context.Context, cfg confi
 		return servicediscovery.ServerEndpoint{}, fmt.Errorf("resolve server URL: %w", err)
 	}
 	return endpoint, nil
-}
-
-func (c *RuntimeController) stopRuntime(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.runtime == nil {
-		return nil
-	}
-	runtime := c.runtime
-	c.runtime = nil
-	return runtime.close(ctx)
 }
 
 func (r *runtimeInstance) close(ctx context.Context) error {

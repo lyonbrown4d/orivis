@@ -46,6 +46,15 @@ func dashboardMonitorViews(
 	)
 }
 
+func dashboardMonitorNames(snapshot store.DashboardSnapshot) *collectionmapping.Map[string, string] {
+	return collectionmapping.AssociateList(
+		collectionlist.NewList(snapshot.Monitors...),
+		func(_ int, monitor store.DashboardMonitor) (string, string) {
+			return monitor.ID, monitor.Name
+		},
+	)
+}
+
 func dashboardFilteredSnapshot(snapshot store.DashboardSnapshot, groupSlug string) store.DashboardSnapshot {
 	groupSlug = strings.TrimSpace(groupSlug)
 	if groupSlug == "" {
@@ -129,16 +138,10 @@ func writeDashboardGroupSlugRune(builder *strings.Builder, item rune, lastDash b
 	}
 }
 
-func dashboardResults(snapshot store.DashboardSnapshot, limit int) *collectionlist.List[dashboardResultView] {
-	monitorNames := collectionmapping.AssociateList(
-		collectionlist.NewList(snapshot.Monitors...),
-		func(_ int, monitor store.DashboardMonitor) (string, string) {
-			return monitor.ID, monitor.Name
-		},
-	)
-
-	results := collectionlist.MapList(
+func dashboardResultsFromMonitorNames(snapshot store.DashboardSnapshot, limit int, monitorNames *collectionmapping.Map[string, string]) *collectionlist.List[dashboardResultView] {
+	return dashboardMappedViews(
 		collectionlist.NewList(snapshot.Results...),
+		limit,
 		func(_ int, result store.DashboardResult) dashboardResultView {
 			return dashboardResultView{
 				DashboardResult: result,
@@ -146,23 +149,12 @@ func dashboardResults(snapshot store.DashboardSnapshot, limit int) *collectionli
 			}
 		},
 	)
-	if limit > 0 && results.Len() > limit {
-		return collectionlist.FilterMapList(results, func(index int, result dashboardResultView) (dashboardResultView, bool) {
-			return result, index < limit
-		})
-	}
-	return results
 }
 
-func dashboardNotifications(snapshot store.DashboardSnapshot, limit int) *collectionlist.List[dashboardNotificationView] {
-	monitorNames := collectionmapping.AssociateList(
-		collectionlist.NewList(snapshot.Monitors...),
-		func(_ int, monitor store.DashboardMonitor) (string, string) {
-			return monitor.ID, monitor.Name
-		},
-	)
-	notifications := collectionlist.MapList(
+func dashboardNotificationsFromMonitorNames(snapshot store.DashboardSnapshot, limit int, monitorNames *collectionmapping.Map[string, string]) *collectionlist.List[dashboardNotificationView] {
+	return dashboardMappedViews(
 		collectionlist.NewList(snapshot.Notifications...),
+		limit,
 		func(_ int, notification store.DashboardNotification) dashboardNotificationView {
 			return dashboardNotificationView{
 				DashboardNotification: notification,
@@ -170,12 +162,20 @@ func dashboardNotifications(snapshot store.DashboardSnapshot, limit int) *collec
 			}
 		},
 	)
-	if limit > 0 && notifications.Len() > limit {
-		return collectionlist.FilterMapList(notifications, func(index int, notification dashboardNotificationView) (dashboardNotificationView, bool) {
-			return notification, index < limit
-		})
+}
+
+func dashboardMappedViews[Input any, Output any](
+	input *collectionlist.List[Input],
+	limit int,
+	mapper func(int, Input) Output,
+) *collectionlist.List[Output] {
+	mapped := collectionlist.MapList(input, mapper)
+	if limit <= 0 || mapped.Len() <= limit {
+		return mapped
 	}
-	return notifications
+	return collectionlist.FilterMapList(mapped, func(index int, item Output) (Output, bool) {
+		return item, index < limit
+	})
 }
 
 func dashboardDiscoverySource(sourceKey, fallback string) string {

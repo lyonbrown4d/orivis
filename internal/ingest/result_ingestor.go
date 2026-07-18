@@ -33,6 +33,7 @@ type ResultIngestor struct {
 	done          chan struct{}
 	startOnce     sync.Once
 	stopOnce      sync.Once
+	stopped       atomic.Bool
 	started       atomic.Bool
 }
 
@@ -112,13 +113,23 @@ func (i *ResultIngestor) Start(ctx context.Context) error {
 	if i == nil {
 		return nil
 	}
+	if i.stopped.Load() {
+		return wrapError(ErrClosed, "start result ingestor")
+	}
+
 	i.startOnce.Do(func() {
+		if i.stopped.Load() {
+			return
+		}
 		i.started.Store(true)
 		if i.logger != nil {
 			i.logger.Info("result ingestor started", "flush_interval", i.flushInterval, "batch_size", i.batchSize)
 		}
 		go i.run(ctx)
 	})
+	if i.stopped.Load() {
+		return wrapError(ErrClosed, "start result ingestor")
+	}
 	return nil
 }
 
@@ -126,8 +137,17 @@ func (i *ResultIngestor) Stop(ctx context.Context) error {
 	if i == nil {
 		return nil
 	}
+	if ctx == nil {
+		return wrapError(ErrResultIngestorContextRequired, "stop result ingestor")
+	}
+	if i.stopped.Swap(true) {
+		return nil
+	}
 	i.queue.close()
 	if !i.started.Load() {
+		if i.queue.len() == 0 {
+			return nil
+		}
 		return i.Flush(ctx)
 	}
 

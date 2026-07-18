@@ -11,14 +11,15 @@ import (
 
 func TestBadgerResultBufferPersistsFIFO(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "agent-buffer.badger")
+	ctx := context.Background()
 	buffer, err := collector.NewPersistentResultBuffer(path, 2)
 	if err != nil {
 		t.Fatalf("new persistent result buffer: %v", err)
 	}
 
-	assertPush(t, buffer, "first", false, 1)
-	assertPush(t, buffer, "second", false, 2)
-	assertPush(t, buffer, "third", true, 2)
+	assertPush(ctx, t, buffer, "first", false, 1)
+	assertPush(ctx, t, buffer, "second", false, 2)
+	assertPush(ctx, t, buffer, "third", true, 2)
 	if closeErr := buffer.Close(); closeErr != nil {
 		t.Fatalf("close badger result buffer: %v", closeErr)
 	}
@@ -32,13 +33,13 @@ func TestBadgerResultBufferPersistsFIFO(t *testing.T) {
 			t.Errorf("close reopened badger result buffer: %v", closeErr)
 		}
 	})
-	assertBufferedMonitor(t, reopened, "second")
-	assertBufferedBatch(t, reopened, []string{"second", "third"})
-	if err := reopened.Drop(); err != nil {
+	assertBufferedMonitor(ctx, t, reopened, "second")
+	assertBufferedBatch(ctx, t, reopened, []string{"second", "third"})
+	if err := reopened.Drop(ctx); err != nil {
 		t.Fatalf("drop second result: %v", err)
 	}
-	assertBufferedMonitor(t, reopened, "third")
-	if err := reopened.Drop(); err != nil {
+	assertBufferedMonitor(ctx, t, reopened, "third")
+	if err := reopened.Drop(ctx); err != nil {
 		t.Fatalf("drop third result: %v", err)
 	}
 	if reopened.Len() != 0 {
@@ -47,6 +48,7 @@ func TestBadgerResultBufferPersistsFIFO(t *testing.T) {
 }
 
 func TestBadgerMemoryResultBuffer(t *testing.T) {
+	ctx := context.Background()
 	buffer, err := collector.NewMemoryBadgerResultBuffer(2)
 	if err != nil {
 		t.Fatalf("new memory badger result buffer: %v", err)
@@ -57,12 +59,12 @@ func TestBadgerMemoryResultBuffer(t *testing.T) {
 		}
 	})
 
-	assertPush(t, buffer, "first", false, 1)
-	assertPush(t, buffer, "second", false, 2)
-	assertPush(t, buffer, "third", true, 2)
-	assertBufferedMonitor(t, buffer, "second")
-	assertBufferedBatch(t, buffer, []string{"second", "third"})
-	if err := buffer.DropBatch(2); err != nil {
+	assertPush(ctx, t, buffer, "first", false, 1)
+	assertPush(ctx, t, buffer, "second", false, 2)
+	assertPush(ctx, t, buffer, "third", true, 2)
+	assertBufferedMonitor(ctx, t, buffer, "second")
+	assertBufferedBatch(ctx, t, buffer, []string{"second", "third"})
+	if err := buffer.DropBatch(ctx, 2); err != nil {
 		t.Fatalf("drop memory badger result buffer batch: %v", err)
 	}
 	if buffer.Len() != 0 {
@@ -72,13 +74,14 @@ func TestBadgerMemoryResultBuffer(t *testing.T) {
 
 func TestBadgerResultBufferCapacityShrink(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "agent-buffer.badger")
+	ctx := context.Background()
 	buffer, err := collector.NewPersistentResultBuffer(path, 3)
 	if err != nil {
 		t.Fatalf("new persistent result buffer: %v", err)
 	}
-	assertPush(t, buffer, "first", false, 1)
-	assertPush(t, buffer, "second", false, 2)
-	assertPush(t, buffer, "third", false, 3)
+	assertPush(ctx, t, buffer, "first", false, 1)
+	assertPush(ctx, t, buffer, "second", false, 2)
+	assertPush(ctx, t, buffer, "third", false, 3)
 	if closeErr := buffer.Close(); closeErr != nil {
 		t.Fatalf("close badger result buffer: %v", closeErr)
 	}
@@ -92,8 +95,8 @@ func TestBadgerResultBufferCapacityShrink(t *testing.T) {
 			t.Errorf("close reopened badger result buffer: %v", closeErr)
 		}
 	})
-	assertPush(t, reopened, "fourth", true, 1)
-	assertBufferedBatch(t, reopened, []string{"fourth"})
+	assertPush(ctx, t, reopened, "fourth", true, 1)
+	assertBufferedBatch(ctx, t, reopened, []string{"fourth"})
 }
 
 func TestBadgerResultBufferCompactionThrottle(t *testing.T) {
@@ -112,7 +115,8 @@ func TestBadgerResultBufferCompactionThrottle(t *testing.T) {
 		Compact(context.Context) (bool, error)
 	} = buffer
 
-	attempted, err := compactable.Compact(context.Background())
+	ctx := context.Background()
+	attempted, err := compactable.Compact(ctx)
 	if err != nil {
 		t.Fatalf("compact badger result buffer: %v", err)
 	}
@@ -120,7 +124,7 @@ func TestBadgerResultBufferCompactionThrottle(t *testing.T) {
 		t.Fatalf("expected compacting attempt")
 	}
 
-	attempted, err = compactable.Compact(context.Background())
+	attempted, err = compactable.Compact(ctx)
 	if err != nil {
 		t.Fatalf("compact badger result buffer: %v", err)
 	}
@@ -144,7 +148,8 @@ func TestBadgerMemoryResultBufferCompactionNoError(t *testing.T) {
 		Compact(context.Context) (bool, error)
 	} = buffer
 
-	attempted, err := compactable.Compact(context.Background())
+	ctx := context.Background()
+	attempted, err := compactable.Compact(ctx)
 	if err != nil {
 		t.Fatalf("compact memory badger result buffer: %v", err)
 	}
@@ -153,9 +158,9 @@ func TestBadgerMemoryResultBufferCompactionNoError(t *testing.T) {
 	}
 }
 
-func assertPush(t *testing.T, buffer collector.ResultQueue, monitorID string, droppedOldest bool, size int) {
+func assertPush(ctx context.Context, t *testing.T, buffer collector.ResultQueue, monitorID string, droppedOldest bool, size int) {
 	t.Helper()
-	result := buffer.Push(bufferedResult(monitorID))
+	result := buffer.Push(ctx, bufferedResult(monitorID))
 	if result.Buffered() != true || result.DroppedOldest() != droppedOldest || result.Size() != size {
 		t.Fatalf("unexpected push result for %q: %#v", monitorID, result)
 	}
@@ -165,9 +170,9 @@ func bufferedResult(monitorID string) protocol.AgentResultRequest {
 	return protocol.AgentResultRequest{ResultID: "result-" + monitorID, MonitorID: monitorID, Status: "up"}
 }
 
-func assertBufferedMonitor(t *testing.T, buffer collector.ResultQueue, monitorID string) {
+func assertBufferedMonitor(ctx context.Context, t *testing.T, buffer collector.ResultQueue, monitorID string) {
 	t.Helper()
-	req, ok := buffer.Peek()
+	req, ok := buffer.Peek(ctx)
 	if !ok {
 		t.Fatalf("expected buffered result %q", monitorID)
 	}
@@ -176,9 +181,9 @@ func assertBufferedMonitor(t *testing.T, buffer collector.ResultQueue, monitorID
 	}
 }
 
-func assertBufferedBatch(t *testing.T, buffer collector.ResultQueue, monitorIDs []string) {
+func assertBufferedBatch(ctx context.Context, t *testing.T, buffer collector.ResultQueue, monitorIDs []string) {
 	t.Helper()
-	batch, err := buffer.PeekBatch(len(monitorIDs))
+	batch, err := buffer.PeekBatch(ctx, len(monitorIDs))
 	if err != nil {
 		t.Fatalf("peek buffered result batch: %v", err)
 	}

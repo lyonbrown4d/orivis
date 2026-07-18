@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	ErrQueueFull = newError("ingest: result queue is full")
-	ErrClosed    = newError("ingest: result ingestor is closed")
+	ErrQueueFull                     = newError("ingest: result queue is full")
+	ErrClosed                        = newError("ingest: result ingestor is closed")
+	ErrResultIngestorContextRequired = newError("ingest: result ingestor context is required")
 )
 
 func newError(message string) error {

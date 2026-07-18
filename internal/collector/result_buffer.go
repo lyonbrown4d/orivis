@@ -8,11 +8,11 @@ import (
 )
 
 type ResultQueue interface {
-	Push(req protocol.AgentResultRequest) ResultQueuePush
-	Peek() (protocol.AgentResultRequest, bool)
-	PeekBatch(limit int) ([]protocol.AgentResultRequest, error)
-	Drop() error
-	DropBatch(count int) error
+	Push(ctx context.Context, req protocol.AgentResultRequest) ResultQueuePush
+	Peek(ctx context.Context) (protocol.AgentResultRequest, bool)
+	PeekBatch(ctx context.Context, limit int) ([]protocol.AgentResultRequest, error)
+	Drop(ctx context.Context) error
+	DropBatch(ctx context.Context, count int) error
 	Len() int
 	Close() error
 }
@@ -56,23 +56,23 @@ func NewResultQueue(ctx context.Context, cfg config.Config) (ResultQueue, error)
 
 type noopResultQueue struct{}
 
-func (noopResultQueue) Push(protocol.AgentResultRequest) ResultQueuePush {
+func (noopResultQueue) Push(context.Context, protocol.AgentResultRequest) ResultQueuePush {
 	return ResultQueuePush{}
 }
 
-func (noopResultQueue) Peek() (protocol.AgentResultRequest, bool) {
+func (noopResultQueue) Peek(context.Context) (protocol.AgentResultRequest, bool) {
 	return protocol.AgentResultRequest{}, false
 }
 
-func (noopResultQueue) PeekBatch(int) ([]protocol.AgentResultRequest, error) {
+func (noopResultQueue) PeekBatch(context.Context, int) ([]protocol.AgentResultRequest, error) {
 	return nil, nil
 }
 
-func (noopResultQueue) Drop() error {
+func (noopResultQueue) Drop(context.Context) error {
 	return nil
 }
 
-func (noopResultQueue) DropBatch(int) error {
+func (noopResultQueue) DropBatch(context.Context, int) error {
 	return nil
 }
 

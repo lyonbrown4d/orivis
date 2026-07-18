@@ -63,7 +63,7 @@ func (r *Runner) queueResult(ctx context.Context, req protocol.AgentResultReques
 		return false
 	}
 
-	result := r.results.Push(req)
+	result := r.results.Push(ctx, req)
 	if result.err != nil {
 		r.logger.Warn("agent result buffer write failed", "monitor_id", req.MonitorID, "error", result.err)
 		return false
@@ -110,7 +110,7 @@ func (r *Runner) flushBufferedResults(ctx context.Context) {
 		return
 	}
 
-	batch, err := r.results.PeekBatch(resultFlushBatchSize(r.cfg.Buffer.FlushBatchSize, r.cfg.Buffer.Capacity))
+	batch, err := r.results.PeekBatch(ctx, resultFlushBatchSize(r.cfg.Buffer.FlushBatchSize, r.cfg.Buffer.Capacity))
 	if err != nil {
 		r.recordFlushFailure(ctx, now, "agent buffered result read failed", 0, err)
 		return
@@ -135,7 +135,7 @@ func (r *Runner) flushBufferedResults(ctx context.Context) {
 		r.recordFlushFailure(ctx, now, "agent buffered result batch flush failed", len(batch), err)
 		return
 	}
-	if err := r.results.DropBatch(len(batch)); err != nil {
+	if err := r.results.DropBatch(ctx, len(batch)); err != nil {
 		r.recordFlushFailure(ctx, now, "agent buffered result batch drop failed", len(batch), err)
 		return
 	}

@@ -22,6 +22,13 @@ import (
 )
 
 func OpenDB(cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
+	return OpenDBWithContext(context.Background(), cfg, logger)
+}
+
+func OpenDBWithContext(ctx context.Context, cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
+	if ctx == nil {
+		return nil, wrapError(ErrInvalidInput, "context is required")
+	}
 	driver := normalizeDBDriver(cfg.DB.Driver)
 	if driver == "" {
 		cfg.DB.Driver = "sqlite"
@@ -32,17 +39,17 @@ func OpenDB(cfg config.Config, logger *slog.Logger) (*dbx.DB, error) {
 		if strings.TrimSpace(cfg.DB.DSN) == "" {
 			cfg.DB.DSN = config.DefaultSQLiteDSN
 		}
-		return openDatabase(cfg, logger, "sqlite", sqlite.New(), true)
+		return openDatabaseWithContext(ctx, cfg, logger, "sqlite", sqlite.New(), true)
 	case "pgx":
-		return openDatabase(cfg, logger, "pgx", postgres.New(), false)
+		return openDatabaseWithContext(ctx, cfg, logger, "pgx", postgres.New(), false)
 	case "mysql":
-		return openDatabase(cfg, logger, "mysql", mysql.New(), false)
+		return openDatabaseWithContext(ctx, cfg, logger, "mysql", mysql.New(), false)
 	default:
 		return nil, newErrorf("unsupported database driver %q: supported drivers are sqlite, mysql, pgx", cfg.DB.Driver)
 	}
 }
 
-func openDatabase(cfg config.Config, logger *slog.Logger, driver string, d dialect.Dialect, forSQLite bool) (*dbx.DB, error) {
+func openDatabaseWithContext(ctx context.Context, cfg config.Config, logger *slog.Logger, driver string, d dialect.Dialect, forSQLite bool) (*dbx.DB, error) {
 	dsn := normalizeDatabaseDSN(driver, cfg.DB.DSN)
 	if strings.TrimSpace(dsn) == "" {
 		return nil, wrapError(ErrInvalidInput, "db.dsn is required")
@@ -64,7 +71,7 @@ func openDatabase(cfg config.Config, logger *slog.Logger, driver string, d diale
 	configureConnectionPool(database, cfg)
 	if forSQLite {
 		configureSQLiteConnection(database, dsn)
-		if err := configureSQLitePragmas(context.Background(), database, dsn, cfg.DB.BusyTimeout); err != nil {
+		if err := configureSQLitePragmas(ctx, database, dsn, cfg.DB.BusyTimeout); err != nil {
 			if closeErr := database.Close(); closeErr != nil {
 				return nil, errors.Join(err, wrapError(closeErr, "close database store"))
 			}

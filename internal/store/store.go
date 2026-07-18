@@ -23,18 +23,45 @@ type Store struct {
 }
 
 func Open(cfg config.Config, logger *slog.Logger) (*Store, error) {
-	database, err := OpenDB(cfg, logger)
+	return OpenWithContext(context.Background(), cfg, logger)
+}
+
+func OpenWithContext(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Store, error) {
+	if ctx == nil {
+		return nil, wrapError(ErrInvalidInput, "context is required")
+	}
+	database, err := OpenDBWithContext(ctx, cfg, logger)
 	if err != nil {
 		return nil, err
 	}
-	return NewWithDriver(database, normalizeDBDriver(cfg.DB.Driver), NewRepositories(database), NewIDGenerator(database))
+	return NewWithDriverWithContext(
+		ctx,
+		database,
+		normalizeDBDriver(cfg.DB.Driver),
+		NewRepositories(database),
+		NewIDGenerator(database),
+	)
 }
 
 func New(database *dbx.DB, repositories *Repositories, ids IDGenerator) (*Store, error) {
-	return NewWithDriver(database, "sqlite", repositories, ids)
+	return NewWithContext(context.Background(), database, repositories, ids)
+}
+
+func NewWithContext(ctx context.Context, database *dbx.DB, repositories *Repositories, ids IDGenerator) (*Store, error) {
+	if ctx == nil {
+		return nil, wrapError(ErrInvalidInput, "context is required")
+	}
+	return NewWithDriverWithContext(ctx, database, "sqlite", repositories, ids)
 }
 
 func NewWithDriver(database *dbx.DB, driver string, repositories *Repositories, ids IDGenerator) (*Store, error) {
+	return NewWithDriverWithContext(context.Background(), database, driver, repositories, ids)
+}
+
+func NewWithDriverWithContext(ctx context.Context, database *dbx.DB, driver string, repositories *Repositories, ids IDGenerator) (*Store, error) {
+	if ctx == nil {
+		return nil, wrapError(ErrInvalidInput, "context is required")
+	}
 	if database == nil {
 		return nil, wrapError(ErrInvalidInput, "db is required")
 	}
@@ -54,7 +81,7 @@ func NewWithDriver(database *dbx.DB, driver string, repositories *Repositories, 
 	storage.agents = &agentStore{repositories: repositories, ids: ids}
 	storage.monitors = &monitorStore{repositories: repositories, ids: ids, db: database}
 	storage.results = &resultStore{db: database, repositories: repositories, ids: ids}
-	if err := storage.Migrate(context.Background()); err != nil {
+	if err := storage.Migrate(ctx); err != nil {
 		if closeErr := database.Close(); closeErr != nil {
 			return nil, errors.Join(wrapError(err, "migrate store"), wrapError(closeErr, "close database"))
 		}

@@ -2,14 +2,25 @@ package collector
 
 import (
 	"context"
-	"fmt"
+	"errors"
+	"sync"
 	"time"
 
 	"github.com/go-co-op/gocron"
 	"github.com/samber/oops"
 )
 
+var (
+	errRunnerStartContextRequired      = errors.New("runner start context is required")
+	errRunnerStopContextRequired       = errors.New("runner stop context is required")
+	errRunnerTaskPoolNotInitializedYet = errors.New("runner task pool is not initialized")
+)
+
 func (r *Runner) Start(ctx context.Context) error {
+	if ctx == nil {
+		return oops.Wrapf(errRunnerStartContextRequired, "start agent")
+	}
+
 	r.logger.Info(
 		"starting agent",
 		"name", r.cfg.Agent.Name,
@@ -25,48 +36,177 @@ func (r *Runner) Start(ctx context.Context) error {
 		"buffer_enabled", r.cfg.Buffer.Enabled,
 	)
 
-	runCtx, stop := context.WithCancel(context.WithoutCancel(ctx))
-	r.stop = stop
-
-	if r.taskPool == nil {
-		return fmt.Errorf("%w", oops.New("runner task pool is not initialized"))
-	}
-
-	scheduler := gocron.NewScheduler(time.UTC)
-	if _, err := scheduler.Every(r.cfg.Poll.Interval).SingletonMode().Do(func() {
-		r.syncTasks(runCtx)
-	}); err != nil {
-		stop()
-		return oops.Wrapf(err, "schedule agent sync")
-	}
-	if err := r.scheduleResultFlush(runCtx, scheduler); err != nil {
+	runCtx, stop := context.WithCancel(ctx)
+	runSeq, shouldStart, err := r.beginRunnerLifecycle(stop)
+	if err != nil {
 		stop()
 		return err
 	}
-	if err := r.scheduleResultBufferCompaction(runCtx, scheduler); err != nil {
+	if !shouldStart {
+		stop()
+		return nil
+	}
+
+	scheduler, err := r.buildScheduler(runCtx)
+	if err != nil {
+		r.endRunnerLifecycle(runSeq)
 		stop()
 		return err
 	}
-	r.sched = scheduler
+	if !r.commitRunnerScheduler(scheduler, runSeq) {
+		r.endRunnerLifecycle(runSeq)
+		stop()
+		return nil
+	}
+
 	scheduler.StartAsync()
 	r.logger.Info("agent sync scheduler started", "interval", r.cfg.Poll.Interval)
-	go r.syncTasks(runCtx)
-	go r.flushBufferedResults(runCtx)
+
+	go func() {
+		defer r.runnerBackgroundWG.Done()
+		r.syncTasks(runCtx)
+	}()
+	go func() {
+		defer r.runnerBackgroundWG.Done()
+		r.flushBufferedResults(runCtx)
+	}()
+
 	return nil
 }
 
+func (r *Runner) beginRunnerLifecycle(stop context.CancelFunc) (uint64, bool, error) {
+	r.runnerStopMu.Lock()
+	defer r.runnerStopMu.Unlock()
+
+	if r.stop != nil || r.runnerStopping {
+		return 0, false, nil
+	}
+	if r.taskPool == nil {
+		return 0, false, oops.Wrapf(errRunnerTaskPoolNotInitializedYet, "start agent")
+	}
+
+	r.runnerRunSeq++
+	runSeq := r.runnerRunSeq
+	r.stop = stop
+	r.sched = nil
+	r.runnerStopping = false
+	r.runnerShutdownOnce = sync.Once{}
+	r.runnerBackgroundWG = sync.WaitGroup{}
+	return runSeq, true, nil
+}
+
+func (r *Runner) buildScheduler(ctx context.Context) (*gocron.Scheduler, error) {
+	scheduler := gocron.NewScheduler(time.UTC)
+	if _, err := scheduler.Every(r.cfg.Poll.Interval).SingletonMode().Do(func() {
+		r.syncTasks(ctx)
+	}); err != nil {
+		return nil, oops.Wrapf(err, "schedule agent sync")
+	}
+	if err := r.scheduleResultFlush(ctx, scheduler); err != nil {
+		return nil, err
+	}
+	if err := r.scheduleResultBufferCompaction(ctx, scheduler); err != nil {
+		return nil, err
+	}
+	return scheduler, nil
+}
+
+func (r *Runner) commitRunnerScheduler(scheduler *gocron.Scheduler, runSeq uint64) bool {
+	r.runnerStopMu.Lock()
+	defer r.runnerStopMu.Unlock()
+
+	if r.runnerRunSeq != runSeq || r.stop == nil {
+		return false
+	}
+	r.sched = scheduler
+	r.runnerBackgroundWG.Add(2)
+	return true
+}
+
+func (r *Runner) endRunnerLifecycle(runSeq uint64) {
+	r.runnerStopMu.Lock()
+	if r.runnerRunSeq == runSeq {
+		r.stop = nil
+		r.sched = nil
+		r.runnerStopping = false
+	}
+	r.runnerStopMu.Unlock()
+}
+
 func (r *Runner) Stop(ctx context.Context) error {
-	if r.stop != nil {
-		r.stop()
+	if ctx == nil {
+		return oops.Wrapf(errRunnerStopContextRequired, "stop agent")
 	}
-	if r.sched != nil {
-		r.sched.Stop()
+
+	var scheduler *gocron.Scheduler
+	var runSeq uint64
+	var stop context.CancelFunc
+	r.runnerStopMu.Lock()
+	if r.stop == nil {
+		r.runnerStopMu.Unlock()
+		return nil
 	}
-	r.closeDiscovery(ctx)
-	r.closeResultBuffer()
-	r.closeChecker()
+	if r.runnerStopping {
+		r.runnerStopMu.Unlock()
+		return nil
+	}
+
+	stop = r.stop
+	scheduler = r.sched
+	runSeq = r.runnerRunSeq
+	r.sched = nil
+	r.runnerStopping = true
+	r.runnerStopMu.Unlock()
+
+	if scheduler != nil {
+		scheduler.Stop()
+	}
+	stop()
+
+	if err := r.waitForBackground(ctx); err != nil {
+		r.finishRunnerStop(ctx, runSeq, false)
+		return err
+	}
+	r.finishRunnerStop(ctx, runSeq, true)
+
 	r.logger.Info("stopped agent")
 	return nil
+}
+
+func (r *Runner) finishRunnerStop(ctx context.Context, runSeq uint64, shouldClose bool) {
+	r.runnerStopMu.Lock()
+	if r.runnerRunSeq != runSeq || !r.runnerStopping {
+		r.runnerStopMu.Unlock()
+		return
+	}
+	r.runnerStopping = false
+	r.sched = nil
+	r.stop = nil
+	r.runnerStopMu.Unlock()
+
+	if !shouldClose {
+		return
+	}
+	r.runnerShutdownOnce.Do(func() {
+		r.closeDiscovery(ctx)
+		r.closeResultBuffer()
+		r.closeChecker()
+	})
+}
+
+func (r *Runner) waitForBackground(ctx context.Context) error {
+	done := make(chan struct{})
+	go func() {
+		r.runnerBackgroundWG.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return oops.Wrapf(ctx.Err(), "runner shutdown")
+	case <-done:
+		return nil
+	}
 }
 
 func (r *Runner) syncTasks(ctx context.Context) {

@@ -52,15 +52,16 @@ func (e *dashboardEndpoint) applyDashboardSnapshot(ctx context.Context, view *da
 	view.Groups = dashboardServiceGroups(allMonitors, groupSlug)
 	view.SelectedGroup = dashboardSelectedGroupName(view.Groups, groupSlug)
 	snapshot = dashboardFilteredSnapshot(snapshot, groupSlug)
+	monitorNames := dashboardMonitorNames(snapshot)
 	view.GeneratedAt = snapshot.GeneratedAt
 	view.Agents = collectionlist.NewList(snapshot.Agents...)
 	view.Summary.Agents = view.Agents.Len()
 	view.Monitors = dashboardMonitors(snapshot)
 	view.Summary.Monitors = view.Monitors.Len()
 	view.Environments = dashboardEnvironmentGroups(view.Monitors)
-	view.RecentResults = dashboardResults(snapshot, 20)
+	view.RecentResults = dashboardResultsFromMonitorNames(snapshot, 20, monitorNames)
 	view.StatusLights = dashboardStatusLights(snapshot, 120)
-	view.Notifications = dashboardNotifications(snapshot, 20)
+	view.Notifications = dashboardNotificationsFromMonitorNames(snapshot, 20, monitorNames)
 	view.Summary.Up, view.Summary.Down, view.Summary.Unknown = dashboardMonitorStatusTotals(view.Monitors)
 	return nil
 }

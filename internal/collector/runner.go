@@ -33,6 +33,11 @@ type Runner struct {
 	discoverySignatureMu      sync.Mutex
 	lastDiscoverySignature    string
 	lastDiscoveryMonitorCount int
+	runnerStopMu              sync.Mutex
+	runnerRunSeq              uint64
+	runnerStopping            bool
+	runnerShutdownOnce        sync.Once
+	runnerBackgroundWG        sync.WaitGroup
 }
 
 type MonitorDiscoverer interface {
