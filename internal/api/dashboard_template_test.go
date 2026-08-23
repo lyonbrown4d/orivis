@@ -37,26 +37,27 @@ func TestDashboardTemplateStaticAsset(t *testing.T) {
 	server := newAPITestServer(cfg, nil)
 	handler := server.Runtime().HumaAPI().Adapter()
 
-	for _, path := range []string{"/ui/static/app.css", "/ui/static/css/app-core.css", "/ui/static/css/app-dark.css"} {
-		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, http.NoBody)
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/ui/static/app.css", want: "@import"},
+		{path: "/ui/static/app.js", want: "htmx:afterSwap"},
+		{path: "/ui/static/css/app-core.css", want: "orivis"},
+		{path: "/ui/static/css/app-dark.css", want: "orivis"},
+	}
+	for _, test := range tests {
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, test.path, http.NoBody)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 		if rec.Code != http.StatusOK {
-			t.Fatalf("expected static asset %s to return 200, got %d: %s", path, rec.Code, rec.Body.String())
+			t.Fatalf("expected static asset %s to return 200, got %d: %s", test.path, rec.Code, rec.Body.String())
 		}
-		if path == "/ui/static/app.css" {
-			if !strings.Contains(rec.Body.String(), "@import") {
-				t.Fatalf("expected app.css to contain imports, got %q", rec.Body.String())
-			}
-			continue
-		}
-
-		if !strings.Contains(rec.Body.String(), "orivis") {
-			t.Fatalf("expected embedded css %s, got %q", path, rec.Body.String())
+		if !strings.Contains(rec.Body.String(), test.want) {
+			t.Fatalf("expected embedded static asset %s to contain %q", test.path, test.want)
 		}
 	}
 }
-
 func TestDashboardTemplateRoutesUseBasePath(t *testing.T) {
 	cfg := config.Config{}
 	cfg.App.Env = "test"

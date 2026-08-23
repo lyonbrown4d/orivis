@@ -82,7 +82,7 @@ type Config struct {
 }
 
 func Load(opts ...configx.Option) (Config, error) {
-	cfg, err := configx.LoadTErr[Config](append(defaultOptions(), opts...)...)
+	cfg, err := configx.Load[Config](append(defaultOptions(), opts...)...)
 	if err != nil {
 		return Config{}, err
 	}

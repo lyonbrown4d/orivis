@@ -1,4 +1,4 @@
-@import "./css/app-core.css";
-@import "./css/app-dark.css";
-@import "./css/app-polish.css";
-@import "./css/app-interactions.css";
+@import url("./css/app-core.css");
+@import url("./css/app-dark.css");
+@import url("./css/app-interactions.css");
+@import url("./css/app-polish.css");

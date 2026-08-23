@@ -5,23 +5,20 @@ import (
 
 	"github.com/lyonbrown4d/orivis/internal/discovery"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestKubernetesServiceLabelSource(t *testing.T) {
 	source := discovery.KubernetesServiceLabelSource(corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "grafana",
-			Namespace: "observability",
-			Labels: map[string]string{
-				"app.kubernetes.io/name":    "grafana",
-				"app.kubernetes.io/part-of": "monitoring",
-				"orivis.enable":             "true",
-			},
-			Annotations: map[string]string{
-				"orivis.monitor.http.type":   "http",
-				"orivis.monitor.http.target": "http://grafana.observability.svc:3000/api/health",
-			},
+		Name:      "grafana",
+		Namespace: "observability",
+		Labels: map[string]string{
+			"app.kubernetes.io/name":    "grafana",
+			"app.kubernetes.io/part-of": "monitoring",
+			"orivis.enable":             "true",
+		},
+		Annotations: map[string]string{
+			"orivis.monitor.http.type":   "http",
+			"orivis.monitor.http.target": "http://grafana.observability.svc:3000/api/health",
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{{Port: 3000, Protocol: corev1.ProtocolTCP}},
@@ -46,13 +43,11 @@ func TestKubernetesServiceLabelSource(t *testing.T) {
 
 func TestKubernetesPodLabelSourceInfersHTTPFromImage(t *testing.T) {
 	monitors, err := discovery.ParseLabels(discovery.KubernetesPodLabelSource(corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "web-6d7f",
-			Namespace: "default",
-			Labels: map[string]string{
-				"app":           "web",
-				"orivis.enable": "true",
-			},
+		Name:      "web-6d7f",
+		Namespace: "default",
+		Labels: map[string]string{
+			"app":           "web",
+			"orivis.enable": "true",
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{{

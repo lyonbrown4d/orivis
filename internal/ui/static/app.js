@@ -1,1219 +1,397 @@
-(function () {
-  "use strict";
-
-  const STORAGE_KEY = "orivis.monitor.ui.v1:theme";
-  const MODES = { light: true, dark: true, system: true };
-  const mediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-
-  function controller() {
-    if (window.OrivisTheme && typeof window.OrivisTheme.apply === "function") {
-      return window.OrivisTheme;
-    }
-
-    return {
-      read: readMode,
-      apply: function (mode) {
-        let root = document.documentElement;
-        let nextMode = normalizeTheme(mode);
-        let effectiveMode = nextMode === "dark" || (nextMode === "system" && prefersDark()) ? "dark" : "light";
-        root.setAttribute("data-orivis-theme", nextMode);
-        root.setAttribute("data-orivis-effective-theme", effectiveMode);
-        root.classList.toggle("dark", effectiveMode === "dark");
-        root.style.colorScheme = effectiveMode;
-      },
-    };
-  }
-
-  function normalizeTheme(mode) {
-    return MODES[mode] ? mode : "system";
-  }
-
-  function prefersDark() {
-    return !!(mediaQuery && mediaQuery.matches);
-  }
-
-  function readMode() {
-    try {
-      let value = window.localStorage ? window.localStorage.getItem(STORAGE_KEY) : "";
-      return normalizeTheme(value);
-    } catch (_) {
-      return "system";
-    }
-  }
-
-  function writeMode(mode) {
-    try {
-      if (window.localStorage) {
-        window.localStorage.setItem(STORAGE_KEY, normalizeTheme(mode));
-      }
-    } catch (_) {
-      return;
-    }
-  }
-
-  function currentMode() {
-    return normalizeTheme(document.documentElement.getAttribute("data-orivis-theme") || readMode());
-  }
-
-  function applyMode(mode, persist) {
-    let nextMode = normalizeTheme(mode);
-    if (persist) {
-      writeMode(nextMode);
-    }
-    controller().apply(nextMode);
-    updateThemeSwitches(document);
-  }
-
-  function updateThemeSwitches(scope) {
-    let root = scope || document;
-    let mode = currentMode();
-    let effectiveMode = document.documentElement.getAttribute("data-orivis-effective-theme") || "light";
-    let switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
-
-    Array.prototype.forEach.call(switches, function (switcher) {
-      switcher.setAttribute("data-orivis-current-theme", mode);
-      switcher.setAttribute("data-orivis-effective-theme", effectiveMode);
-      let options = switcher.querySelectorAll("[data-orivis-theme-option]");
-      Array.prototype.forEach.call(options, function (option) {
-        let active = option.getAttribute("data-orivis-theme-option") === mode;
-        option.classList.toggle("is-active", active);
-        option.setAttribute("aria-pressed", active ? "true" : "false");
-      });
-    });
-  }
-
-  function bindThemeSwitches(scope) {
-    let root = scope || document;
-    let switches = root.querySelectorAll ? root.querySelectorAll("[data-orivis-theme-switch]") : [];
-
-    Array.prototype.forEach.call(switches, function (switcher) {
-      if (switcher.__orivis_theme_bound__) {
-        return;
-      }
-      switcher.__orivis_theme_bound__ = true;
-      switcher.addEventListener("click", function (event) {
-        let option = event.target && event.target.closest ? event.target.closest("[data-orivis-theme-option]") : null;
-        if (!option || !switcher.contains(option)) {
-          return;
-        }
-        applyMode(option.getAttribute("data-orivis-theme-option"), true);
-      });
-    });
-
-    updateThemeSwitches(root);
-  }
-
-  function syncSystemTheme() {
-    if (currentMode() === "system") {
-      applyMode("system", false);
-    }
-  }
-
-  if (mediaQuery) {
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", syncSystemTheme);
-    } else if (typeof mediaQuery.addListener === "function") {
-      mediaQuery.addListener(syncSystemTheme);
-    }
-  }
-
-  window.OrivisThemeSwitch = {
-    apply: applyMode,
-    bind: bindThemeSwitches,
-    read: currentMode,
-  };
-
-  document.addEventListener("DOMContentLoaded", function () {
-    applyMode(readMode(), false);
-    bindThemeSwitches(document);
-  });
-
-  document.addEventListener("htmx:afterSwap", function (event) {
-    let target = event && event.detail && event.detail.target ? event.detail.target : document;
-    bindThemeSwitches(target);
-    updateThemeSwitches(document);
-  });
-}());
-(function () {
-  const STORAGE_PREFIX = "orivis.monitor.ui.";
-  const STORAGE_VERSION = "v1";
-  const STORAGE_TTL = 1000 * 60 * 60 * 24 * 14;
-  const REFRESH_PAUSED_KEY = STORAGE_PREFIX + STORAGE_VERSION + ":refresh-paused";
-  const MAX_ANIMATION_CARD_COUNT = 22;
-  const SEARCH_DEBOUNCE_MS = 90;
-  const DEFAULT_SORT = "checked-desc";
-  const FILTER_HINT_CLEAR_DISABLED = "filters already cleared";
-  const FILTER_SUMMARY_DEFAULT = "No filters";
-  const FILTER_SUMMARY_PREFIX = "Filters:";
-  const SEARCH_SHORTCUT_HINT = "Press / to focus search";
-  const CARD_INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label, summary, [data-orivis-ignore-card-click]";
-  const TOOLTIP_OFFSET = 14;
-
-  const statusFilterLabel = {
-    success: "Healthy",
-    warning: "Unknown",
-    danger: "Down",
-    secondary: "Other",
-  };
-
-  const statusSortOrder = {
-    success: 0,
-    warning: 1,
-    danger: 2,
-    secondary: 3,
-  };
-
-  function getStorageKey(pathname) {
-    return STORAGE_PREFIX + STORAGE_VERSION + ":" + (pathname || "/");
-  }
-
-  function readPersistedState(pathname) {
-    let fallback = {
-      q: "",
-      s: {},
-      sort: DEFAULT_SORT,
-    };
-
-    let raw = null;
-    if (!window.localStorage) {
-      return fallback;
-    }
-
-    try {
-      raw = window.localStorage.getItem(getStorageKey(pathname));
-    } catch (_) {
-      return fallback;
-    }
-    if (!raw) {
-      return fallback;
-    }
-
-    try {
-      let parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object") {
-        return fallback;
-      }
-      let q = typeof parsed.q === "string" ? parsed.q : "";
-      let sort = typeof parsed.sort === "string" ? parsed.sort : DEFAULT_SORT;
-      let statusObj = parsed.s;
-      let normalized = {};
-      if (statusObj && typeof statusObj === "object") {
-        Object.keys(statusObj).forEach(function (key) {
-          if (statusObj[key]) {
-            normalized[key] = true;
-          }
-        });
-      }
-      return {
-        q: q,
-        s: normalized,
-        sort: sort,
-        at: parsed.at || 0,
-      };
-    } catch (_) {
-      return fallback;
-    }
-  }
-
-  function writePersistedState(pathname, state) {
-    if (!window.localStorage) {
-      return;
-    }
-
-    try {
-      let payload = {
-        q: state.q || "",
-        s: state.s || {},
-        sort: state.sort || DEFAULT_SORT,
-        at: Date.now(),
-      };
-      window.localStorage.setItem(getStorageKey(pathname), JSON.stringify(payload));
-    } catch (_) {
-      return;
-    }
-  }
-
-  function readRefreshPaused() {
-    if (!window.localStorage) {
-      return false;
-    }
-
-    try {
-      return window.localStorage.getItem(REFRESH_PAUSED_KEY) === "1";
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function writeRefreshPaused(paused) {
-    if (!window.localStorage) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(REFRESH_PAUSED_KEY, paused ? "1" : "0");
-    } catch (_) {
-      return;
-    }
-  }
-
-  function normalize(value) {
-    return (value || "").toString().toLowerCase();
-  }
-
-  function parseIntOrZero(value) {
-    let parsed = parseInt(value, 10);
-    if (!parsed || parsed < 0) {
-      return 0;
-    }
-    return parsed;
-  }
-
-  function hasTextFilter(state) {
-    return normalize(state.q || "").length > 0;
-  }
-
-  function hasStatusFilter(state) {
-    return Object.keys(state.s || {}).length > 0;
-  }
-
-  function hasAnyFilter(state) {
-    return hasTextFilter(state) || hasStatusFilter(state);
-  }
-
-  function parseStatusKey(card) {
-    return normalize(card && card.getAttribute ? card.getAttribute("data-monitor-status") : "");
-  }
-
-  function collectCards(scope) {
-    if (!scope) {
-      return [];
-    }
-    return Array.prototype.slice.call(scope.querySelectorAll("[data-monitor-card]"));
-  }
-
-  function setActiveState(element, active) {
-    if (!element) {
-      return;
-    }
-    element.classList.toggle("is-active", active);
-  }
-
-  function updateChipState(scope, state) {
-    let hasFilter = Object.keys(state.s).length > 0;
-    let chips = scope.querySelectorAll("[data-status-filter]");
-    Array.prototype.forEach.call(chips, function (chip) {
-      let value = normalize(chip.getAttribute("data-status-filter"));
-      let active = value === "all" ? !hasFilter : state.s[value] === true;
-      setActiveState(chip, active);
-      chip.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-  }
-
-  function matchCard(card, state, query) {
-    let status = parseStatusKey(card);
-    let hasStatusFilters = Object.keys(state.s).length > 0;
-    let matchStatus = true;
-    if (hasStatusFilters) {
-      matchStatus = !!state.s[status];
-    }
-
-    let haystack = [
-      normalize(card.getAttribute("data-monitor-name")),
-      normalize(card.getAttribute("data-monitor-target")),
-      normalize(card.getAttribute("data-monitor-group")),
-      normalize(card.getAttribute("data-monitor-environment")),
-      normalize(card.getAttribute("data-monitor-source")),
-    ].join(" ");
-    let matchQuery = haystack.indexOf(query) !== -1;
-    return matchStatus && matchQuery;
-  }
-
-  function statusOrder(value) {
-    return Object.prototype.hasOwnProperty.call(statusSortOrder, value) ? statusSortOrder[value] : 99;
-  }
-
-  function comparator(sortValue) {
-    return function (left, right) {
-      let leftStatus = parseStatusKey(left);
-      let rightStatus = parseStatusKey(right);
-      let leftChecked = parseIntOrZero(left.getAttribute("data-monitor-checked-at"));
-      let rightChecked = parseIntOrZero(right.getAttribute("data-monitor-checked-at"));
-      let leftLatency = parseIntOrZero(left.getAttribute("data-monitor-latency-ms"));
-      let rightLatency = parseIntOrZero(right.getAttribute("data-monitor-latency-ms"));
-      let leftName = normalize(left.getAttribute("data-monitor-name"));
-      let rightName = normalize(right.getAttribute("data-monitor-name"));
-
-      switch (sortValue) {
-        case "name-asc":
-          if (leftName < rightName) return -1;
-          if (leftName > rightName) return 1;
-          break;
-        case "name-desc":
-          if (leftName < rightName) return 1;
-          if (leftName > rightName) return -1;
-          break;
-        case "latency-asc":
-          if (leftLatency < rightLatency) return -1;
-          if (leftLatency > rightLatency) return 1;
-          break;
-        case "latency-desc":
-          if (leftLatency < rightLatency) return 1;
-          if (leftLatency > rightLatency) return -1;
-          break;
-        case "checked-asc":
-          if (leftChecked < rightChecked) return -1;
-          if (leftChecked > rightChecked) return 1;
-          break;
-        case "checked-desc":
-        default:
-          if (leftChecked < rightChecked) return 1;
-          if (leftChecked > rightChecked) return -1;
-          break;
-      }
-
-      let statusCompare = statusOrder(leftStatus) - statusOrder(rightStatus);
-      if (statusCompare !== 0) {
-        return statusCompare;
-      }
-      if (leftName < rightName) return -1;
-      if (leftName > rightName) return 1;
-      return 0;
-    };
-  }
-
-  function setCountText(scope, total, visible) {
-    let counter = scope.querySelector("#orivis-monitor-visible-count");
-    if (!counter) {
-      return;
-    }
-    counter.textContent = visible + " / " + total;
-  }
-
-  function showOrHideEmptyState(scope, root, visibleCount, totalCount) {
-    if (!root) {
-      return;
-    }
-    let emptyState = root.querySelector("[data-orivis-monitor-empty-all]");
-    let emptyFilterState = root.querySelector("[data-orivis-monitor-empty-filter]");
-    if (!emptyState || !emptyFilterState) {
-      return;
-    }
-
-    if (totalCount === 0) {
-      emptyFilterState.classList.add("is-hidden");
-      emptyState.classList.remove("is-hidden");
-      return;
-    }
-
-    if (visibleCount === 0) {
-      emptyState.classList.add("is-hidden");
-      emptyFilterState.textContent = emptyFilterState.getAttribute("data-orivis-monitor-no-matches") || emptyFilterState.textContent;
-      emptyFilterState.classList.remove("is-hidden");
-      return;
-    }
-
-    emptyFilterState.classList.add("is-hidden");
-    emptyState.classList.add("is-hidden");
-  }
-
-  function normalizeStatusFilters(state) {
-    let names = [];
-    if (!state || !state.s) {
-      return names;
-    }
-    Object.keys(state.s).forEach(function (key) {
-      if (state.s[key] && key) {
-        names.push(key);
-      }
-    });
-    return names.sort();
-  }
-
-  function getMonitorRoot(scope) {
-    if (!scope) {
-      return null;
-    }
-    return scope.querySelector("[data-orivis-monitor-root]");
-  }
-
-  function getRefreshIndicator(scope) {
-    if (scope && scope.querySelector) {
-      let scopedIndicator = scope.querySelector("#orivis-refresh-indicator");
-      if (scopedIndicator) {
-        return scopedIndicator;
-      }
-    }
-    return document.querySelector("#orivis-refresh-indicator");
-  }
-
-  function getRefreshToggle(scope) {
-    if (scope && scope.querySelector) {
-      let scopedToggle = scope.querySelector("#orivis-refresh-toggle");
-      if (scopedToggle) {
-        return scopedToggle;
-      }
-    }
-    return document.querySelector("#orivis-refresh-toggle");
-  }
-
-  function setSearchHint(searchInput) {
-    if (!searchInput) {
-      return;
-    }
-    if (!searchInput.getAttribute("aria-description")) {
-      searchInput.setAttribute("aria-description", SEARCH_SHORTCUT_HINT);
-    }
-  }
-
-  function enableSearchShortcut(scope) {
-    let searchInput = scope.querySelector("#orivis-monitor-search");
-    if (!searchInput) {
-      return;
-    }
-
-    setSearchHint(searchInput);
-    let timer;
-    document.addEventListener("keydown", function (event) {
-      if (event.defaultPrevented) {
-        return;
-      }
-      if ((event.key || "").toLowerCase() !== "/") {
-        return;
-      }
-      if (
-        event.target &&
-        (event.target.tagName === "INPUT" || event.target.tagName === "TEXTAREA" || event.target.isContentEditable)
-      ) {
-        return;
-      }
-
-      event.preventDefault();
-      searchInput.focus({ preventScroll: true });
-      if (timer) {
-        clearTimeout(timer);
-      }
-      searchInput.classList.add("is-active");
-      timer = setTimeout(function () {
-        searchInput.classList.remove("is-active");
-      }, 900);
-    });
-  }
-
-  function setRefreshState(scope, refreshing) {
-    if (readRefreshPaused()) {
-      updateRefreshPausedUI(scope, true);
-      return;
-    }
-
-    let indicator = getRefreshIndicator(scope);
-    if (!indicator) {
-      return;
-    }
-
-    let baseText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
-    if (refreshing) {
-      indicator.textContent = baseText + "...";
-      indicator.classList.add("is-refreshing");
-      return;
-    }
-
-    indicator.textContent = baseText;
-    indicator.classList.remove("is-refreshing");
-  }
-
-  function updateRefreshPausedUI(scope, paused) {
-    let indicator = getRefreshIndicator(scope);
-    if (indicator) {
-      let idleText = indicator.getAttribute("data-orivis-refresh-idle") || indicator.textContent || "Refresh";
-      let pausedText = indicator.getAttribute("data-orivis-refresh-paused") || "Refresh paused";
-      indicator.textContent = paused ? pausedText : idleText;
-      indicator.classList.toggle("is-paused", paused);
-      indicator.classList.remove("is-refreshing");
-    }
-
-    let toggle = getRefreshToggle(scope);
-    if (!toggle) {
-      return;
-    }
-    let pauseText = toggle.getAttribute("data-orivis-refresh-pause") || "Pause refresh";
-    let resumeText = toggle.getAttribute("data-orivis-refresh-resume") || "Resume refresh";
-    toggle.textContent = paused ? resumeText : pauseText;
-    toggle.setAttribute("aria-pressed", paused ? "true" : "false");
-    toggle.classList.toggle("is-paused", paused);
-  }
-
-  function bindRefreshToggle(scope) {
-    let toggle = getRefreshToggle(scope);
-    if (!toggle || toggle.__orivis_refresh_bound__) {
-      updateRefreshPausedUI(scope, readRefreshPaused());
-      return;
-    }
-
-    toggle.__orivis_refresh_bound__ = true;
-    updateRefreshPausedUI(scope, readRefreshPaused());
-    toggle.addEventListener("click", function () {
-      let next = !readRefreshPaused();
-      writeRefreshPaused(next);
-      updateRefreshPausedUI(scope, next);
-    });
-  }
-
-  function animateValueFromZero(node, targetText) {
-    if (!node || typeof targetText !== "string") {
-      return;
-    }
-    let target = parseInt(targetText.replace(/[^\d-]/g, ""), 10);
-    if (!target && target !== 0) {
-      return;
-    }
-
-    let from = 0;
-    let start = null;
-    let duration = 420;
-    let durationMs = Math.min(Math.max(Math.abs(target), 0), 1600);
-    function tick(timestamp) {
-      if (!start) {
-        start = timestamp;
-      }
-      let ratio = Math.min(1, (timestamp - start) / (duration + durationMs));
-      let current = Math.round(from + (target - from) * ratio);
-      node.textContent = String(current);
-      if (ratio < 1) {
-        requestAnimationFrame(tick);
-        return;
-      }
-      node.textContent = targetText;
-    }
-
-    requestAnimationFrame(tick);
-  }
-
-  function animateMonitorCards(cards) {
-    let i = 0;
-    let total = cards && cards.length ? cards.length : 0;
-    if (total > MAX_ANIMATION_CARD_COUNT) {
-      total = MAX_ANIMATION_CARD_COUNT;
-    }
-
-    for (i = 0; i < cards.length; i++) {
-      cards[i].classList.remove("orivis-monitor-card-enter");
-      cards[i].style.animationDelay = "";
-    }
-    for (i = 0; i < total; i++) {
-      cards[i].style.animationDelay = i * 28 + "ms";
-      cards[i].classList.add("orivis-monitor-card-enter");
-    }
-  }
-
-  function isInteractiveTarget(target, card) {
-    let node = target;
-    while (node && node !== card) {
-      if (node.matches && node.matches(CARD_INTERACTIVE_SELECTOR)) {
-        return true;
-      }
-      node = node.parentNode;
-    }
-    return false;
-  }
-
-  function navigateMonitorCard(card, event, newTab) {
-    if (!card) {
-      return;
-    }
-    let url = card.getAttribute("data-monitor-url");
-    if (!url) {
-      return;
-    }
-    if (event) {
-      event.preventDefault();
-    }
-    if (newTab) {
-      window.open(url, "_blank", "noopener");
-      return;
-    }
-    window.location.href = url;
-  }
-
-  function bindMonitorCardNavigation(scope) {
-    let cards = scope.querySelectorAll("[data-monitor-card][data-monitor-url]");
-    Array.prototype.forEach.call(cards, function (card) {
-      if (card.__orivis_card_nav_bound__) {
-        return;
-      }
-      card.__orivis_card_nav_bound__ = true;
-      card.addEventListener("click", function (event) {
-        if (isInteractiveTarget(event.target, card)) {
-          return;
-        }
-        navigateMonitorCard(card, event, event.metaKey || event.ctrlKey);
-      });
-      card.addEventListener("auxclick", function (event) {
-        if (event.button !== 1 || isInteractiveTarget(event.target, card)) {
-          return;
-        }
-        navigateMonitorCard(card, event, true);
-      });
-      card.addEventListener("keydown", function (event) {
-        if (event.defaultPrevented || isInteractiveTarget(event.target, card)) {
-          return;
-        }
-        if (event.key === "Enter" || event.key === " ") {
-          navigateMonitorCard(card, event, false);
-        }
-      });
-    });
-  }
-
-  function tooltipNode() {
-    let existing = document.querySelector("[data-orivis-floating-tooltip]");
-    if (existing) {
-      return existing;
-    }
-    let node = document.createElement("div");
-    node.className = "orivis-floating-tooltip";
-    node.setAttribute("data-orivis-floating-tooltip", "");
-    node.setAttribute("role", "tooltip");
-    node.setAttribute("aria-hidden", "true");
-    document.body.appendChild(node);
-    return node;
-  }
-
-  function setTooltipPosition(node, x, y) {
-    let left = x + TOOLTIP_OFFSET;
-    let top = y - TOOLTIP_OFFSET;
-    let rect = node.getBoundingClientRect();
-    let maxLeft = window.innerWidth - rect.width - 12;
-    let maxTop = window.innerHeight - rect.height - 12;
-    node.style.left = Math.max(12, Math.min(left, maxLeft)) + "px";
-    node.style.top = Math.max(12, Math.min(top, maxTop)) + "px";
-  }
-
-  function showTooltip(target, event) {
-    let text = target.getAttribute("data-orivis-tooltip") || target.getAttribute("title") || "";
-    if (!text) {
-      return;
-    }
-    let node = tooltipNode();
-    node.textContent = text;
-    node.classList.add("is-visible");
-    node.setAttribute("aria-hidden", "false");
-    setTooltipPosition(node, event.clientX || 20, event.clientY || 20);
-  }
-
-  function hideTooltip() {
-    let node = document.querySelector("[data-orivis-floating-tooltip]");
-    if (!node) {
-      return;
-    }
-    node.classList.remove("is-visible");
-    node.setAttribute("aria-hidden", "true");
-  }
-
-  function bindStatusLightTooltips(scope) {
-    let lights = scope.querySelectorAll(".orivis-status-light");
-    Array.prototype.forEach.call(lights, function (light) {
-      if (light.__orivis_tooltip_bound__) {
-        return;
-      }
-      let title = light.getAttribute("title");
-      if (title) {
-        light.setAttribute("data-orivis-tooltip", title);
-        light.setAttribute("aria-label", title);
-        light.removeAttribute("title");
-      }
-      if (!light.getAttribute("data-orivis-tooltip")) {
-        return;
-      }
-      light.__orivis_tooltip_bound__ = true;
-      if (!light.hasAttribute("tabindex")) {
-        light.setAttribute("tabindex", "0");
-      }
-      light.addEventListener("pointerenter", function (event) {
-        showTooltip(light, event);
-      });
-      light.addEventListener("pointermove", function (event) {
-        let node = tooltipNode();
-        if (node.classList.contains("is-visible")) {
-          setTooltipPosition(node, event.clientX, event.clientY);
-        }
-      });
-      light.addEventListener("pointerleave", hideTooltip);
-      light.addEventListener("focus", function () {
-        let rect = light.getBoundingClientRect();
-        showTooltip(light, { clientX: rect.left + rect.width / 2, clientY: rect.top });
-      });
-      light.addEventListener("blur", hideTooltip);
-    });
-  }
-
-  function isMainScope(target) {
-    return !!(target && target.matches && target.matches("main"));
-  }
-
-  function updateFilterSummary(scope, state, visibleCount, totalCount) {
-    if (!scope) {
-      return;
-    }
-
-    let summary = scope.querySelector("#orivis-monitor-filter-summary");
-    if (!summary) {
-      return;
-    }
-
-    let query = normalize(state.q || "");
-    let filters = [];
-    if (query.length > 0) {
-      filters.push("Keyword: " + state.q);
-    }
-
-    let selectedStatuses = normalizeStatusFilters(state);
-    if (selectedStatuses.length > 0) {
-      let labeled = [];
-      for (let i = 0; i < selectedStatuses.length; i++) {
-        labeled.push(statusFilterLabel[selectedStatuses[i]] || selectedStatuses[i]);
-      }
-      filters.push("Status: " + labeled.join(", "));
-    }
-
-    if (!filters.length) {
-      summary.textContent = FILTER_SUMMARY_DEFAULT;
-      if (totalCount <= 0) {
-        summary.textContent = FILTER_SUMMARY_DEFAULT + " · no data";
-      }
-      summary.className = "text-slate-500 orivis-filter-summary";
-      return;
-    }
-
-    summary.textContent = FILTER_SUMMARY_PREFIX + " " + filters.join(" · ");
-    summary.className = "text-slate-600 orivis-filter-summary";
-  }
-
-  function applyMonitorFilters(scope, state, animate) {
-    if (!scope) {
-      return;
-    }
-
-    let root = getMonitorRoot(scope);
-    if (!root) {
-      return;
-    }
-
-    let grid = root.querySelector(".orivis-monitor-grid");
-    if (!grid) {
-      return;
-    }
-
-    let cards = collectCards(grid);
-    if (cards.length === 0) {
-      setCountText(scope, 0, 0);
-      showOrHideEmptyState(scope, root, 0, 0);
-      return;
-    }
-
-    let query = normalize(state.q);
-    let visibleCards = [];
-    let hiddenCards = [];
-    for (let i = 0; i < cards.length; i++) {
-      let card = cards[i];
-      if (matchCard(card, state, query)) {
-        card.classList.remove("is-hidden");
-        visibleCards.push(card);
-      } else {
-        card.classList.add("is-hidden");
-        hiddenCards.push(card);
-      }
-    }
-
-    visibleCards.sort(comparator(state.sort || DEFAULT_SORT));
-    for (i = 0; i < visibleCards.length; i++) {
-      grid.appendChild(visibleCards[i]);
-    }
-    for (i = 0; i < hiddenCards.length; i++) {
-      grid.appendChild(hiddenCards[i]);
-    }
-
-    let total = Number(root.getAttribute("data-monitor-total") || cards.length || "0");
-    setCountText(scope, total, visibleCards.length);
-
-    updateChipState(scope, state);
-    showOrHideEmptyState(scope, root, visibleCards.length, total);
-    refreshFilterControls(scope, state);
-    updateFilterSummary(scope, state, visibleCards.length, total);
-    animateValueFromZero(
-      scope.querySelector("#orivis-monitor-visible-count"),
-      visibleCards.length + " / " + total
-    );
-    if (animate) {
-      animateMonitorCards(visibleCards);
-    }
-  }
-
-  function resetFilterUI(scope, state) {
-    state.q = "";
-    state.s = {};
-    let searchInput = scope.querySelector("#orivis-monitor-search");
-    if (searchInput) {
-      searchInput.value = "";
-    }
-
-    let sortSelect = scope.querySelector("#orivis-monitor-sort");
-    if (sortSelect) {
-      sortSelect.value = DEFAULT_SORT;
-      state.sort = DEFAULT_SORT;
-    }
-  }
-
-  function refreshFilterControls(scope, state) {
-    if (!scope) {
-      return;
-    }
-
-    let clearButton = scope.querySelector("#orivis-clear-filters");
-    if (!clearButton) {
-      return;
-    }
-
-    if (!hasAnyFilter(state)) {
-      clearButton.disabled = true;
-      clearButton.setAttribute("title", FILTER_HINT_CLEAR_DISABLED);
-      clearButton.classList.add("is-disabled");
-      return;
-    }
-
-    clearButton.disabled = false;
-    clearButton.removeAttribute("title");
-    clearButton.classList.remove("is-disabled");
-  }
-
-  function bind(scope) {
-    if (!scope) {
-      return;
-    }
-
-    if (scope.__orivis_monitor_bound__) {
-      return;
-    }
-    scope.__orivis_monitor_bound__ = true;
-
-    let root = scope.querySelector("[data-orivis-monitor-root]");
-    if (!root) {
-      return;
-    }
-
-    let state = readPersistedState(window.location.pathname);
-    if (!state.at || Date.now() - Number(state.at || 0) > STORAGE_TTL) {
-      state = {
-        q: "",
-        s: {},
-        sort: DEFAULT_SORT,
-      };
-    }
-
-    let chips = scope.querySelectorAll("[data-status-filter]");
-    let searchInput = scope.querySelector("#orivis-monitor-search");
-    let sortSelect = scope.querySelector("#orivis-monitor-sort");
-    let clearButton = scope.querySelector("#orivis-clear-filters");
-    let filterTimer = 0;
-
-    function scheduleApply(animate) {
-      if (filterTimer) {
-        clearTimeout(filterTimer);
-      }
-      filterTimer = setTimeout(function () {
-        applyMonitorFilters(scope, state, animate);
-      }, SEARCH_DEBOUNCE_MS);
-    }
-
-    if (searchInput) {
-      searchInput.value = state.q || "";
-      searchInput.addEventListener("input", function () {
-        state.q = this.value || "";
-        scheduleApply(false);
-        writePersistedState(window.location.pathname, state);
-      });
-      searchInput.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") {
-          if (filterTimer) {
-            clearTimeout(filterTimer);
-          }
-          state.q = "";
-          searchInput.value = "";
-          applyMonitorFilters(scope, state, false);
-          writePersistedState(window.location.pathname, state);
-        }
-      });
-    }
-
-    Array.prototype.forEach.call(chips, function (chip) {
-      chip.addEventListener("click", function () {
-        let value = normalize(chip.getAttribute("data-status-filter") || "all");
-        if (value === "all") {
-          state.s = {};
-        } else {
-          if (state.s[value]) {
-            delete state.s[value];
-          } else {
-            state.s[value] = true;
-          }
-        }
-        applyMonitorFilters(scope, state, false);
-        writePersistedState(window.location.pathname, state);
-      });
-    });
-
-    if (sortSelect) {
-      sortSelect.value = state.sort || DEFAULT_SORT;
-      sortSelect.addEventListener("change", function () {
-        state.sort = sortSelect.value || DEFAULT_SORT;
-        applyMonitorFilters(scope, state, false);
-        writePersistedState(window.location.pathname, state);
-      });
-    }
-
-    enableSearchShortcut(scope);
-    bindRefreshToggle(scope);
-    bindMonitorCardNavigation(scope);
-    bindStatusLightTooltips(scope);
-
-    if (clearButton) {
-      clearButton.disabled = !hasAnyFilter(state);
-      clearButton.addEventListener("click", function () {
-        resetFilterUI(scope, state);
-        applyMonitorFilters(scope, state, false);
-        writePersistedState(window.location.pathname, state);
-      });
-    }
-
-    applyMonitorFilters(scope, state, true);
-  }
-
-  function ensureBound(scope) {
-    if (!scope || scope === document) {
-      bind(document);
-      return;
-    }
-    bind(scope);
-    bind(document);
-  }
-
-  document.addEventListener("DOMContentLoaded", function () {
-    ensureBound(document);
-  });
-  document.addEventListener("htmx:afterSwap", function (event) {
-    let target = event && event.detail && event.detail.target ? event.detail.target : null;
-    if (!target) {
-      return;
-    }
-    if (target.matches && (target.matches("main") || target.matches("[data-orivis-monitor-root]") || target.querySelector && target.querySelector("[data-orivis-monitor-root]"))) {
-      ensureBound(target);
-      setRefreshState(target, false);
-    }
-  });
-  document.addEventListener("htmx:beforeRequest", function (event) {
-    if (!event || !event.detail || !event.detail.target || !isMainScope(event.detail.target)) {
-      return;
-    }
-    if (readRefreshPaused()) {
-      event.preventDefault();
-      updateRefreshPausedUI(event.detail.target, true);
-      return;
-    }
-    setRefreshState(event.detail.target, true);
-  });
-  document.addEventListener("htmx:afterRequest", function (event) {
-    if (!event || !event.detail || !event.detail.target || !isMainScope(event.detail.target)) {
-      return;
-    }
-    setRefreshState(event.detail.target, false);
-  });
-  document.addEventListener("htmx:afterSettle", function (event) {
-    let target = event && event.detail && event.detail.target ? event.detail.target : null;
-    if (!target) {
-      return;
-    }
-    if (target.matches && target.matches("main")) {
-      ensureBound(target);
-    }
-  });
-
-  document.addEventListener("htmx:responseError", function (event) {
-    let detail = event.detail || {};
-    let target = detail.target;
-    if (!target) {
-      return;
-    }
-    setRefreshState(target, false);
-
-    let status = detail.xhr && detail.xhr.status ? " (" + detail.xhr.status + ")" : "";
-    let alert = document.createElement("div");
-    alert.className =
-      "orivis-hx-error rounded-xl px-4 py-3 text-center text-sm font-medium shadow-sm";
-    alert.setAttribute("role", "alert");
-    alert.textContent = "Unable to refresh this section" + status + ".";
-
-    while (target.firstChild) {
-      target.removeChild(target.firstChild);
-    }
-    target.appendChild(alert);
-  });
-})();
-
-(function () {
-  "use strict";
-
-  function bindPasswordToggles(scope) {
-    let root = scope || document;
-    let toggles = root.querySelectorAll("[data-orivis-password-toggle]");
-
-    toggles.forEach(function (toggle) {
-      if (toggle.dataset.orivisBound === "true") {
-        return;
-      }
-
-      toggle.dataset.orivisBound = "true";
-      toggle.addEventListener("click", function () {
-        let field = toggle.closest(".orivis-password-field");
-        let input = field ? field.querySelector("input") : null;
-
-        if (!input) {
-          return;
-        }
-
-        let isHidden = input.type === "password";
-        let label = isHidden ? toggle.dataset.orivisPasswordHide : toggle.dataset.orivisPasswordShow;
-
-        input.type = isHidden ? "text" : "password";
-        toggle.textContent = label;
-        toggle.setAttribute("aria-label", label);
-        toggle.setAttribute("aria-pressed", isHidden ? "true" : "false");
-      });
-    });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      bindPasswordToggles(document);
-    });
-    return;
-  }
-
-  bindPasswordToggles(document);
-}());
-
-
-(function () {
-  "use strict";
-
-  const POINTER_SELECTOR = ".orivis-command-center, .orivis-public-header, .orivis-control-panel, .orivis-panel, .orivis-monitor-card, .orivis-metric-card";
-
-  function bindPointerLight(scope) {
-    let root = scope || document;
-    let nodes = root.querySelectorAll ? root.querySelectorAll(POINTER_SELECTOR) : [];
-    Array.prototype.forEach.call(nodes, function (node) {
-      if (node.__orivis_pointer_light_bound__) {
-        return;
-      }
-      node.__orivis_pointer_light_bound__ = true;
-      node.addEventListener("pointermove", function (event) {
-        let rect = node.getBoundingClientRect();
-        if (!rect.width || !rect.height) {
-          return;
-        }
-        let x = ((event.clientX - rect.left) / rect.width) * 100;
-        let y = ((event.clientY - rect.top) / rect.height) * 100;
-        node.style.setProperty("--orivis-pointer-x", x.toFixed(2) + "%");
-        node.style.setProperty("--orivis-pointer-y", y.toFixed(2) + "%");
-      });
-    });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      bindPointerLight(document);
-    });
-  } else {
-    bindPointerLight(document);
-  }
-
-  document.addEventListener("htmx:afterSwap", function (event) {
-    let target = event && event.detail && event.detail.target ? event.detail.target : document;
-    bindPointerLight(target);
-  });
-}());
-
 (() => {
   "use strict";
 
-  const PRESSABLE_SELECTOR = "button, a, [role='button'], [data-monitor-card]";
-  const PRESSING_CLASS = "is-pressing";
-  const THEME_MODES = ["system", "light", "dark"];
+  const doc = document;
+  const root = doc.documentElement;
+  const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+  const themeModes = ["system", "light", "dark"];
+  const statePrefix = "orivis.monitor.ui.v1:";
+  const refreshKey = statePrefix + "refresh-paused";
+  const stateTTL = 14 * 24 * 60 * 60 * 1000;
+  const defaultSort = "checked-desc";
+  const validStatuses = new Set(["success", "danger", "warning", "secondary"]);
+  const validSorts = new Set(["checked-desc", "checked-asc", "name-asc", "name-desc", "latency-desc", "latency-asc"]);
+  const interactiveSelector = "a,button,input,select,textarea,label,summary,[data-orivis-ignore-card-click]";
+  let filterTimer = 0;
+  let swapFocus = null;
 
-  const pressableNodes = scope => Array.from((scope || document).querySelectorAll(PRESSABLE_SELECTOR));
-  const normalizeThemeMode = mode => THEME_MODES.includes(mode) ? mode : "system";
-
-  const clearPressing = element => {
-    element.classList.remove(PRESSING_CLASS);
+  const storageGet = key => {
+    try { return window.localStorage?.getItem(key) || ""; } catch (_) { return ""; }
   };
-
-  const setPressing = element => {
-    element.classList.add(PRESSING_CLASS);
+  const storageSet = (key, value) => {
+    try { window.localStorage?.setItem(key, value); } catch (_) { /* Optional storage. */ }
   };
+  const normalize = value => String(value || "").toLocaleLowerCase();
+  const numberValue = value => Math.max(0, Number.parseInt(value, 10) || 0);
+  const currentMain = scope => scope?.matches?.("main") ? scope : scope?.querySelector?.("main") || doc.querySelector("main");
+  const isAutoMain = target => Boolean(target?.matches?.("main[data-orivis-auto-refresh]"));
+  const mainFromDetail = detail => {
+    if (isAutoMain(detail?.target)) return detail.target;
+    if (isAutoMain(detail?.elt)) return detail.elt;
+    return detail?.elt?.closest?.("main[data-orivis-auto-refresh]") || null;
+  };
+  const refreshPaused = () => storageGet(refreshKey) === "1";
+  const stateKey = () => statePrefix + (window.location.pathname || "/");
 
-  const bindPressStates = scope => {
-    for (const element of pressableNodes(scope)) {
-      if (element.dataset.orivisPressBound === "true") {
-        continue;
-      }
-      element.dataset.orivisPressBound = "true";
-      element.addEventListener("pointerdown", () => setPressing(element));
-      element.addEventListener("pointerup", () => clearPressing(element));
-      element.addEventListener("pointercancel", () => clearPressing(element));
-      element.addEventListener("pointerleave", () => clearPressing(element));
-      element.addEventListener("keydown", event => {
-        if (event.key === "Enter" || event.key === " ") {
-          setPressing(element);
-        }
+  const readState = () => {
+    const fallback = { q: "", statuses: new Set(), sort: defaultSort };
+    try {
+      const parsed = JSON.parse(storageGet(stateKey()));
+      if (!parsed || Date.now() - numberValue(parsed.at) > stateTTL) return fallback;
+      const statuses = new Set(Array.isArray(parsed.statuses) ? parsed.statuses.filter(value => validStatuses.has(value)) : []);
+      return { q: typeof parsed.q === "string" ? parsed.q : "", statuses, sort: validSorts.has(parsed.sort) ? parsed.sort : defaultSort };
+    } catch (_) {
+      return fallback;
+    }
+  };
+  const writeState = state => storageSet(stateKey(), JSON.stringify({ q: state.q, statuses: [...state.statuses], sort: state.sort, at: Date.now() }));
+
+  const applyTheme = (mode, persist = false) => {
+    const next = themeModes.includes(mode) ? mode : "system";
+    if (persist) storageSet(window.OrivisTheme?.key || statePrefix + "theme", next);
+    window.OrivisTheme?.apply(next);
+    doc.querySelectorAll("[data-orivis-theme-switch]").forEach(switcher => {
+      switcher.dataset.orivisCurrentTheme = next;
+      switcher.querySelectorAll("[data-orivis-theme-option]").forEach(option => {
+        const active = option.dataset.orivisThemeOption === next;
+        option.classList.toggle("is-active", active);
+        option.setAttribute("aria-pressed", String(active));
       });
-      element.addEventListener("keyup", () => clearPressing(element));
-      element.addEventListener("blur", () => clearPressing(element));
-    }
-  };
-
-  const cycleThemeMode = () => {
-    const root = document.documentElement;
-    const current = normalizeThemeMode(root.getAttribute("data-orivis-theme"));
-    const next = THEME_MODES[(THEME_MODES.indexOf(current) + 1) % THEME_MODES.length];
-    const control = document.querySelector(`[data-orivis-theme-option="${next}"]`);
-    control?.click();
-  };
-
-  const bindThemeShortcut = () => {
-    if (document.documentElement.dataset.orivisThemeShortcutBound === "true") {
-      return;
-    }
-    document.documentElement.dataset.orivisThemeShortcutBound = "true";
-    document.addEventListener("keydown", event => {
-      if (event.defaultPrevented || !event.altKey || !event.shiftKey || event.key.toLowerCase() !== "t") {
-        return;
-      }
-      event.preventDefault();
-      cycleThemeMode();
     });
   };
 
-  const bindInteractions = scope => {
-    bindPressStates(scope || document);
-    bindThemeShortcut();
+  const monitorState = main => {
+    if (!main) return null;
+    if (!main.__orivisMonitorState) main.__orivisMonitorState = readState();
+    return main.__orivisMonitorState;
+  };
+  const cardsFor = main => [...(main?.querySelectorAll("[data-monitor-card]") || [])];
+  const compareCards = sort => (left, right) => {
+    const aName = normalize(left.dataset.monitorName);
+    const bName = normalize(right.dataset.monitorName);
+    const aChecked = numberValue(left.dataset.monitorCheckedAt);
+    const bChecked = numberValue(right.dataset.monitorCheckedAt);
+    const aLatency = numberValue(left.dataset.monitorLatencyMs);
+    const bLatency = numberValue(right.dataset.monitorLatencyMs);
+    if (sort === "name-asc" || sort === "name-desc") return (aName.localeCompare(bName) || aChecked - bChecked) * (sort === "name-desc" ? -1 : 1);
+    if (sort === "latency-asc" || sort === "latency-desc") return (aLatency - bLatency || aName.localeCompare(bName)) * (sort === "latency-desc" ? -1 : 1);
+    return (aChecked - bChecked || aName.localeCompare(bName)) * (sort === "checked-desc" ? -1 : 1);
+  };
+  const matchesCard = (card, state) => {
+    const query = normalize(state.q);
+    const statusMatch = state.statuses.size === 0 || state.statuses.has(normalize(card.dataset.monitorStatus));
+    const text = [card.dataset.monitorName, card.dataset.monitorTarget, card.dataset.monitorGroup, card.dataset.monitorEnvironment, card.dataset.monitorSource].map(normalize).join(" ");
+    return statusMatch && text.includes(query);
   };
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => bindInteractions(document));
-  } else {
-    bindInteractions(document);
-  }
+  const applyFilters = (main, persist = false) => {
+    const state = monitorState(main);
+    const monitorRoot = main?.querySelector("[data-orivis-monitor-root]");
+    const grid = monitorRoot?.querySelector(".orivis-monitor-grid");
+    if (!state || !monitorRoot || !grid) return;
+    const cards = cardsFor(main);
+    const visible = [];
+    const hidden = [];
+    cards.forEach(card => (matchesCard(card, state) ? visible : hidden).push(card));
+    visible.sort(compareCards(state.sort));
+    const hiddenSet = new Set(hidden);
+    [...visible, ...hidden].forEach(card => {
+      card.classList.toggle("is-hidden", hiddenSet.has(card));
+      grid.append(card);
+    });
+    const total = numberValue(monitorRoot.dataset.monitorTotal || cards.length);
+    const counter = main.querySelector("#orivis-monitor-visible-count");
+    const summary = main.querySelector("#orivis-monitor-filter-summary");
+    if (counter) counter.textContent = visible.length + " / " + total;
+    if (summary) summary.textContent = (visible.length + " / " + total + " " + (monitorRoot.dataset.orivisMonitorLabel || "")).trim();
+    main.querySelectorAll("[data-status-filter]").forEach(chip => {
+      const value = chip.dataset.statusFilter;
+      const active = value === "all" ? state.statuses.size === 0 : state.statuses.has(value);
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", String(active));
+    });
+    const emptyAll = monitorRoot.querySelector("[data-orivis-monitor-empty-all]");
+    const emptyFilter = monitorRoot.querySelector("[data-orivis-monitor-empty-filter]");
+    emptyAll?.classList.toggle("is-hidden", total !== 0);
+    emptyFilter?.classList.toggle("is-hidden", total === 0 || visible.length !== 0);
+    const clear = main.querySelector("#orivis-clear-filters");
+    if (clear) clear.disabled = !state.q && state.statuses.size === 0;
+    if (persist) writeState(state);
+  };
 
-  document.addEventListener("htmx:afterSwap", event => {
-    bindInteractions(event.detail?.target || document);
+  const updateRefreshUI = main => {
+    if (!main) return;
+    const paused = refreshPaused();
+    const indicator = main.querySelector("#orivis-refresh-indicator");
+    const toggle = main.querySelector("#orivis-refresh-toggle");
+    if (indicator) {
+      indicator.textContent = paused ? indicator.dataset.orivisRefreshPaused : indicator.dataset.orivisRefreshIdle;
+      indicator.classList.toggle("is-paused", paused);
+    }
+    if (toggle) {
+      toggle.textContent = paused ? toggle.dataset.orivisRefreshResume : toggle.dataset.orivisRefreshPause;
+      toggle.setAttribute("aria-pressed", String(paused));
+    }
+  };
+  const setBusy = (main, busy) => {
+    if (!isAutoMain(main)) return;
+    main.setAttribute("aria-busy", String(busy));
+    updateRefreshUI(main);
+  };
+  const hideError = () => {
+    const error = doc.querySelector("[data-orivis-hx-error]");
+    if (error) {
+      error.hidden = true;
+      error.textContent = "";
+    }
+  };
+  const showError = detail => {
+    const main = mainFromDetail(detail);
+    if (!main) return;
+    setBusy(main, false);
+    const error = doc.querySelector("[data-orivis-hx-error]");
+    if (!error) return;
+    const label = main.querySelector("#orivis-refresh-indicator")?.dataset.orivisRefreshIdle || "Refresh";
+    const status = detail?.xhr?.status ? " · " + detail.xhr.status : "";
+    error.textContent = label + status;
+    error.hidden = false;
+  };
+
+  const hydrate = scope => {
+    applyTheme(root.dataset.orivisTheme || window.OrivisTheme?.read?.() || "system");
+    const main = currentMain(scope);
+    if (!main) return;
+    const state = monitorState(main);
+    const search = main.querySelector("#orivis-monitor-search");
+    const sort = main.querySelector("#orivis-monitor-sort");
+    if (search && state) search.value = state.q;
+    if (sort && state) sort.value = state.sort;
+    main.querySelectorAll(".orivis-status-light").forEach(light => {
+      const text = light.dataset.orivisTooltip || light.title;
+      if (!text) return;
+      light.dataset.orivisTooltip = text;
+      light.removeAttribute("title");
+      light.setAttribute("aria-label", text);
+      if (!light.hasAttribute("tabindex")) light.tabIndex = 0;
+    });
+    applyFilters(main);
+    updateRefreshUI(main);
+    setBusy(main, false);
+  };
+
+  const cardFromEvent = event => event.target?.closest?.("[data-monitor-card][data-monitor-url]");
+  const eventHitsControl = (event, card) => {
+    const control = event.target?.closest?.(interactiveSelector);
+    return Boolean(control && control !== card);
+  };
+  const openCard = (card, newTab = false) => {
+    const url = card?.dataset.monitorUrl;
+    if (!url) return;
+    if (newTab) window.open(url, "_blank", "noopener,noreferrer");
+    else window.location.assign(url);
+  };
+
+  const tooltip = () => {
+    let node = doc.querySelector("[data-orivis-floating-tooltip]");
+    if (node) return node;
+    node = doc.createElement("div");
+    node.className = "orivis-floating-tooltip";
+    node.dataset.orivisFloatingTooltip = "";
+    node.setAttribute("role", "tooltip");
+    node.setAttribute("aria-hidden", "true");
+    doc.body.append(node);
+    return node;
+  };
+  const positionTooltip = (node, x, y) => {
+    const rect = node.getBoundingClientRect();
+    node.style.left = Math.max(8, Math.min(x + 12, window.innerWidth - rect.width - 8)) + "px";
+    node.style.top = Math.max(8, Math.min(y - rect.height - 8, window.innerHeight - rect.height - 8)) + "px";
+  };
+  const showTooltip = (light, x, y) => {
+    const text = light?.dataset.orivisTooltip;
+    if (!text) return;
+    const node = tooltip();
+    node.textContent = text;
+    node.classList.add("is-visible");
+    node.setAttribute("aria-hidden", "false");
+    positionTooltip(node, x, y);
+  };
+  const hideTooltip = () => {
+    const node = doc.querySelector("[data-orivis-floating-tooltip]");
+    node?.classList.remove("is-visible");
+    node?.setAttribute("aria-hidden", "true");
+  };
+
+  doc.addEventListener("click", event => {
+    const theme = event.target.closest?.("[data-orivis-theme-option]");
+    if (theme) {
+      applyTheme(theme.dataset.orivisThemeOption, true);
+      return;
+    }
+    const password = event.target.closest?.("[data-orivis-password-toggle]");
+    if (password) {
+      const input = password.closest(".orivis-password-field")?.querySelector("input");
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      const label = show ? password.dataset.orivisPasswordHide : password.dataset.orivisPasswordShow;
+      password.textContent = label;
+      password.setAttribute("aria-label", label);
+      password.setAttribute("aria-pressed", String(show));
+      return;
+    }
+    const main = event.target.closest?.("main") || doc.querySelector("main");
+    const state = monitorState(main);
+    const chip = event.target.closest?.("[data-status-filter]");
+    if (chip && state) {
+      const value = chip.dataset.statusFilter;
+      if (value === "all") state.statuses.clear();
+      else if (validStatuses.has(value)) state.statuses.has(value) ? state.statuses.delete(value) : state.statuses.add(value);
+      applyFilters(main, true);
+      return;
+    }
+    if (event.target.closest?.("#orivis-clear-filters") && state) {
+      state.q = "";
+      state.statuses.clear();
+      state.sort = defaultSort;
+      const search = main.querySelector("#orivis-monitor-search");
+      const sort = main.querySelector("#orivis-monitor-sort");
+      if (search) search.value = "";
+      if (sort) sort.value = defaultSort;
+      applyFilters(main, true);
+      return;
+    }
+    if (event.target.closest?.("#orivis-refresh-toggle")) {
+      const paused = !refreshPaused();
+      storageSet(refreshKey, paused ? "1" : "0");
+      updateRefreshUI(main);
+      if (!paused && isAutoMain(main)) window.htmx?.trigger(main, "refresh");
+      return;
+    }
+    const card = cardFromEvent(event);
+    if (card && !eventHitsControl(event, card)) {
+      event.preventDefault();
+      openCard(card, event.ctrlKey || event.metaKey);
+    }
   });
+
+  doc.addEventListener("input", event => {
+    if (event.target.id !== "orivis-monitor-search") return;
+    const main = event.target.closest("main");
+    const state = monitorState(main);
+    if (!state) return;
+    state.q = event.target.value;
+    window.clearTimeout(filterTimer);
+    filterTimer = window.setTimeout(() => applyFilters(main, true), 120);
+  });
+  doc.addEventListener("change", event => {
+    if (event.target.id !== "orivis-monitor-sort") return;
+    const main = event.target.closest("main");
+    const state = monitorState(main);
+    if (!state || !validSorts.has(event.target.value)) return;
+    state.sort = event.target.value;
+    applyFilters(main, true);
+  });
+  doc.addEventListener("keydown", event => {
+    if (event.altKey && event.shiftKey && event.key.toLowerCase() === "t") {
+      event.preventDefault();
+      const current = themeModes.includes(root.dataset.orivisTheme) ? root.dataset.orivisTheme : "system";
+      applyTheme(themeModes[(themeModes.indexOf(current) + 1) % themeModes.length], true);
+      return;
+    }
+    if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !event.target.matches("input,textarea,[contenteditable]")) {
+      const search = doc.querySelector("#orivis-monitor-search");
+      if (search) {
+        event.preventDefault();
+        search.focus();
+      }
+      return;
+    }
+    if (event.target.id === "orivis-monitor-search" && event.key === "Escape") {
+      const main = event.target.closest("main");
+      const state = monitorState(main);
+      if (state) {
+        state.q = "";
+        event.target.value = "";
+        applyFilters(main, true);
+      }
+      return;
+    }
+    const card = cardFromEvent(event);
+    if (card && !eventHitsControl(event, card) && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      openCard(card);
+    }
+  });
+  doc.addEventListener("auxclick", event => {
+    const card = cardFromEvent(event);
+    if (event.button === 1 && card && !eventHitsControl(event, card)) {
+      event.preventDefault();
+      openCard(card, true);
+    }
+  });
+  doc.addEventListener("pointerover", event => {
+    const light = event.target.closest?.(".orivis-status-light");
+    if (light) showTooltip(light, event.clientX, event.clientY);
+  });
+  doc.addEventListener("pointermove", event => {
+    const light = event.target.closest?.(".orivis-status-light");
+    const node = doc.querySelector("[data-orivis-floating-tooltip].is-visible");
+    if (light && node) positionTooltip(node, event.clientX, event.clientY);
+  });
+  doc.addEventListener("pointerout", event => {
+    if (event.target.closest?.(".orivis-status-light")) hideTooltip();
+  });
+  doc.addEventListener("focusin", event => {
+    const light = event.target.closest?.(".orivis-status-light");
+    if (!light) return;
+    const rect = light.getBoundingClientRect();
+    showTooltip(light, rect.left + rect.width / 2, rect.top);
+  });
+  doc.addEventListener("focusout", event => {
+    if (event.target.closest?.(".orivis-status-light")) hideTooltip();
+  });
+
+  doc.addEventListener("htmx:beforeRequest", event => {
+    const main = mainFromDetail(event.detail);
+    if (!main) return;
+    if (refreshPaused()) {
+      event.preventDefault();
+      updateRefreshUI(main);
+      return;
+    }
+    hideError();
+    setBusy(main, true);
+  });
+  doc.addEventListener("htmx:afterRequest", event => {
+    const main = mainFromDetail(event.detail);
+    if (main) setBusy(main, false);
+  });
+  doc.addEventListener("htmx:beforeSwap", event => {
+    const main = mainFromDetail(event.detail);
+    if (!main) return;
+    const search = doc.activeElement?.id === "orivis-monitor-search" ? doc.activeElement : null;
+    swapFocus = search ? { focused: true, start: search.selectionStart, end: search.selectionEnd } : null;
+  });
+  doc.addEventListener("htmx:afterSwap", event => {
+    const swappedMain = mainFromDetail(event.detail);
+    if (!swappedMain) return;
+    const main = currentMain(doc);
+    hydrate(main);
+    hideError();
+    if (swapFocus?.focused) {
+      const search = main.querySelector("#orivis-monitor-search");
+      search?.focus({ preventScroll: true });
+      if (search && swapFocus.start !== null) search.setSelectionRange(swapFocus.start, swapFocus.end);
+    }
+    swapFocus = null;
+  });
+  ["htmx:responseError", "htmx:sendError", "htmx:timeout", "htmx:swapError"].forEach(name => doc.addEventListener(name, event => showError(event.detail)));
+
+  media?.addEventListener?.("change", () => {
+    if (root.dataset.orivisTheme === "system") applyTheme("system");
+  });
+  window.OrivisThemeSwitch = { apply: (mode, persist = true) => applyTheme(mode, persist), bind: hydrate, read: () => root.dataset.orivisTheme };
+  if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", () => hydrate(doc), { once: true });
+  else hydrate(doc);
 })();

@@ -27,6 +27,7 @@ type dashboardTemplatePage struct {
 	Locale        string
 	Title         string
 	Public        bool
+	Login         bool
 	AuthEnabled   bool
 	AutoRefresh   bool
 	User          *dashboardTemplateUser

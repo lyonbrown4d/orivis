@@ -30,12 +30,10 @@ func (e *dashboardEndpoint) createDashboardJWT(username string) (string, error) 
 	}
 	now := time.Now().UTC()
 	claims := authjwt.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   strings.TrimSpace(username),
-			Issuer:    "orivis",
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(dashboardTokenTTL)),
-		},
+		Subject:   strings.TrimSpace(username),
+		Issuer:    "orivis",
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(now.Add(dashboardTokenTTL)),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString([]byte(secret))
